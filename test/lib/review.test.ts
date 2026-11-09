@@ -185,6 +185,8 @@ describe('сессия практики', () => {
       due: 1,
       freshToday: 6,
       ready: 7,
+      readyFresh: 6,
+      readyByGroup: { cards: 3, questions: 4, tasks: 0 },
     })
     expect((await getReviewCounts(user.id, 'demo', 'demo/other')).byKind).toMatchObject({ code: 2, react: 1 })
   })

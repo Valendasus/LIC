@@ -1,8 +1,8 @@
 import { expect, test } from './fixtures'
 
-test('главная: специальности, открытые и запланированные', async ({ page }) => {
+test('«Сегодня»: специальности, открытые и запланированные', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1, name: 'Learn → Implement → Confirm' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: /^(Доброе утро|Добрый день|Добрый вечер|Доброй ночи)$/ })).toBeVisible()
   await expect(page.getByRole('link', { name: /Frontend.*HTML, CSS/ })).toBeVisible()
   // Запланированная специальность видна, но не кликабельна.
   await expect(page.getByText('Backend на Node.js')).toBeVisible()

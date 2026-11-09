@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { notFound } from 'next/navigation'
 import RootLayout, { metadata as layoutMetadata } from '@/app/layout'
 import SiteLayout from '@/app/(site)/layout'
 import FocusLayout from '@/app/(focus)/layout'
 import { AppShell } from '@/widgets/app-shell/ui/AppShell'
 import HomePage from '@/app/(site)/page'
+import { greeting, longDate } from '@/views/home/ui/HomePage'
 import SpecialtyPage, { generateMetadata as specialtyMetadata } from '@/app/(site)/[specialty]/page'
 import NodePage, { generateMetadata as nodeMetadata } from '@/app/(site)/[specialty]/[...path]/page'
 import ReviewPage, { metadata as reviewMetadata } from '@/app/(focus)/practice/page'
@@ -14,7 +15,7 @@ import { NodeRow } from '@/entities/topic/ui/NodeRow'
 import { getCurrentUser } from '@/entities/user/api/user'
 import { NEW_PER_DAY } from '@/entities/review/api/session'
 import { db, resetDb } from '../db'
-import { byType, findAll, textOf } from '../tree'
+import { byType, findAll, rendered, textOf } from '../tree'
 
 const params = <T,>(value: T) => ({ params: Promise.resolve(value) })
 const search = (value: Record<string, string>) => ({ searchParams: Promise.resolve(value) })
@@ -53,14 +54,66 @@ describe('каркас', () => {
   })
 })
 
-describe('главная', () => {
-  it('специальности: активная — ссылка с прогрессом, запланированные — без ссылки', async () => {
-    const page = await HomePage()
-    expect(hrefs(page)).toEqual(['/frontend'])
-    const text = textOf(page)
-    expect(text).toContain('Learn → Implement → Confirm')
-    expect(text).toContain('Начато тем: 0 из')
+describe('«Сегодня»', () => {
+  const ROW = { kind: 'card', stability: 1, stabilityFast: 1, difficulty: 5, state: 2, scheduleStatus: 'review', reps: 1, lapses: 0, scheduledDays: 1, learningStep: 0 }
+
+  it('приветствие по времени суток и дата по-русски', () => {
+    expect([3, 9, 14, 21].map((hour) => greeting(new Date(2026, 10, 9, hour)))).toEqual(['Доброй ночи', 'Доброе утро', 'Добрый день', 'Добрый вечер'])
+    expect(longDate(new Date(2026, 10, 9))).toBe('Понедельник, 9 ноября')
+  })
+
+  it('первый вход: с чего начать — первая тема по пути; продолжать нечего', async () => {
+    const { text, hrefs: links } = rendered(await HomePage())
+    expect(text).toContain('Начните с первой темы')
+    expect(text).not.toContain('Продолжить')
+    expect(text).toContain('На этой неделе 0 из 7 дней')
+    expect(links).toContain('/frontend/css/cascade/specificity')
+    // Специальности: активная — ссылка с прогрессом, запланированные — без ссылки.
+    expect(links).toContain('/frontend')
     expect(text).toContain('в планах')
+    expect(text).toMatch(/Начато 0 из 231 темы/)
+  })
+
+  it('есть что повторить: число, состав, кнопка; продолжить последнюю тему; неделя', async () => {
+    // Четверг: в неделе есть прошедшие дни без занятий, сегодняшний с ответом и будущие.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 10, 12, 15))
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+    const user = await getCurrentUser()
+    const topic = 'frontend/javascript/scope/closures'
+    await db.reviewItem.create({ data: { ...ROW, userId: user.id, itemId: `${topic}#closure-def`, dueAt: new Date(Date.now() - 1000) } })
+    await db.reviewLog.create({ data: { userId: user.id, itemId: `${topic}#closure-def`, rating: 3, stateBefore: 0, reviewedAt: new Date() } })
+    const { text, hrefs: links } = rendered(await HomePage())
+    expect(text).toMatch(/\d+ элемент/)
+    expect(text).toMatch(/1 повторение и \d+ новых/)
+    expect(text).toContain('Начать повторение')
+    expect(links).toContain('/practice')
+    expect(text).toContain('Продолжить')
+    expect(text).toContain('Замыкания')
+    expect(text).toContain('Карточки')
+    expect(text).toContain('100 %')
+    expect(text).toContain('На этой неделе 1 из 7 дней')
+    // Продолжаемая тема не повторяется в «Дальше по пути».
+    expect(links.filter((href) => href === `/${topic}`)).toHaveLength(1)
+  })
+
+  it('на сегодня всё: предлагается свободная тренировка', async () => {
+    const user = await getCurrentUser()
+    await db.reviewItem.create({ data: { ...ROW, userId: user.id, itemId: 'frontend/javascript/scope/closures#closure-def', dueAt: new Date(Date.now() + 86_400_000) } })
+    for (let i = 0; i < NEW_PER_DAY; i++) await db.reviewItem.create({ data: { ...ROW, userId: user.id, itemId: `other#${i}`, dueAt: new Date(Date.now() + 86_400_000) } })
+    const { text, hrefs: links } = rendered(await HomePage())
+    expect(text).toContain('На сегодня всё')
+    expect(links).toContain('/practice?mode=free')
+  })
+
+  it('только новые — без слова «повторений»', async () => {
+    const user = await getCurrentUser()
+    await db.nodeProgress.create({ data: { userId: user.id, nodeId: 'frontend/javascript/scope/closures', level: 1 } })
+    const { text } = rendered(await HomePage())
+    expect(text).toMatch(/20 новых/)
+    expect(text).not.toMatch(/повторени[ейя] и/)
   })
 })
 

@@ -135,6 +135,14 @@ export async function getReviewCounts(userId: string, specialty: string, scope?:
     freshToday: plan.fresh,
     /** Сколько элементов будет в сессии «Учить и повторять» прямо сейчас. */
     ready: plan.ordered.length,
+    /** Из них новых — остальное повторение. */
+    readyFresh: plan.ordered.filter((item) => !plan.byId.has(item.id)).length,
+    /** Состав сессии: карточки, вопросы (квиз, «что выведет», порядок) и задачи с редактором. */
+    readyByGroup: {
+      cards: plan.ordered.filter((item) => item.kind === 'card').length,
+      questions: plan.ordered.filter((item) => item.kind !== 'card' && !isTask(item)).length,
+      tasks: plan.ordered.filter((item) => isTask(item)).length,
+    },
   }
 }
 
