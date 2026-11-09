@@ -116,19 +116,19 @@ test('свободная тренировка не меняет расписан
   expect((await reviewRows()).logs).toEqual([])
 })
 
-test('счётчик практики в навигации и блок практики на странице темы', async ({ page }) => {
-  await page.goto('/frontend/javascript/scope/closures')
-  const panel = page.locator('section', { has: page.getByRole('heading', { name: 'Практика' }) })
-  await expect(panel).toContainText('в изучении 0')
+test('счётчик практики в навигации и практика из шага Confirm', async ({ page }) => {
+  await page.goto('/frontend/javascript/scope/closures#confirm')
   const nav = page.getByRole('navigation', { name: 'Основная навигация' })
   await expect(nav.getByRole('link', { name: 'Практика, ждут 20' })).toBeVisible()
-  await panel.getByRole('link', { name: /Учить и повторять/ }).click()
-  await expect(page).toHaveURL(new RegExp(`/practice\\?scope=${SCOPE.replace(/\//g, '%2F')}`))
+  await expect(page.getByRole('tab', { name: /Confirm/ })).toContainText('19 карточек')
+  await page.getByRole('link', { name: 'Повторить карточки' }).click()
+  await expect(page).toHaveURL(new RegExp(`/practice\\?scope=${SCOPE.replace(/\//g, '%2F')}&kinds=card`))
   await page.keyboard.press('Space')
   await page.keyboard.press('3')
   await expect.poll(async () => (await reviewRows()).items.length).toBe(1)
   await page.goto('/frontend/javascript/scope/closures')
-  await expect(page.locator('section', { has: page.getByRole('heading', { name: 'Практика' }) })).toContainText('в изучении 1')
+  await expect(page.getByRole('tab', { name: /Confirm/ })).toContainText('Начато 1 из 19')
+  await expect(page.getByRole('tab', { name: /Learn/ })).toContainText('Пройдено')
   await expect(page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: 'Практика, ждут 19' })).toBeVisible()
 })
 

@@ -4,7 +4,8 @@ vi.hoisted(() => {
   process.env.LIC_CONTENT_DIR = `${process.cwd()}/test/fixtures/content`
 })
 
-import { getLastTopic, getNextTopics, getTopicSteps, getWeekActivity, startOfWeek, weekdayIndex } from '@/entities/review/api/today'
+import { getLastTopic, getNextTopics, getTopicPractice, getTopicStatuses, getTopicSteps, getWeekActivity, startOfWeek, weekdayIndex } from '@/entities/review/api/today'
+import { getTree, leavesOf } from '@/entities/topic/api/tree'
 import { getCurrentUser } from '@/entities/user/api/user'
 import { db, resetDb } from '../db'
 
@@ -114,5 +115,32 @@ describe('дальше по пути', () => {
   it('у неактивной специальности пусто', async () => {
     const user = await getCurrentUser()
     expect(await getNextTopics(user.id, 'later')).toEqual([])
+  })
+})
+
+describe('практика и статусы тем', () => {
+  it('задачи с редактором со статусом «решена», вопросы и карточки отдельно', async () => {
+    const user = await getCurrentUser()
+    expect(await getTopicPractice(user.id, TOPIC)).toEqual({ tasks: [], questions: 4, cards: 5 })
+    await log(user.id, 'demo/other/solo#sum', 1, NOW)
+    await log(user.id, 'demo/other/solo#bare', 2, NOW)
+    const practice = await getTopicPractice(user.id, 'demo/other/solo')
+    expect(practice.tasks).toEqual([
+      { id: 'demo/other/solo#sum', title: 'Сумма', level: 'easy', kind: 'code', solved: false },
+      { id: 'demo/other/solo#bare', title: 'Ноль', level: 'warmup', kind: 'code', solved: true },
+      { id: 'demo/other/solo#view', title: 'Привет', level: 'easy', kind: 'react', solved: false },
+    ])
+    expect(practice).toMatchObject({ questions: 0, cards: 0 })
+  })
+
+  it('освоена, начата, можно начинать, готовится', async () => {
+    const user = await getCurrentUser()
+    const tree = (await getTree('demo'))!
+    const leaves = leavesOf(tree)
+    expect([...(await getTopicStatuses(user.id, 'demo', leaves)).values()]).toEqual(['new', 'soon', 'new'])
+    await db.nodeProgress.create({ data: { userId: user.id, nodeId: TOPIC, level: 2 } })
+    await item(user.id, 'demo/other/solo#sum')
+    await db.nodeProgress.create({ data: { userId: user.id, nodeId: 'demo/block/mod/empty', level: 1 } })
+    expect(Object.fromEntries(await getTopicStatuses(user.id, 'demo', leaves))).toEqual({ [TOPIC]: 'mastered', 'demo/block/mod/empty': 'started', 'demo/other/solo': 'started' })
   })
 })

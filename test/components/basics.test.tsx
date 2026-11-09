@@ -144,6 +144,6 @@ describe('блоки темы', () => {
   })
 
   it('компоненты, доступные в MDX', () => {
-    expect(Object.keys(useMDXComponents()).sort()).toEqual(['Callout', 'Example', 'Hints', 'Question', 'Sources', 'Task'])
+    expect(Object.keys(useMDXComponents()).sort()).toEqual(['Callout', 'Example', 'Hints', 'Question', 'Sources', 'Task', 'h3'])
   })
 })

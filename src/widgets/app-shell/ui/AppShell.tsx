@@ -60,7 +60,7 @@ export async function AppShell({ children }: { children: ReactNode }) {
           </Link>
           <SearchButton compact />
         </header>
-        <main id="content" className="mx-auto w-full max-w-[1200px] px-4 pt-6 pb-28 sm:px-8 lg:px-12 lg:pt-10 lg:pb-16">
+        <main id="content" className="mx-auto w-full max-w-[1360px] px-4 pt-6 pb-28 sm:px-8 lg:px-12 lg:pt-10 lg:pb-16">
           {children}
         </main>
       </div>

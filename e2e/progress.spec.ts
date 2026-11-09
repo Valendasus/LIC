@@ -1,7 +1,7 @@
 import { expect, progressRows, test } from './fixtures'
 
 test('отметка освоения сохраняется, считается в ветке и сбрасывается повторным нажатием', async ({ page }) => {
-  await page.goto('/frontend/javascript/scope/closures')
+  await page.goto('/frontend/javascript/scope/closures#confirm')
   const understand = page.getByRole('button', { name: /^Понимаю/ })
   await expect(understand).toHaveAttribute('aria-pressed', 'false')
   await understand.click()
@@ -20,7 +20,7 @@ test('отметка освоения сохраняется, считается
   // Ветка JavaScript показывает долю: 2 из 4 у одной темы из многих — больше нуля.
   await expect(page.getByRole('link', { name: /^JavaScript/ }).getByRole('progressbar')).not.toHaveAttribute('aria-valuenow', '0')
 
-  await page.goto('/frontend/javascript/scope/closures')
+  await page.goto('/frontend/javascript/scope/closures#confirm')
   await page.getByRole('button', { name: /^Понимаю/ }).click()
   await expect(page.getByRole('button', { name: /^Понимаю/ })).toHaveAttribute('aria-pressed', 'false')
   await expect.poll(async () => (await progressRows())[0]?.level).toBe(0)

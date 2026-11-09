@@ -5,7 +5,8 @@ import remarkGfm from 'remark-gfm'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  plugins: [{ enforce: 'pre', ...mdx({ remarkPlugins: [remarkGfm] }) }, react()],
+  // Как в Next.js: компоненты уроков (Callout, Task, h3…) берутся из src/mdx-components.tsx.
+  plugins: [{ enforce: 'pre', ...mdx({ remarkPlugins: [remarkGfm], providerImportSource: '@/mdx-components' }) }, react()],
   resolve: {
     alias: {
       '@content': path.resolve(import.meta.dirname, 'content'),

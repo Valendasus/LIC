@@ -1,5 +1,5 @@
 import { db } from '@/shared/api/db'
-import { getItems } from '@/entities/practice-item/@x/review'
+import { getItems, isTask, type CodeItem, type TaskKind, type TaskLevel } from '@/entities/practice-item/@x/review'
 import { getProgressMap } from '@/entities/progress/@x/review'
 import { findNode, getTree, leavesOf, type TreeNode } from '@/entities/topic/@x/review'
 
@@ -109,4 +109,52 @@ export async function getNextTopics(userId: string, specialty: string, { limit =
   const next = leavesOf(tree).filter((leaf) => leaf.id !== skip && (leaf.content || withPractice.has(leaf.id)) && !started.has(leaf.id) && !(progress.get(leaf.id) ?? 0))
   const refs = await Promise.all(next.slice(0, limit).map((leaf) => refOf(leaf.id)))
   return refs.filter((ref) => ref !== null)
+}
+
+export interface TopicTask {
+  id: string
+  title: string
+  level: TaskLevel
+  kind: TaskKind
+  /** Решена хотя бы раз с оценкой не «снова». */
+  solved: boolean
+}
+
+export interface TopicPractice {
+  /** Задачи с редактором: код, типы, React. */
+  tasks: TopicTask[]
+  /** Быстрые вопросы: квиз, «что выведет», порядок. */
+  questions: number
+  cards: number
+}
+
+/** Практика темы для шагов Implement и Confirm. */
+export async function getTopicPractice(userId: string, topicId: string): Promise<TopicPractice> {
+  const [specialty] = topicId.split('/')
+  const items = (await getItems(specialty)).filter((item) => item.topicId === topicId)
+  const tasks = items.filter(isTask) as CodeItem[]
+  const solved = await db.reviewLog.findMany({ where: { userId, itemId: { in: tasks.map((task) => task.id) }, rating: { gte: 2 } }, select: { itemId: true }, distinct: ['itemId'] })
+  const done = new Set(solved.map((row) => row.itemId))
+  return {
+    tasks: tasks.map((task) => ({ id: task.id, title: task.title, level: task.level, kind: task.kind, solved: done.has(task.id) })),
+    questions: items.filter((item) => item.kind !== 'card' && !isTask(item)).length,
+    cards: items.filter((item) => item.kind === 'card').length,
+  }
+}
+
+/** Статус темы в списках: освоена, начата, можно начинать, готовится. */
+export type TopicStatus = 'mastered' | 'started' | 'new' | 'soon'
+
+/** Статусы тем для списков: отметка «понимаю» и выше — освоена; любая отметка или ответ — начата. */
+export async function getTopicStatuses(userId: string, specialty: string, topics: TreeNode[]): Promise<Map<string, TopicStatus>> {
+  const [items, progress, rows] = await Promise.all([getItems(specialty), getProgressMap(userId), db.reviewItem.findMany({ where: { userId }, select: { itemId: true } })])
+  const withPractice = new Set(items.map((item) => item.topicId))
+  const started = new Set(rows.map((row) => row.itemId.split('#')[0]))
+  return new Map(
+    topics.map((topic) => {
+      const level = progress.get(topic.id) ?? 0
+      const status: TopicStatus = level >= 2 ? 'mastered' : level > 0 || started.has(topic.id) ? 'started' : topic.content || withPractice.has(topic.id) ? 'new' : 'soon'
+      return [topic.id, status]
+    }),
+  )
 }

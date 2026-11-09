@@ -1,19 +1,15 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { PracticePanel } from '@/widgets/practice-panel'
-import { LevelPicker } from '@/features/set-level'
-import { Breadcrumbs, GradeBadge, GRADE_TEXT, NodeRow } from '@/entities/topic'
+import { getTopicPractice, getTopicStatuses, getTopicSteps } from '@/entities/review/server'
+import { Breadcrumbs, GradeBadge, NodeRow } from '@/entities/topic'
 import { getProgressMap, rollup } from '@/entities/progress/server'
 import { getCurrentUser } from '@/entities/user/server'
 import { type TreeNode } from '@/entities/topic'
-import { findNode, getTree } from '@/entities/topic/server'
+import { findNode, getTree, leavesOf } from '@/entities/topic/server'
+import { TopicView, type LessonModule } from './TopicView'
 
 type Props = { params: Promise<{ specialty: string; path: string[] }> }
-
-interface LessonMeta {
-  verified: string
-  versions: string
-}
 
 async function resolve(params: Props['params']) {
   const { specialty, path } = await params
@@ -31,7 +27,7 @@ async function loadLesson(node: TreeNode) {
   const [specialty] = node.id.split('/')
   const lesson = await import(`@content/${specialty}/${node.path.join('/')}.mdx`)
   // meta обязателен: npm run content:check не пропустит тему без него.
-  return { Lesson: lesson.default as React.ComponentType, meta: lesson.meta as LessonMeta }
+  return { Lesson: lesson.default, meta: lesson.meta } as LessonModule
 }
 
 export async function NodePage({ params }: Props) {
@@ -69,50 +65,28 @@ export async function NodePage({ params }: Props) {
     )
   }
 
-  const lesson = node.content ? await loadLesson(node) : null
+  const tree = trail[0]
+  const leaves = leavesOf(tree)
+  const siblings = trail.at(-2)!.children
+  const [lesson, steps, practice, statuses] = await Promise.all([
+    node.content ? loadLesson(node) : null,
+    getTopicSteps(user.id, node.id),
+    getTopicPractice(user.id, node.id),
+    getTopicStatuses(user.id, tree.slug, siblings),
+  ])
+  const next = leaves[leaves.findIndex((leaf) => leaf.id === node.id) + 1] ?? null
 
   return (
-    <article className="mx-auto max-w-3xl">
-      <Breadcrumbs trail={trail} />
-      <header className="mb-6 space-y-3">
-        <h1 className="flex flex-wrap items-center gap-3 text-3xl font-bold tracking-tight text-balance">
-          {node.title} <GradeBadge grade={node.grade} />
-        </h1>
-        {node.grade && <p className="text-sm text-muted">{GRADE_TEXT[node.grade]}</p>}
-        {lesson && (
-          <p className="text-xs text-muted">
-            Проверено {lesson.meta.verified} · {lesson.meta.versions}
-          </p>
-        )}
-        {node.goals && (
-          <div className="rounded-lg border border-line bg-surface p-4">
-            <p className="mb-2 text-sm font-semibold">После темы вы сможете</p>
-            <ul className="list-disc space-y-1 pl-5 text-sm">
-              {node.goals.map((goal) => (
-                <li key={goal}>{goal}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </header>
-
-      <div className="mb-8">
-        <PracticePanel scope={node.id} />
-      </div>
-
-      {lesson ? (
-        <div className="lesson prose max-w-none prose-headings:scroll-mt-20 prose-pre:text-sm">
-          <lesson.Lesson />
-        </div>
-      ) : (
-        <p className="rounded-lg border border-dashed border-line p-6 text-muted">
-          Тема ещё не наполнена. Она есть в плане курса и появится по мере работы над блоком.
-        </p>
-      )}
-
-      <div className="mt-10">
-        <LevelPicker nodeId={node.id} level={progress.get(node.id) ?? 0} />
-      </div>
-    </article>
+    <TopicView
+      node={node}
+      trail={trail}
+      lesson={lesson}
+      steps={steps}
+      practice={practice}
+      level={progress.get(node.id) ?? 0}
+      siblings={siblings}
+      statuses={statuses}
+      next={next}
+    />
   )
 }

@@ -9,7 +9,8 @@ import { greeting, longDate } from '@/views/home/ui/HomePage'
 import SpecialtyPage, { generateMetadata as specialtyMetadata } from '@/app/(site)/[specialty]/page'
 import NodePage, { generateMetadata as nodeMetadata } from '@/app/(site)/[specialty]/[...path]/page'
 import ReviewPage, { metadata as reviewMetadata } from '@/app/(focus)/practice/page'
-import { LevelPicker } from '@/features/set-level/ui/LevelPicker'
+import { TopicView } from '@/views/node/ui/TopicView'
+import { getTree, leavesOf } from '@/entities/topic/api/tree'
 import { PracticeSession } from '@/widgets/practice-session/ui/PracticeSession'
 import { NodeRow } from '@/entities/topic/ui/NodeRow'
 import { getCurrentUser } from '@/entities/user/api/user'
@@ -142,24 +143,46 @@ describe('страница узла', () => {
     expect(textOf(module)).toMatch(/2 тем · начато 0/)
   })
 
-  it('наполненная тема: цели, дата проверки, урок, отметка освоения', async () => {
+  it('наполненная тема: шаги, урок без заголовков шагов, оглавление, данные для шагов', async () => {
     const user = await getCurrentUser()
     await db.nodeProgress.create({ data: { userId: user.id, nodeId: 'frontend/javascript/scope/closures', level: 2 } })
     const page = await NodePage(params({ specialty: 'frontend', path: ['javascript', 'scope', 'closures'] }))
-    const text = textOf(page)
-    expect(text).toContain('Нужно для первой работы (Junior).')
+    expect(page.type).toBe(TopicView)
+    expect(page.props).toMatchObject({ level: 2, steps: { learn: true }, next: { id: 'frontend/javascript/this' } })
+    expect(page.props.practice.tasks.map((task: { title: string }) => task.title)).toContain('once')
+    expect(page.props.siblings.map((node: { id: string }) => node.id)).toContain('frontend/javascript/scope/closures')
+    const { html, text } = rendered(page)
+    expect(text).toContain('Суть за минуту')
     expect(text).toContain('Проверено 08.11.2026')
     expect(text).toContain('После темы вы сможете')
-    expect(text).not.toContain('Тема ещё не наполнена')
-    expect(byType(page, LevelPicker)[0].props).toEqual({ nodeId: 'frontend/javascript/scope/closures', level: 2 })
+    expect(text).toContain('На странице')
+    // Заголовки шагов «## Learn» стали вкладками, а не текстом урока; Implement ещё не открыт.
+    expect(html).not.toMatch(/<h2[^>]*>Learn<\/h2>/)
+    expect(text).not.toContain('Счётчик с ограничением')
+    expect(html).toContain('id="суть-за-минуту"')
     expect(await nodeMetadata(params({ specialty: 'frontend', path: ['javascript', 'scope', 'closures'] }))).toEqual({ title: 'Замыкания' })
+  })
+
+  it('последняя тема курса — следующей нет', async () => {
+    const tree = (await getTree('frontend'))!
+    const last = leavesOf(tree).at(-1)!
+    const page = await NodePage(params({ specialty: 'frontend', path: last.path }))
+    expect(page.props.next).toBeNull()
+  })
+
+  it('тема без урока: урок готовится, практика есть', async () => {
+    const page = await NodePage(params({ specialty: 'frontend', path: ['typescript', 'utility-types'] }))
+    expect(page.props.lesson).toBeNull()
+    expect(page.props.practice.tasks).toHaveLength(3)
+    expect(rendered(page).text).toContain('Урок по этой теме готовится')
   })
 
   it('ненаполненная тема', async () => {
     const page = await NodePage(params({ specialty: 'frontend', path: ['nextjs', 'routing'] }))
-    expect(textOf(page)).toContain('Тема ещё не наполнена')
-    expect(textOf(page)).not.toContain('Проверено')
-    expect(byType(page, LevelPicker)[0].props.level).toBe(0)
+    const { text } = rendered(page)
+    expect(text).toContain('Урок по этой теме готовится')
+    expect(text).not.toContain('Проверено')
+    expect(page.props.level).toBe(0)
   })
 
   it('несуществующий путь — 404', async () => {

@@ -25,12 +25,23 @@ test('дерево: специальность → блок → модуль →
 
   await expect(page).toHaveURL('/frontend/javascript/scope/closures')
   await expect(page.getByRole('heading', { level: 1, name: /Замыкания/ })).toBeVisible()
-  await expect(page.getByText('Нужно для первой работы (Junior).')).toBeVisible()
-  await expect(page.getByText(/Проверено 08\.11\.2026/)).toBeVisible()
+  await expect(page.getByText('Junior', { exact: true })).toBeVisible()
   await expect(page.getByText('После темы вы сможете')).toBeVisible()
-  for (const section of ['Learn', 'Implement', 'Confirm', 'Источники']) {
-    await expect(page.getByRole('heading', { level: 2, name: section })).toBeVisible()
-  }
+  // Тема — три шага-вкладки; открыт Learn: объяснение, источники и дата проверки, без заголовков шагов в тексте.
+  await expect(page.getByRole('tab')).toHaveText([/Learn · понять/, /Implement · применить/, /Confirm · закрепить/])
+  await expect(page.getByRole('tab', { selected: true })).toContainText('Learn')
+  await expect(page.getByRole('heading', { level: 3, name: 'Суть за минуту' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: 'Источники' })).toBeVisible()
+  await expect(page.getByText(/Проверено 08\.11\.2026/)).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Learn' })).toHaveCount(0)
+
+  // «Дальше» переключает шаг и запоминает его в адресе.
+  await page.getByRole('button', { name: 'Дальше: Implement' }).click()
+  await expect(page).toHaveURL(/#implement$/)
+  await expect(page.getByRole('tabpanel')).toContainText('Задачи темы')
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByRole('tab', { selected: true })).toContainText('Confirm')
+  await expect(page.getByRole('link', { name: /Следующая тема:/ })).toBeVisible()
 
   // Хлебные крошки ведут обратно.
   await page.getByRole('navigation', { name: 'Путь' }).getByRole('link', { name: 'JavaScript', exact: true }).click()
@@ -38,7 +49,7 @@ test('дерево: специальность → блок → модуль →
 })
 
 test('лестница подсказок открывается по одной ступени, решение — отдельно', async ({ page }) => {
-  await page.goto('/frontend/javascript/scope/closures')
+  await page.goto('/frontend/javascript/scope/closures#implement')
   const task = page.locator('section', { hasText: 'debounce с cancel и flush' })
   await expect(task.getByText('Подсказка 1.')).toHaveCount(0)
   await task.getByRole('button', { name: 'Подсказка 1 из 4' }).click()
@@ -54,7 +65,7 @@ test('лестница подсказок открывается по одной
 })
 
 test('вопрос на вспоминание раскрывается по клику', async ({ page }) => {
-  await page.goto('/frontend/javascript/async/event-loop')
+  await page.goto('/frontend/javascript/async/event-loop#confirm')
   const question = page.locator('details', { hasText: 'Опишите один оборот цикла событий' })
   await expect(question.getByText(/Взять одну задачу/)).toBeHidden()
   await question.locator('summary').click()
@@ -63,7 +74,7 @@ test('вопрос на вспоминание раскрывается по к�
 
 test('ненаполненная тема и страницы, которых нет', async ({ page, pageErrors }) => {
   await page.goto('/frontend/nextjs/routing')
-  await expect(page.getByText('Тема ещё не наполнена.', { exact: false })).toBeVisible()
+  await expect(page.getByText('Урок по этой теме готовится')).toBeVisible()
 
   for (const url of ['/frontend/nope', '/frontend/javascript/nope/deeper', '/backend', '/practice?scope=frontend/nope']) {
     const response = await page.goto(url)
