@@ -25,25 +25,25 @@ export function Outcome({
   useEffect(() => next.current?.focus({ preventScroll: true }), [])
 
   return (
-    <div className="space-y-3" role="status">
-      <div className={`rounded-lg px-4 py-3 ${correct ? 'bg-good-soft' : 'bg-bad-soft'}`}>
+    <div className="flex animate-[rise_200ms_ease-out] flex-col gap-4" role="status">
+      <div className={`rounded-card px-5 py-4 ${correct ? 'bg-good-soft' : 'bg-bad-soft'}`}>
         <p className={`mb-1 font-semibold ${correct ? 'text-good' : 'text-bad'}`}>{correct ? 'Верно' : 'Неверно'}</p>
-        <RichText text={explain} className="text-sm" />
+        <RichText text={explain} className="text-[15px] leading-relaxed" />
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           ref={next}
           type="button"
           onClick={() => onGrade(correct ? 3 : 1)}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary"
+          className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 font-semibold text-on-primary transition-colors duration-150 hover:bg-ink-300"
         >
           Дальше
-          {!free && <span className="ml-2 font-mono text-xs opacity-80">{intervals[correct ? 3 : 1]}</span>}
+          {!free && <span className="text-xs font-normal text-ink-700">вернётся {intervals[correct ? 3 : 1]}</span>}
         </button>
         {correct && (
-          <button type="button" onClick={() => onGrade(2)} className="rounded-lg border border-line px-4 py-2 text-sm hover:border-accent">
+          <button type="button" onClick={() => onGrade(2)} className="inline-flex h-11 items-center gap-2 rounded-full border border-line px-5 text-sm transition-colors duration-150 hover:border-line-strong hover:bg-surface">
             Угадал — повторить раньше
-            {!free && <span className="ml-2 font-mono text-xs text-muted">{intervals[2]}</span>}
+            {!free && <span className="text-xs text-muted">{intervals[2]}</span>}
           </button>
         )}
       </div>

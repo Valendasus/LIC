@@ -80,12 +80,12 @@ describe('задача на код', () => {
     expect(screen.getByText('эталона')).toBeInTheDocument()
     // После решения подсказки, сброс и «Показать решение» уже не нужны.
     expect(screen.queryByRole('button', { name: /Подсказка/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Показать решение' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Сдаться и посмотреть решение' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Сбросить к заготовке' })).toBeNull()
 
     await user.click(screen.getByRole('button', { name: /Дальше/ }))
     expect(p.onGrade).toHaveBeenCalledWith(3)
-    expect(screen.getByRole('button', { name: /Дальше/ })).toHaveTextContent('3 дн.')
+    expect(screen.getByRole('button', { name: /Дальше/ })).toHaveTextContent('через 3 дня')
     expect(localStorage.getItem('lic:draft:f/t#code')).toBeNull()
   })
 
@@ -134,6 +134,7 @@ describe('задача на код', () => {
     const p = props()
     run.mockResolvedValue(pass)
     render(<CodeView item={code()} {...p} />)
+    await user.click(screen.getByRole('button', { name: 'Сдаться и посмотреть решение' }))
     await user.click(screen.getByRole('button', { name: 'Показать решение' }))
     expect(await screen.findByText('Решение открыто')).toBeInTheDocument()
     expect(screen.getByText('решение открыто — задача вернётся скоро')).toBeInTheDocument()
@@ -236,6 +237,7 @@ describe('задача на код', () => {
     const user = userEvent.setup()
     reveal.mockRejectedValueOnce(new Error('offline'))
     render(<CodeView item={code()} {...props()} />)
+    await user.click(screen.getByRole('button', { name: 'Сдаться и посмотреть решение' }))
     await user.click(screen.getByRole('button', { name: 'Показать решение' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось загрузить решение: нет связи с сервером')
   })
@@ -300,5 +302,23 @@ describe('задача на типы и React-задача', () => {
     await user.click(runButton())
     expect(await screen.findByText('Код не запустился. Синтаксическая ошибка, строка 1: x')).toBeInTheDocument()
     expect(sandboxRun).not.toHaveBeenCalled()
+  })
+
+  it('«Сдаться» сначала переспрашивает; «Не сейчас» возвращает к решению', async () => {
+    const user = userEvent.setup()
+    render(<CodeView item={code()} {...props()} />)
+    await user.click(screen.getByRole('button', { name: 'Сдаться и посмотреть решение' }))
+    expect(screen.getByText('Задача вернётся на повторение скоро. Открыть решение?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Не сейчас' }))
+    expect(screen.getByRole('button', { name: 'Сдаться и посмотреть решение' })).toBeInTheDocument()
+    expect(reveal).not.toHaveBeenCalled()
+  })
+
+  it('черновик: отметка «сохранён», пока код отличается от заготовки', async () => {
+    const user = userEvent.setup()
+    render(<CodeView item={code()} {...props()} />)
+    expect(screen.queryByText('Черновик сохранён')).toBeNull()
+    await user.type(editor(), 'x')
+    expect(screen.getByText('Черновик сохранён')).toBeInTheDocument()
   })
 })

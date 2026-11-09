@@ -62,7 +62,7 @@ export function QuizView({ item, intervals, free, onGrade, status }: ViewProps<Q
                 aria-checked={picked}
                 onClick={() => toggle(index)}
                 disabled={checked}
-                className={`w-full rounded-lg border px-4 py-3 text-left transition-colors disabled:cursor-default ${state}`}
+                className={`w-full rounded-card border px-4 py-3 text-left transition-colors disabled:cursor-default ${state}`}
               >
                 <span className="flex items-start gap-3">
                   <span aria-hidden className="mt-0.5 font-mono text-xs text-muted">
@@ -88,7 +88,7 @@ export function QuizView({ item, intervals, free, onGrade, status }: ViewProps<Q
               type="button"
               onClick={() => setChecked(true)}
               disabled={chosen.length === 0}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
+              className="inline-flex h-11 items-center rounded-full bg-primary px-5 font-semibold text-on-primary transition-colors duration-150 hover:bg-ink-300 disabled:opacity-50"
             >
               Проверить
             </button>

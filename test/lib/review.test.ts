@@ -50,7 +50,7 @@ describe('сессия практики', () => {
     // Задачи на код из другой темы идут после первой темы — темы в порядке курса.
     expect(session.map((entry) => entry.item.id.split('#')[1])).toEqual(['term-a', 'qa-b', 'code-c', 'quiz-one', 'qa-d', 'quiz-many', 'out', 'ord', 'sum', 'bare', 'view'])
     expect(session.every((entry) => entry.status === 'new')).toBe(true)
-    expect(session[0].intervals[1]).toBe('1 мин')
+    expect(session[0].intervals[1]).toBe('через минуту')
   })
 
   it('подошедшие повторения идут вперемешку с новыми, статусы изучения и повторения', async () => {

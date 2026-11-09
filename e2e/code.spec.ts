@@ -59,6 +59,7 @@ test('с первого запуска — «Хорошо»; «Показать 
 
   const second = await currentTask(page)
   expect(second.key).not.toBe(first.key)
+  await page.getByRole('button', { name: 'Сдаться и посмотреть решение' }).click()
   await page.getByRole('button', { name: 'Показать решение' }).click()
   await expect(page.getByText('Решение открыто', { exact: true })).toBeVisible()
   await expect(page.locator('details[open] pre')).toContainText(second.solution!.split('\n')[0])
@@ -66,7 +67,7 @@ test('с первого запуска — «Хорошо»; «Показать 
 
   await expect.poll(async () => (await reviewRows()).logs.map((log) => log.rating)).toEqual([3, 1])
   // После «Снова» задача вернётся через минуту — в этой же сессии, в конце очереди.
-  await expect(page.locator('main .font-mono').first()).toHaveText(/^3 \/ 5$/)
+  await expect(page.locator('[data-counter]')).toHaveText(/^3 \/ 5$/)
 })
 
 test('бесконечный цикл останавливается, страница остаётся живой', async ({ page }) => {
@@ -122,6 +123,6 @@ test('все задачи всех тем решаются своим этало
       await expect(page.getByText('Решено'), `${topic}: ${task.key}`).toBeVisible({ timeout: 10_000 })
       await page.getByRole('button', { name: /^Дальше/ }).click()
     }
-    await expect(page.getByText('Сессия завершена')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /^Готово/ })).toBeVisible()
   }
 })

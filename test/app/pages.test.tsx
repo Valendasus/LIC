@@ -196,7 +196,7 @@ describe('страница практики', () => {
 
   it('ежедневное повторение без ветки', async () => {
     const page = await ReviewPage(search({}))
-    expect(textOf(page)).toContain('Повторение на сегодня')
+    expect(session(page).props.title).toBe('Повторение на сегодня')
     expect(session(page).props.mode).toBe('review')
     expect(session(page).props.backHref).toBe('/')
     expect(reviewMetadata).toEqual({ title: 'Практика' })
@@ -204,7 +204,7 @@ describe('страница практики', () => {
 
   it('ветка, виды и свободный режим; правильный порядок передаётся отдельно', async () => {
     const page = await ReviewPage(search({ scope: 'frontend/css/cascade/specificity', mode: 'free', kinds: 'order,bogus' }))
-    expect(textOf(page)).toContain('Свободная тренировка · порядок')
+    expect(session(page).props.title).toBe('Свободная тренировка · Каскад, специфичность и наследование · порядок')
     const props = session(page).props as { mode: string; items: { item: { kind: string } }[]; orders: Record<string, string[]>; backHref: string }
     expect(props.mode).toBe('free')
     expect(props.backHref).toBe('/frontend/css/cascade/specificity')
@@ -217,23 +217,24 @@ describe('страница практики', () => {
 
   it('практика ветки в обычном режиме', async () => {
     const page = await ReviewPage(search({ scope: 'frontend/javascript' }))
-    expect(textOf(page)).toContain('Практика')
+    expect(session(page).props.title).toBe('JavaScript')
     expect(session(page).props.mode).toBe('review')
   })
 
   it('ветка без практики', async () => {
     const page = await ReviewPage(search({ scope: 'frontend/nextjs' }))
-    expect(textOf(page)).toContain('В этой ветке пока нет практики')
-    expect(hrefs(page)).toEqual(['/frontend/nextjs'])
+    const { text, hrefs: links } = rendered(page)
+    expect(text).toContain('В этой ветке пока нет практики')
+    expect(links).toEqual(['/frontend/nextjs', '/frontend/nextjs'])
   })
 
   it('всё на сегодня сделано: предлагается свободная тренировка с сохранением ветки', async () => {
     await exhaustNewToday()
     const scoped = await ReviewPage(search({ scope: 'frontend/javascript' }))
-    expect(textOf(scoped)).toContain('На сегодня всё')
-    expect(hrefs(scoped)).toContain('/practice?mode=free&scope=frontend%2Fjavascript')
+    expect(rendered(scoped).text).toContain('На сегодня всё')
+    expect(rendered(scoped).hrefs).toContain('/practice?mode=free&scope=frontend%2Fjavascript')
     const daily = await ReviewPage(search({}))
-    expect(hrefs(daily)).toContain('/practice?mode=free')
+    expect(rendered(daily).hrefs).toContain('/practice?mode=free')
   })
 
   it('неизвестная ветка или специальность — 404', async () => {

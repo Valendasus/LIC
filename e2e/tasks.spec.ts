@@ -99,7 +99,7 @@ test('«Порядок»: последний шаг можно убрать', as
 test('автооценка заданий записывается в расписание: верно, «угадал» и ошибка', async ({ page }) => {
   const topic = 'javascript/scope/closures'
   await page.goto(`/practice?scope=frontend/${topic}&kinds=quiz`)
-  const counter = page.locator('main .font-mono').first()
+  const counter = page.locator('[data-counter]')
   const total = Number((await counter.innerText()).split('/')[1])
 
   await answerQuiz(page, await currentQuiz(page, topic), true)

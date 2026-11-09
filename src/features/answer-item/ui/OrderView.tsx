@@ -27,7 +27,7 @@ export function OrderView({ item, correctOrder, intervals, free, onGrade, status
           return (
             <li
               key={index}
-              className={`flex items-start gap-3 rounded-lg border px-3 py-2 ${done ? (wrong ? 'border-bad bg-bad-soft' : 'border-good bg-good-soft') : 'border-accent bg-accent-soft'}`}
+              className={`flex items-start gap-3 rounded-card border px-3 py-2 ${done ? (wrong ? 'border-bad bg-bad-soft' : 'border-good bg-good-soft') : 'border-accent bg-accent-soft'}`}
             >
               <span className="font-mono text-sm text-muted">{position + 1}.</span>
               <RichText text={item.steps[index]} className="min-w-0 flex-1" />
@@ -46,7 +46,7 @@ export function OrderView({ item, correctOrder, intervals, free, onGrade, status
                   <button
                     type="button"
                     onClick={() => setPicked((value) => [...value, index])}
-                    className="w-full rounded-lg border border-line px-3 py-2 text-left hover:border-accent"
+                    className="w-full rounded-card border border-line px-3 py-2 text-left hover:border-accent"
                   >
                     <RichText text={step} />
                   </button>
@@ -67,7 +67,7 @@ export function OrderView({ item, correctOrder, intervals, free, onGrade, status
           {!correct && (
             <div>
               <p className="mb-1 text-xs text-muted">Правильный порядок</p>
-              <ol className="list-decimal space-y-1 rounded-md border border-line bg-bg py-2 pr-3 pl-8 text-sm">
+              <ol className="list-decimal space-y-1 rounded-[10px] border border-line bg-bg py-2 pr-3 pl-8 text-sm">
                 {correctOrder.map((step) => (
                   <li key={step}>
                     <RichText text={step} />

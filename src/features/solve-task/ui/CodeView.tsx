@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { revealSolution, type SolutionResult } from '../api/actions'
-import { RichText } from '@/shared/ui'
+import { ArrowRight } from 'lucide-react'
+import { cn, count } from '@/shared/lib'
+import { Badge, Button, CodeBlock, RichText, SegmentBar } from '@/shared/ui'
 import { isSolved, type RunResult } from '../lib/code-runner'
 import type { CodeItem } from '@/entities/practice-item'
 import { LEVEL_LABEL } from '@/entities/practice-item'
@@ -11,7 +13,6 @@ import { CodeEditor } from './CodeEditor'
 import { checkTypesInWorker, compileReactInWorker } from '../lib/compiler'
 import { runInWorker } from '../lib/run'
 import { useSandbox } from '../model/useSandbox'
-import { CodeBlock, Panel } from '@/shared/ui'
 import type { ViewProps } from '@/entities/practice-item'
 
 const TASK_LABEL: Record<CodeItem['kind'], string> = { code: 'Задача', types: 'Задача на типы', react: 'React-задача' }
@@ -67,6 +68,8 @@ export function CodeView({ item, intervals, free, onGrade, status }: ViewProps<C
   const [gaveUp, setGaveUp] = useState(false)
   const [reference, setReference] = useState<{ solution: string; explain: string } | null>(null)
   const [error, setError] = useState('')
+  /** «Сдаться» сначала переспрашивает: открытое решение вернёт задачу на повторение скоро. */
+  const [confirming, setConfirming] = useState(false)
   const sandbox = useSandbox()
 
   // Черновик читаем после монтирования: на сервере localStorage нет, и разметка должна совпасть.
@@ -124,119 +127,180 @@ export function CodeView({ item, intervals, free, onGrade, status }: ViewProps<C
   const finished = solved || gaveUp
   const grade = codeGrade({ gaveUp, hints, failedRuns })
   const passed = result?.tests.filter((test) => test.passed).length ?? 0
+  const failedTests = result?.tests.filter((test) => !test.passed) ?? []
+  const passedTests = result?.tests.filter((test) => test.passed) ?? []
 
   return (
-    <Panel label={`${TASK_LABEL[item.kind]} · ${LEVEL_LABEL[item.level]}`} status={status}>
-      <h2 className="mb-2 text-lg font-semibold">{item.title}</h2>
-      <RichText text={item.prompt} className="mb-4 text-[15px]" />
-
-      <CodeEditor value={code} onChange={edit} onRun={run} label={`Решение задачи «${item.title}»`} language={LANGUAGE[item.kind]} />
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={run} disabled={running} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-60">
-          {running ? 'Проверяем…' : 'Запустить тесты'}
-          <span className="ml-2 font-mono text-xs opacity-80">Ctrl/⌘+Enter</span>
-        </button>
-        {hints < item.hints.length && !finished && (
-          <button type="button" onClick={() => setHints((value) => value + 1)} className="rounded-lg border border-line px-3 py-2 text-sm hover:border-accent">
-            Подсказка {hints + 1} из {item.hints.length}
-          </button>
-        )}
+    <div className="flex flex-col gap-4">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="text-sm text-muted">{TASK_LABEL[item.kind]} · {LEVEL_LABEL[item.level]}</span>
+        <h2 className="text-xl font-semibold">{item.title}</h2>
+        <Badge>{status}</Badge>
         {code !== item.starter && !finished && (
-          <button type="button" onClick={() => edit(item.starter)} className="rounded-lg px-3 py-2 text-sm text-muted hover:text-accent">
-            Сбросить к заготовке
-          </button>
+          <span className="ml-auto inline-flex items-center gap-2 text-[13px] text-muted">
+            <span aria-hidden className="size-1.5 rounded-full bg-good" />
+            Черновик сохранён
+          </span>
         )}
-        {!finished && (
-          <button type="button" onClick={giveUp} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted hover:text-bad">
-            Показать решение
-          </button>
-        )}
-      </div>
+      </header>
 
-      {hints > 0 && (
-        <ol className="mt-4 space-y-2" aria-label="Подсказки">
-          {item.hints.slice(0, hints).map((hint, index) => (
-            <li key={index} className="rounded-md bg-accent-soft px-3 py-2 text-sm">
-              <span className="mr-2 font-semibold">Подсказка {index + 1}.</span>
-              <RichText text={hint} className="inline" />
-            </li>
-          ))}
-        </ol>
-      )}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <section aria-label="Условие" className="flex flex-col gap-5 rounded-panel bg-surface p-6">
+          <RichText text={item.prompt} className="text-[15px] leading-relaxed" />
 
-      {result && (
-        <div className="mt-4 space-y-2" role="status" aria-label="Результат запуска">
-          {result.status === 'ok' ? (
-            <p className={`font-semibold ${passed === result.tests.length ? 'text-good' : 'text-bad'}`}>
-              Тесты: {passed} из {result.tests.length}
-            </p>
-          ) : (
-            <p className="rounded-md bg-bad-soft px-3 py-2 text-sm text-bad">
-              {result.status === 'timeout' ? 'Остановлено по времени. ' : 'Код не запустился. '}
-              {result.error}
-            </p>
-          )}
-          {result.tests.length > 0 && (
-            <ul className="space-y-1 text-sm">
-              {result.tests.map((test, index) => (
-                <li key={index} data-test-result={test.passed ? 'pass' : 'fail'} className="flex gap-2">
-                  <span aria-hidden className={test.passed ? 'text-good' : 'text-bad'}>
-                    {test.passed ? '✓' : '✗'}
-                  </span>
-                  <span>
-                    {test.name}
-                    {test.error && <span className="block font-mono text-xs text-bad">{test.error}</span>}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          {result.logs.length > 0 && (
-            <div>
-              <p className="text-xs text-muted">Вывод console.log</p>
-              <CodeBlock code={result.logs.join('\n')} />
+          {item.hints.length > 0 && !finished && (
+            <div className="flex flex-col gap-3 rounded-card bg-bg p-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold">Подсказки</span>
+                <span className="flex gap-1" aria-label={`Открыто ${hints} из ${item.hints.length}`}>
+                  {item.hints.map((_, index) => (
+                    <span key={index} aria-hidden className={cn('h-1 w-4 rounded-full', index < hints ? 'bg-accent' : 'bg-raised')} />
+                  ))}
+                </span>
+              </div>
+              {hints > 0 && (
+                <ol className="flex flex-col gap-2" aria-label="Подсказки">
+                  {item.hints.slice(0, hints).map((hint, index) => (
+                    <li key={index} className="rounded-[10px] bg-surface px-3.5 py-2.5 text-sm">
+                      <span className="mr-2 font-semibold text-accent">Подсказка {index + 1}.</span>
+                      <RichText text={hint} className="inline" />
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {hints < item.hints.length && (
+                <Button variant="outline" size="sm" onClick={() => setHints((value) => value + 1)} className="self-start">
+                  Подсказка {hints + 1} из {item.hints.length}
+                </Button>
+              )}
+              <p className="text-xs text-muted">Подсказки не наказывают: с двумя и больше задача просто вернётся на повторение раньше.</p>
             </div>
           )}
-        </div>
-      )}
 
-      {item.kind === 'react' && (
-        <section className="mt-4" aria-label="Предпросмотр">
-          <p className="mb-1 text-xs text-muted">{sandbox.frame ? 'Предпросмотр — с компонентом можно взаимодействовать' : 'Предпросмотр появится после запуска тестов'}</p>
-          {sandbox.frame}
+          {finished && (
+            <div className="flex animate-[rise_300ms_ease-out] flex-col gap-4">
+              <div className={cn('rounded-card px-4 py-3', solved && !gaveUp ? 'bg-good-soft' : 'bg-warn-soft')}>
+                <p className={cn('font-semibold', solved && !gaveUp ? 'text-good' : 'text-warn')}>{solved && !gaveUp ? 'Решено' : 'Решение открыто'}</p>
+                <p className="text-sm text-muted">{GRADE_NOTE[grade]}</p>
+              </div>
+              {reference && (
+                <>
+                  <RichText text={reference.explain} className="text-[15px] leading-relaxed" />
+                  <details open={gaveUp} className="rounded-card bg-bg px-4 py-3">
+                    <summary className="cursor-pointer text-sm font-medium">Эталонное решение</summary>
+                    <div className="mt-3">
+                      <CodeBlock code={reference.solution} />
+                    </div>
+                  </details>
+                </>
+              )}
+            </div>
+          )}
         </section>
-      )}
+
+        <section aria-label="Решение" className="flex min-w-0 flex-col gap-3">
+          <CodeEditor value={code} onChange={edit} onRun={run} label={`Решение задачи «${item.title}»`} language={LANGUAGE[item.kind]} />
+
+          {result && (
+            <div className="flex flex-col gap-3 rounded-panel bg-surface p-5" role="status" aria-label="Результат запуска">
+              {result.status === 'ok' ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <SegmentBar segments={result.tests.map((test) => (test.passed ? 'good' : 'bad'))} label="Тесты" className="w-32" />
+                  <p className={cn('font-semibold', passed === result.tests.length ? 'text-good' : 'text-bad')}>
+                    Тесты: {passed} из {result.tests.length}
+                  </p>
+                </div>
+              ) : (
+                <p className="rounded-card bg-bad-soft px-3 py-2 text-sm text-bad">
+                  {result.status === 'timeout' ? 'Остановлено по времени. ' : 'Код не запустился. '}
+                  {result.error}
+                </p>
+              )}
+              {failedTests.length > 0 && (
+                <ul className="flex flex-col gap-2 text-sm">
+                  {failedTests.map((test, index) => (
+                    <li key={index} data-test-result="fail" className="flex gap-3 rounded-card bg-bad-soft px-3.5 py-2.5">
+                      <span aria-hidden className="font-semibold text-bad">✗</span>
+                      <span className="min-w-0">
+                        {test.name}
+                        <span className="block font-mono text-xs break-words whitespace-pre-wrap text-bad">{test.error}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {passedTests.length > 0 && (
+                <details open={failedTests.length === 0 && passedTests.length <= 3}>
+                  <summary className="cursor-pointer text-sm text-muted">
+                    <span aria-hidden className="text-good">✓</span> {count(passedTests.length, ['тест пройден', 'теста пройдено', 'тестов пройдено'])}
+                  </summary>
+                  <ul className="mt-2 flex flex-col gap-1 text-sm">
+                    {passedTests.map((test, index) => (
+                      <li key={index} data-test-result="pass" className="flex gap-3 px-3.5">
+                        <span aria-hidden className="text-good">✓</span>
+                        {test.name}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {result.logs.length > 0 && (
+                <div>
+                  <p className="mb-1 text-xs text-muted">Вывод console.log</p>
+                  <CodeBlock code={result.logs.join('\n')} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {item.kind === 'react' && (
+            <section className="flex flex-col gap-2" aria-label="Предпросмотр">
+              <p className="text-xs text-muted">{sandbox.frame ? 'Предпросмотр — с компонентом можно взаимодействовать' : 'Предпросмотр появится после запуска тестов'}</p>
+              {sandbox.frame}
+            </section>
+          )}
+        </section>
+      </div>
 
       {error && (
-        <p role="alert" className="mt-3 rounded-md bg-bad-soft px-3 py-2 text-sm text-bad">
+        <p role="alert" className="rounded-card bg-bad-soft px-4 py-3 text-sm text-bad">
           {error}
         </p>
       )}
 
-      {finished && (
-        <div className="mt-5 space-y-3 border-t border-line pt-4">
-          <div className={`rounded-lg px-4 py-3 ${solved && !gaveUp ? 'bg-good-soft' : 'bg-bad-soft'}`}>
-            <p className={`font-semibold ${solved && !gaveUp ? 'text-good' : 'text-bad'}`}>{solved && !gaveUp ? 'Решено' : 'Решение открыто'}</p>
-            <p className="text-sm text-muted">{GRADE_NOTE[grade]}</p>
-          </div>
-          {reference && (
-            <>
-              <details open={gaveUp}>
-                <summary className="cursor-pointer text-sm font-medium">Эталонное решение</summary>
-                <div className="mt-2">
-                  <CodeBlock code={reference.solution} />
-                </div>
-              </details>
-              <RichText text={reference.explain} className="text-sm" />
-            </>
-          )}
-          <button type="button" onClick={next} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary">
+      <footer className="flex flex-wrap items-center gap-3 border-t border-surface pt-4">
+        <Button onClick={run} disabled={running} variant={finished ? 'secondary' : 'primary'} kbd="Ctrl/⌘+Enter">
+          {running ? 'Проверяем…' : 'Запустить тесты'}
+        </Button>
+        {code !== item.starter && !finished && (
+          <Button variant="ghost" onClick={() => edit(item.starter)}>
+            Сбросить к заготовке
+          </Button>
+        )}
+        <span className="flex-1" />
+        {!finished &&
+          (confirming ? (
+            <span className="flex flex-wrap items-center gap-3 text-sm">
+              <span className="text-muted">Задача вернётся на повторение скоро. Открыть решение?</span>
+              <Button variant="danger" size="sm" onClick={giveUp}>
+                Показать решение
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+                Не сейчас
+              </Button>
+            </span>
+          ) : (
+            <Button variant="outline" onClick={() => setConfirming(true)}>
+              Сдаться и посмотреть решение
+            </Button>
+          ))}
+        {finished && (
+          <Button onClick={next} iconEnd={<ArrowRight aria-hidden size={17} />}>
             Дальше
-            {!free && <span className="ml-2 font-mono text-xs opacity-80">{intervals[grade]}</span>}
-          </button>
-        </div>
-      )}
-    </Panel>
+            {!free && <span className="ml-2 text-xs font-normal text-ink-700">вернётся {intervals[grade]}</span>}
+          </Button>
+        )}
+      </footer>
+    </div>
   )
 }

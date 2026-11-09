@@ -1,5 +1,6 @@
 import type { ReviewItem } from '@prisma/client'
 import { DefaultScheduler, Rating } from 'ts-fsrs'
+import { count } from '@/shared/lib'
 
 /**
  * Интервальное повторение на FSRS-7 (ts-fsrs 6).
@@ -59,17 +60,21 @@ export function fromSchedulerCard(card: SchedulerCard) {
   }
 }
 
-/** «через 10 мин», «через 3 дн.» — подпись на кнопке оценки. */
+/** Срок словами для кнопок оценки: «через минуту», «через 2 дня», «через 2 недели». */
 export function formatInterval(from: Date, to: Date) {
   const minutes = Math.max(1, Math.round((to.getTime() - from.getTime()) / 60_000))
-  if (minutes < 60) return `${minutes} мин`
+  if (minutes === 1) return 'через минуту'
+  if (minutes < 60) return `через ${count(minutes, ['минуту', 'минуты', 'минут'])}`
   const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours} ч`
+  if (hours === 1) return 'через час'
+  if (hours < 24) return `через ${count(hours, ['час', 'часа', 'часов'])}`
   const days = Math.round(hours / 24)
-  if (days < 31) return `${days} дн.`
+  if (days === 1) return 'завтра'
+  if (days < 14) return `через ${count(days, ['день', 'дня', 'дней'])}`
+  if (days < 31) return `через ${count(Math.round(days / 7), ['неделю', 'недели', 'недель'])}`
   const months = Math.round(days / 30)
-  if (months < 12) return `${months} мес.`
-  return `${(days / 365).toFixed(1).replace('.', ',')} г.`
+  if (months < 12) return months === 1 ? 'через месяц' : `через ${count(months, ['месяц', 'месяца', 'месяцев'])}`
+  return `через ${(days / 365).toFixed(1).replace('.', ',').replace(',0', '')} г.`
 }
 
 /** Когда элемент вернётся при каждой из четырёх оценок. */

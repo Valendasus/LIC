@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
+import { Sparkles, X } from 'lucide-react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { PracticeSession } from '@/widgets/practice-session'
+import { ButtonLink, EmptyState } from '@/shared/ui'
 import { type OrderItem } from '@/entities/practice-item'
 import { getItems, inScope } from '@/entities/practice-item/server'
 import { ITEM_KINDS, KIND_LABEL, type ItemKind } from '@/entities/practice-item'
@@ -38,42 +40,42 @@ export async function ReviewPage({ searchParams }: Props) {
 
   const backHref = scope ? `/${scope}` : '/'
   const kindNote = kinds.length ? ` · ${kinds.map((kind) => KIND_LABEL[kind].toLowerCase()).join(', ')}` : ''
-  const title = (mode === 'free' ? 'Свободная тренировка' : scope ? 'Практика' : 'Повторение на сегодня') + kindNote
+  const base = mode === 'free' ? 'Свободная тренировка' : scope ? found.node.title : 'Повторение на сегодня'
+  const title = (mode === 'free' && scope ? `${base} · ${found.node.title}` : base) + kindNote
+
+  if (items.length > 0) {
+    return <PracticeSession key={`${mode}:${scope ?? ''}:${kinds.join(',')}`} items={items} orders={orders} mode={mode} backHref={backHref} title={title} />
+  }
 
   return (
-    <div className="space-y-6">
-      <header className="mx-auto max-w-2xl">
-        <p className="text-sm text-muted">
-          <Link href={backHref} className="hover:text-accent">
-            {found.node.title}
-          </Link>
-        </p>
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        <p className="mt-1 text-sm text-muted">
-          Элементов в ветке: {counts.total} · в изучении: {counts.studied} · к повторению сейчас: {counts.due} · новых на сегодня: {counts.freshToday}
-        </p>
+    <div className="flex min-h-dvh flex-col">
+      <header className="flex items-center gap-4 px-4 py-3 sm:px-8">
+        <Link href={backHref} aria-label="Выйти из сессии" className="inline-flex items-center gap-2 text-sm text-muted hover:text-fg">
+          <X aria-hidden size={18} />
+          {found.node.title}
+        </Link>
       </header>
-
-      {items.length > 0 ? (
-        <PracticeSession key={`${mode}:${scope ?? ''}:${kinds.join(',')}`} items={items} orders={orders} mode={mode} backHref={backHref} />
-      ) : (
-        <div className="mx-auto max-w-2xl rounded-xl border border-line bg-surface p-6">
-          <p className="text-lg font-semibold">{counts.total === 0 ? 'В этой ветке пока нет практики' : 'На сегодня всё'}</p>
-          <p className="mt-1 text-muted">
-            {counts.total === 0
-              ? 'Карточки и задания появляются по мере наполнения тем.'
-              : 'Элементы, срок которых не наступил, вернутся сами. Если хочется ещё — свободная тренировка не меняет расписание.'}
-          </p>
-          {counts.total > 0 && (
-            <Link
-              href={`/practice?mode=free${scope ? `&scope=${encodeURIComponent(scope)}` : ''}`}
-              className="mt-4 inline-block rounded-md border border-line px-4 py-2 text-sm hover:border-accent"
-            >
-              Свободная тренировка
-            </Link>
-          )}
-        </div>
-      )}
+      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-4 pb-16">
+        <EmptyState
+          icon={<Sparkles size={28} />}
+          title={counts.total === 0 ? 'В этой ветке пока нет практики' : 'На сегодня всё'}
+          action={
+            counts.total > 0 ? (
+              <ButtonLink href={`/practice?mode=free${scope ? `&scope=${encodeURIComponent(scope)}` : ''}`} variant="secondary">
+                Свободная тренировка
+              </ButtonLink>
+            ) : (
+              <ButtonLink href={backHref} variant="secondary">
+                Вернуться
+              </ButtonLink>
+            )
+          }
+        >
+          {counts.total === 0
+            ? 'Карточки и задания появляются по мере наполнения тем.'
+            : 'Остальное вернётся по расписанию — тогда, когда вы начнёте забывать. Свободная тренировка не меняет расписание.'}
+        </EmptyState>
+      </div>
     </div>
   )
 }

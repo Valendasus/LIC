@@ -55,7 +55,7 @@ test('все задачи на типы решаются эталоном в б�
       await expect(page.getByText('Решено'), `${topic}#${task.key}`).toBeVisible({ timeout: 30_000 })
       await page.getByRole('button', { name: /^Дальше/ }).click()
     }
-    await expect(page.getByText('Сессия завершена')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /^Готово/ })).toBeVisible()
   }
 })
 

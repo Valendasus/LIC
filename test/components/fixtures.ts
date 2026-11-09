@@ -2,7 +2,7 @@ import type { CardItem, CodeItem, OrderItem, OutputItem, QuizItem } from '@/enti
 import type { SessionItem } from '@/entities/review/api/session'
 
 const topic = { topicId: 'f/t', topicTitle: 'Тема', topicHref: '/f/t' }
-export const intervals = { 1: '1 мин', 2: '1 дн.', 3: '3 дн.', 4: '9 дн.' } as const
+export const intervals = { 1: 'через минуту', 2: 'завтра', 3: 'через 3 дня', 4: 'через 9 дней' } as const
 
 export const card = (overrides: Partial<CardItem> = {}): CardItem => ({
   ...topic, id: 'f/t#card', kind: 'card', type: 'term', front: 'Термин', back: 'Определение', reversed: false, ...overrides,

@@ -4,7 +4,7 @@ import { expect, reviewRows, test } from './fixtures'
 
 const SCOPE = 'frontend/javascript/scope/closures'
 const card = (page: Page) => page.getByRole('button', { name: /^Карточка:/ })
-const counter = (page: Page) => page.locator('main .font-mono').first()
+const counter = (page: Page) => page.locator('[data-counter]')
 
 /** Отвечает на все карточки в сессии оценкой «Хорошо» и возвращает, сколько было. */
 async function answerAll(page: Page) {
@@ -16,7 +16,7 @@ async function answerAll(page: Page) {
     answered++
   }
   // Итог появляется только после того, как все ответы сохранены на сервере.
-  await expect(page.getByText('Сессия завершена')).toBeVisible()
+  await expect(page.getByRole('heading', { name: /^Готово/ })).toBeVisible()
   return answered
 }
 
@@ -39,8 +39,8 @@ test('переворот карточки кликом, пробелом и Ente
   // У каждой оценки подписан срок следующего показа.
   const grades = page.locator('[data-grade]')
   await expect(grades).toHaveCount(4)
-  await expect(grades.nth(0)).toContainText(/Снова.*мин/s)
-  await expect(grades.nth(2)).toContainText(/Хорошо.*дн/s)
+  await expect(grades.nth(0)).toContainText(/Не вспомнил.*вернётся через минуту/s)
+  await expect(grades.nth(2)).toContainText(/Вспомнил.*вернётся (завтра|через \d+ (дня|дней))/s)
 })
 
 test('оценка сохраняется в расписании, «Снова» возвращает карточку в эту же сессию', async ({ page }) => {

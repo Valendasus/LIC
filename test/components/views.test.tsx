@@ -20,16 +20,19 @@ describe('карточка', () => {
     expect(screen.getByRole('button', { name: /вопрос/ })).toHaveFocus()
     expect(document.querySelectorAll('[data-side]')).toHaveLength(1)
     expect(screen.getByText('Слово')).toBeInTheDocument()
-    expect(screen.getByText('Термин')).toBeInTheDocument()
+    expect(screen.getByText('Термин · Тема')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /вопрос/ }))
     expect(screen.getByText('Определение')).toBeInTheDocument()
     expect(screen.getByText('пример')).toBeInTheDocument()
     expect(document.querySelector('[data-side="front"]')).toBeNull()
 
-    await user.click(screen.getByRole('button', { name: /Хорошо/ }))
+    // Оценки словами, срок словами, клавиша отдельной меткой.
+    expect(screen.getByRole('group', { name: /Насколько легко вспомнили/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Не вспомнил/ })).toHaveTextContent('Не вспомнилвернётся через минуту1')
+    expect(screen.getByRole('button', { name: /^Вспомнил/ })).toHaveClass('bg-primary')
+    await user.click(screen.getByRole('button', { name: /^Вспомнил/ }))
     expect(p.onGrade).toHaveBeenCalledWith(3)
-    expect(screen.getByRole('button', { name: /Снова/ })).toHaveTextContent('1 мин · 1')
   })
 
   it('клавиатура: пробел и Enter переворачивают, 1–4 оценивают только после переворота', () => {
@@ -225,7 +228,7 @@ describe('общие части', () => {
     const user = userEvent.setup()
     const onGrade = vi.fn()
     const { rerender } = render(<Outcome correct explain="ok" onGrade={onGrade} intervals={{ ...intervals }} free={false} />)
-    expect(screen.getByRole('button', { name: /Дальше/ })).toHaveTextContent('3 дн.')
+    expect(screen.getByRole('button', { name: /Дальше/ })).toHaveTextContent('через 3 дня')
     expect(screen.getByRole('button', { name: /Дальше/ })).toHaveFocus()
     await user.click(screen.getByRole('button', { name: /Угадал/ }))
     expect(onGrade).toHaveBeenLastCalledWith(2)

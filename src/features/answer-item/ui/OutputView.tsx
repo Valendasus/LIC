@@ -47,10 +47,10 @@ export function OutputView({ item, intervals, free, onGrade, status }: ViewProps
           readOnly={checked}
           rows={Math.max(2, item.answer.length)}
           spellCheck={false}
-          className="w-full rounded-lg border border-line bg-bg px-3 py-2 font-mono text-sm"
+          className="w-full rounded-card border border-line bg-bg px-3 py-2 font-mono text-sm"
         />
         {!checked && (
-          <button type="submit" disabled={!given.length} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-50">
+          <button type="submit" disabled={!given.length} className="inline-flex h-11 items-center rounded-full bg-primary px-5 font-semibold text-on-primary transition-colors duration-150 hover:bg-ink-300 disabled:opacity-50">
             Проверить <span className="ml-1 font-mono text-xs opacity-80">Ctrl/⌘ + Enter</span>
           </button>
         )}
@@ -74,7 +74,7 @@ function Lines({ title, lines, compare }: { title: string; lines: string[]; comp
   return (
     <div>
       <p className="mb-1 text-xs text-muted">{title}</p>
-      <ol className="rounded-md border border-line bg-bg px-3 py-2 font-mono text-sm">
+      <ol className="rounded-[10px] border border-line bg-bg px-3 py-2 font-mono text-sm">
         {lines.map((line, i) => (
           <li key={i} className={compare && compare[i] !== line ? 'text-bad' : ''}>
             {line || ' '}
