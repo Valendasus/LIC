@@ -13,7 +13,7 @@ export function Breadcrumbs({ trail }: { trail: TreeNode[] }) {
                 {node.title}
               </Link>
             ) : (
-              <span aria-current="page" className="text-ink">
+              <span aria-current="page" className="text-fg">
                 {node.title}
               </span>
             )}

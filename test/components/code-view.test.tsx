@@ -96,7 +96,7 @@ describe('задача на код', () => {
     render(<CodeView item={code()} {...p} />)
 
     await user.click(runButton())
-    expect(await screen.findByText('Тесты: 1 из 2')).toHaveClass('text-warn')
+    expect(await screen.findByText('Тесты: 1 из 2')).toHaveClass('text-bad')
     expect(document.querySelector('[data-test-result="pass"]')).toHaveTextContent('складывает')
     expect(document.querySelector('[data-test-result="fail"]')).toHaveTextContent('с нулём')
     expect(screen.getByText('Ожидалось 4, получено undefined')).toBeInTheDocument()

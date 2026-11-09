@@ -9,27 +9,27 @@ import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers } f
 import { tags } from '@lezer/highlight'
 import { useEffect, useRef } from 'react'
 
-/** Подсветка под тёмный фон — такой же, как у блоков кода на платформе. */
+/** Подсветка из палитры платформы: те же цвета, что в макетах и блоках кода. */
 const highlight = HighlightStyle.define([
-  { tag: [tags.keyword, tags.controlKeyword, tags.moduleKeyword, tags.operatorKeyword], color: 'oklch(75% 0.15 300)' },
-  { tag: [tags.string, tags.special(tags.string), tags.regexp], color: 'oklch(80% 0.13 140)' },
-  { tag: [tags.number, tags.bool, tags.null], color: 'oklch(80% 0.14 60)' },
-  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: 'oklch(65% 0.02 260)', fontStyle: 'italic' },
-  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'oklch(80% 0.12 230)' },
-  { tag: [tags.definition(tags.variableName)], color: 'oklch(90% 0.05 230)' },
-  { tag: tags.propertyName, color: 'oklch(85% 0.08 200)' },
+  { tag: [tags.keyword, tags.controlKeyword, tags.moduleKeyword, tags.operatorKeyword], color: 'var(--color-accent)' },
+  { tag: [tags.string, tags.special(tags.string), tags.regexp], color: 'var(--color-good)' },
+  { tag: [tags.number, tags.bool, tags.null], color: 'var(--color-warn)' },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: 'var(--color-subtle)', fontStyle: 'italic' },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--color-info)' },
+  { tag: [tags.definition(tags.variableName), tags.propertyName], color: 'var(--color-fg)' },
 ])
 
 const theme = EditorView.theme(
   {
-    '&': { backgroundColor: 'oklch(22% 0.02 260)', color: 'oklch(92% 0.01 260)', fontSize: '13px', borderRadius: '0.5rem' },
+    '&': { backgroundColor: 'var(--color-bg)', color: 'var(--color-fg)', fontSize: '14px', borderRadius: 'var(--radius-card)' },
     '&.cm-focused': { outline: '2px solid var(--color-accent)', outlineOffset: '2px' },
-    '.cm-content': { fontFamily: 'var(--font-mono)', padding: '12px 0', caretColor: 'oklch(92% 0.01 260)', minHeight: '12rem' },
-    '.cm-gutters': { backgroundColor: 'transparent', color: 'oklch(55% 0.02 260)', border: 'none' },
-    '.cm-activeLine': { backgroundColor: 'oklch(27% 0.02 260)' },
-    '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'oklch(80% 0.02 260)' },
-    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'oklch(38% 0.06 260)' },
-    '.cm-cursor': { borderLeftColor: 'oklch(92% 0.01 260)' },
+    '.cm-content': { fontFamily: 'var(--font-mono)', padding: '14px 0', caretColor: 'var(--color-fg)', minHeight: '12rem', lineHeight: '1.75' },
+    '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--color-subtle)', border: 'none', paddingLeft: '8px' },
+    '.cm-activeLine': { backgroundColor: 'rgb(41 37 49 / 0.6)' },
+    '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--color-muted)' },
+    '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'var(--color-raised)' },
+    '.cm-cursor': { borderLeftColor: 'var(--color-fg)' },
+    '.cm-matchingBracket': { backgroundColor: 'var(--color-accent-soft)', outline: 'none' },
   },
   { dark: true },
 )

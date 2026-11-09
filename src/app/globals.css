@@ -1,42 +1,62 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
 @plugin '@tailwindcss/typography';
 
-/* Токены дизайна. Цвета — в OKLCH: одинаковая светлота читается одинаково при любом оттенке.
-   Тёмная тема — по системной настройке. */
+/*
+ * Токены дизайна LIC. Палитра и роли — CLAUDE.md и docs/DESIGN.md (раздел 5).
+ * Только тёмная тема. Компоненты используют смысловые токены (bg, surface, fg…), а не палитру напрямую.
+ */
 @theme {
-  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
-  --color-paper: oklch(98.5% 0.004 250);
-  --color-surface: oklch(100% 0 0);
-  --color-ink: oklch(24% 0.02 260);
-  --color-muted: oklch(50% 0.02 260);
-  --color-line: oklch(90% 0.01 260);
-  --color-accent: oklch(52% 0.17 262);
-  --color-accent-soft: oklch(94% 0.03 262);
-  --color-marker: oklch(90% 0.13 95);
-  --color-good: oklch(55% 0.13 155);
-  --color-good-soft: oklch(94% 0.04 155);
-  --color-warn: oklch(58% 0.15 45);
-  --color-warn-soft: oklch(95% 0.04 60);
+  /* Палитра, закреплена 09.11.2026 */
+  --color-ink-900: #17151c;
+  --color-ink-800: #292531;
+  --color-ink-700: #45404f;
+  --color-ink-500: #716879;
+  --color-ink-300: #aaa2b3;
+  --color-ink-100: #e2dde7;
+
+  /* Смысловые токены */
+  --color-bg: var(--color-ink-900);
+  --color-surface: var(--color-ink-800);
+  --color-raised: var(--color-ink-700);
+  --color-line: var(--color-ink-700);
+  --color-line-strong: var(--color-ink-500);
+  --color-fg: var(--color-ink-100);
+  --color-muted: var(--color-ink-300);
+  --color-subtle: var(--color-ink-500);
+  --color-primary: var(--color-ink-100);
+  --color-on-primary: var(--color-ink-900);
+
+  /* Акцент и статусы: контраст на bg и surface от 6:1 до 10:1 */
+  --color-accent: #c7b8f0;
+  --color-accent-soft: rgb(199 184 240 / 0.16);
+  --color-good: #8fc4a2;
+  --color-good-soft: rgb(143 196 162 / 0.14);
+  --color-warn: #d9b46e;
+  --color-warn-soft: rgb(217 180 110 / 0.14);
+  --color-bad: #e0959f;
+  --color-bad-soft: rgb(224 149 159 / 0.12);
+  --color-info: #9db2e0;
+  --color-info-soft: rgb(157 178 224 / 0.14);
+
+  /* Радиусы: поля 8, карточки 12, панели 20, таблетки — full */
+  --radius-field: 0.5rem;
+  --radius-card: 0.75rem;
+  --radius-panel: 1.25rem;
+
+  /* Движение */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-paper: oklch(19% 0.015 260);
-    --color-surface: oklch(23% 0.018 260);
-    --color-ink: oklch(93% 0.01 260);
-    --color-muted: oklch(70% 0.02 260);
-    --color-line: oklch(32% 0.02 260);
-    --color-accent: oklch(74% 0.13 262);
-    --color-accent-soft: oklch(30% 0.06 262);
-    --color-marker: oklch(45% 0.09 95);
-    --color-good: oklch(76% 0.13 155);
-    --color-good-soft: oklch(30% 0.05 155);
-    --color-warn: oklch(78% 0.12 55);
-    --color-warn-soft: oklch(31% 0.05 50);
-    color-scheme: dark;
-  }
+:root {
+  color-scheme: dark;
 }
 
 /* Переворот карточки: новая сторона появляется поворотом от ребра. */
@@ -51,9 +71,22 @@
   }
 }
 
+/* Появление результата и панелей. */
+@keyframes rise {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
 body {
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-feature-settings: 'cv11', 'ss01';
 }
 
 :focus-visible {
@@ -61,28 +94,44 @@ body {
   outline-offset: 2px;
 }
 
-/* Содержание тем: типографика плагина, подстроенная под токены. */
+::selection {
+  background: var(--color-raised);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+/* Текст уроков: типографика плагина, подстроенная под токены. Колонка 64–72 знака, 17 px, интерлиньяж 1,7. */
 .lesson {
-  --tw-prose-body: var(--color-ink);
-  --tw-prose-headings: var(--color-ink);
+  --tw-prose-body: var(--color-fg);
+  --tw-prose-headings: var(--color-fg);
   --tw-prose-links: var(--color-accent);
-  --tw-prose-bold: var(--color-ink);
-  --tw-prose-code: var(--color-ink);
+  --tw-prose-bold: var(--color-fg);
+  --tw-prose-code: var(--color-fg);
   --tw-prose-quotes: var(--color-muted);
-  --tw-prose-bullets: var(--color-muted);
+  --tw-prose-bullets: var(--color-subtle);
   --tw-prose-counters: var(--color-muted);
   --tw-prose-hr: var(--color-line);
   --tw-prose-th-borders: var(--color-line);
   --tw-prose-td-borders: var(--color-line);
-  --tw-prose-pre-bg: oklch(22% 0.02 260);
-  --tw-prose-pre-code: oklch(92% 0.01 260);
+  --tw-prose-pre-bg: var(--color-surface);
+  --tw-prose-pre-code: var(--color-fg);
+  font-size: 1.0625rem;
+  line-height: 1.7;
 }
 
 .lesson :where(code):not(:where(pre *)) {
-  background: var(--color-accent-soft);
-  border-radius: 0.3rem;
-  padding: 0.1em 0.35em;
+  background: var(--color-surface);
+  border-radius: 0.375rem;
+  padding: 0.1em 0.4em;
   font-weight: 500;
+  font-size: 0.875em;
 }
 
 .lesson :where(code):not(:where(pre *))::before,
@@ -90,20 +139,21 @@ body {
   content: none;
 }
 
-/* Широкие таблицы и код прокручиваются внутри себя, а не растягивают страницу на телефоне. */
+.lesson pre {
+  border-radius: var(--radius-card);
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Широкие таблицы прокручиваются внутри себя, а не растягивают страницу на телефоне. */
 .lesson table {
   display: block;
   max-width: 100%;
   overflow-x: auto;
 }
 
-.lesson pre {
-  max-width: 100%;
-  overflow-x: auto;
-}
-
 .lesson mark {
-  background: var(--color-marker);
+  background: var(--color-accent-soft);
   color: inherit;
   padding: 0 0.2em;
   border-radius: 0.2em;

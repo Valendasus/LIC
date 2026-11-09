@@ -11,7 +11,7 @@ export async function ReviewBadge() {
     <Link href="/review" className="flex items-center gap-1.5 hover:text-accent">
       Повторение
       {ready > 0 && (
-        <span className="rounded-full bg-accent px-1.5 py-px font-mono text-[11px] font-semibold text-surface" aria-label={`${ready} карточек ждут`}>
+        <span className="rounded-full bg-primary px-1.5 py-px font-mono text-[11px] font-semibold text-on-primary" aria-label={`${ready} карточек ждут`}>
           {ready}
         </span>
       )}

@@ -1,5 +1,11 @@
 // UI-кит платформы: компоненты без знаний о предметной области.
+export * from './Badge'
+export * from './Button'
+export * from './Card'
 export * from './CodeBlock'
+export * from './EmptyState'
+export * from './IconButton'
+export * from './Kbd'
 export * from './Panel'
 export * from './ProgressBar'
 export * from './RichText'

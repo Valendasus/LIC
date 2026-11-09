@@ -133,7 +133,7 @@ export function CodeView({ item, intervals, free, onGrade, status }: ViewProps<C
       <CodeEditor value={code} onChange={edit} onRun={run} label={`Решение задачи «${item.title}»`} language={LANGUAGE[item.kind]} />
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={run} disabled={running} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-surface disabled:opacity-60">
+        <button type="button" onClick={run} disabled={running} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-60">
           {running ? 'Проверяем…' : 'Запустить тесты'}
           <span className="ml-2 font-mono text-xs opacity-80">Ctrl/⌘+Enter</span>
         </button>
@@ -148,7 +148,7 @@ export function CodeView({ item, intervals, free, onGrade, status }: ViewProps<C
           </button>
         )}
         {!finished && (
-          <button type="button" onClick={giveUp} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted hover:text-warn">
+          <button type="button" onClick={giveUp} className="ml-auto rounded-lg px-3 py-2 text-sm text-muted hover:text-bad">
             Показать решение
           </button>
         )}
@@ -168,11 +168,11 @@ export function CodeView({ item, intervals, free, onGrade, status }: ViewProps<C
       {result && (
         <div className="mt-4 space-y-2" role="status" aria-label="Результат запуска">
           {result.status === 'ok' ? (
-            <p className={`font-semibold ${passed === result.tests.length ? 'text-good' : 'text-warn'}`}>
+            <p className={`font-semibold ${passed === result.tests.length ? 'text-good' : 'text-bad'}`}>
               Тесты: {passed} из {result.tests.length}
             </p>
           ) : (
-            <p className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">
+            <p className="rounded-md bg-bad-soft px-3 py-2 text-sm text-bad">
               {result.status === 'timeout' ? 'Остановлено по времени. ' : 'Код не запустился. '}
               {result.error}
             </p>
@@ -181,12 +181,12 @@ export function CodeView({ item, intervals, free, onGrade, status }: ViewProps<C
             <ul className="space-y-1 text-sm">
               {result.tests.map((test, index) => (
                 <li key={index} data-test-result={test.passed ? 'pass' : 'fail'} className="flex gap-2">
-                  <span aria-hidden className={test.passed ? 'text-good' : 'text-warn'}>
+                  <span aria-hidden className={test.passed ? 'text-good' : 'text-bad'}>
                     {test.passed ? '✓' : '✗'}
                   </span>
                   <span>
                     {test.name}
-                    {test.error && <span className="block font-mono text-xs text-warn">{test.error}</span>}
+                    {test.error && <span className="block font-mono text-xs text-bad">{test.error}</span>}
                   </span>
                 </li>
               ))}
@@ -209,15 +209,15 @@ export function CodeView({ item, intervals, free, onGrade, status }: ViewProps<C
       )}
 
       {error && (
-        <p role="alert" className="mt-3 rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">
+        <p role="alert" className="mt-3 rounded-md bg-bad-soft px-3 py-2 text-sm text-bad">
           {error}
         </p>
       )}
 
       {finished && (
         <div className="mt-5 space-y-3 border-t border-line pt-4">
-          <div className={`rounded-lg px-4 py-3 ${solved && !gaveUp ? 'bg-good-soft' : 'bg-warn-soft'}`}>
-            <p className={`font-semibold ${solved && !gaveUp ? 'text-good' : 'text-warn'}`}>{solved && !gaveUp ? 'Решено' : 'Решение открыто'}</p>
+          <div className={`rounded-lg px-4 py-3 ${solved && !gaveUp ? 'bg-good-soft' : 'bg-bad-soft'}`}>
+            <p className={`font-semibold ${solved && !gaveUp ? 'text-good' : 'text-bad'}`}>{solved && !gaveUp ? 'Решено' : 'Решение открыто'}</p>
             <p className="text-sm text-muted">{GRADE_NOTE[grade]}</p>
           </div>
           {reference && (
@@ -231,7 +231,7 @@ export function CodeView({ item, intervals, free, onGrade, status }: ViewProps<C
               <RichText text={reference.explain} className="text-sm" />
             </>
           )}
-          <button type="button" onClick={next} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-surface">
+          <button type="button" onClick={next} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary">
             Дальше
             {!free && <span className="ml-2 font-mono text-xs opacity-80">{intervals[grade]}</span>}
           </button>

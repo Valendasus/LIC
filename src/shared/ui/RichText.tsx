@@ -16,7 +16,7 @@ export function RichText({ text, className = '' }: { text: string; className?: s
       while (i < lines.length && !lines[i].startsWith('```')) code.push(lines[i++])
       i++
       blocks.push(
-        <pre key={blocks.length} className="overflow-x-auto rounded-md bg-[oklch(22%_0.02_260)] p-3 text-left font-mono text-[13px] leading-relaxed text-[oklch(92%_0.01_260)]">
+        <pre key={blocks.length} className="overflow-x-auto rounded-card bg-bg px-4 py-3 text-left font-mono text-[13px] leading-relaxed text-fg">
           <code>{code.join('\n')}</code>
         </pre>,
       )
@@ -65,7 +65,7 @@ function inline(text: string): ReactNode[] {
     const token = match[0]
     out.push(
       token.startsWith('`') ? (
-        <code key={match.index} className="rounded bg-accent-soft px-1 py-0.5 font-mono text-[0.9em]">
+        <code key={match.index} className="rounded-md bg-raised px-1.5 py-0.5 font-mono text-[0.88em]">
           {token.slice(1, -1)}
         </code>
       ) : (

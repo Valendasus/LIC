@@ -178,7 +178,7 @@ describe('«Что выведет»', () => {
     await user.keyboard('{Meta>}{Enter}{/Meta}')
     expect(screen.getByRole('status')).toHaveTextContent('Неверно')
     expect(screen.getByText('Ваш ответ')).toBeInTheDocument()
-    expect(screen.getByText('x')).toHaveClass('text-warn')
+    expect(screen.getByText('x')).toHaveClass('text-bad')
   })
 
   it('пустой ответ не отправляется ни кнопкой, ни клавишами; пустая строка в ответе показывается', async () => {

@@ -26,8 +26,8 @@ export function Outcome({
 
   return (
     <div className="space-y-3" role="status">
-      <div className={`rounded-lg px-4 py-3 ${correct ? 'bg-good-soft' : 'bg-warn-soft'}`}>
-        <p className={`mb-1 font-semibold ${correct ? 'text-good' : 'text-warn'}`}>{correct ? 'Верно' : 'Неверно'}</p>
+      <div className={`rounded-lg px-4 py-3 ${correct ? 'bg-good-soft' : 'bg-bad-soft'}`}>
+        <p className={`mb-1 font-semibold ${correct ? 'text-good' : 'text-bad'}`}>{correct ? 'Верно' : 'Неверно'}</p>
         <RichText text={explain} className="text-sm" />
       </div>
       <div className="flex flex-wrap gap-2">
@@ -35,7 +35,7 @@ export function Outcome({
           ref={next}
           type="button"
           onClick={() => onGrade(correct ? 3 : 1)}
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-surface"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary"
         >
           Дальше
           {!free && <span className="ml-2 font-mono text-xs opacity-80">{intervals[correct ? 3 : 1]}</span>}

@@ -111,11 +111,11 @@ export function PracticeSession({
             .join(' · ')}
         </p>
         {error && (
-          <p role="alert" className="mt-4 rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">
+          <p role="alert" className="mt-4 rounded-md bg-bad-soft px-3 py-2 text-sm text-bad">
             {error}
           </p>
         )}
-        <Link href={backHref} className="mt-6 inline-block rounded-md bg-accent px-4 py-2 text-sm font-medium text-surface">
+        <Link href={backHref} className="mt-6 inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-on-primary">
           Вернуться
         </Link>
       </div>
@@ -146,7 +146,7 @@ export function PracticeSession({
       {isTask(item) && <CodeView key={viewKey} item={item} {...common} />}
 
       {error && (
-        <p role="alert" className="mt-3 rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">
+        <p role="alert" className="mt-3 rounded-md bg-bad-soft px-3 py-2 text-sm text-bad">
           {error}
         </p>
       )}

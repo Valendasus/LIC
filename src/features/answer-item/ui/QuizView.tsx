@@ -52,7 +52,7 @@ export function QuizView({ item, intervals, free, onGrade, status }: ViewProps<Q
                 ? 'border-dashed border-good'
                 : 'border-good bg-good-soft'
               : picked
-                ? 'border-warn bg-warn-soft'
+                ? 'border-bad bg-bad-soft'
                 : 'border-line opacity-70'
           return (
             <li key={index}>
@@ -88,7 +88,7 @@ export function QuizView({ item, intervals, free, onGrade, status }: ViewProps<Q
               type="button"
               onClick={() => setChecked(true)}
               disabled={chosen.length === 0}
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-surface disabled:opacity-50"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-50"
             >
               Проверить
             </button>

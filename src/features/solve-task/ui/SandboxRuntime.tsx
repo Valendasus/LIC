@@ -44,7 +44,7 @@ export function SandboxRuntime() {
     <div className="p-4" data-sandbox={state}>
       {state === 'running' && <p className="text-sm text-muted">Выполняем тесты…</p>}
       {previewError && (
-        <p role="alert" className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">
+        <p role="alert" className="rounded-md bg-bad-soft px-3 py-2 text-sm text-bad">
           Предпросмотр упал: {previewError}
         </p>
       )}

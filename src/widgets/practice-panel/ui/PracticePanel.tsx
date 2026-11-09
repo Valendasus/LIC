@@ -25,7 +25,7 @@ export async function PracticePanel({ scope }: { scope: string }) {
       <div className="mt-3 flex flex-wrap gap-2">
         <Link
           href={`/review?scope=${query}`}
-          className={`rounded-md px-4 py-2 text-sm font-medium ${ready ? 'bg-accent text-surface' : 'border border-line text-muted'}`}
+          className={`rounded-md px-4 py-2 text-sm font-medium ${ready ? 'bg-primary text-on-primary' : 'border border-line text-muted'}`}
         >
           {ready ? `Учить и повторять (${ready})` : 'На сегодня всё'}
         </Link>

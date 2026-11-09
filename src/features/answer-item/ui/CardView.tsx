@@ -7,7 +7,7 @@ import type { Grade } from '@/entities/schedule'
 import type { ViewProps } from '@/entities/practice-item'
 
 const GRADE_BUTTONS: { grade: Grade; label: string; style: string }[] = [
-  { grade: 1, label: 'Снова', style: 'border-warn/60 hover:bg-warn-soft' },
+  { grade: 1, label: 'Снова', style: 'border-bad/60 hover:bg-bad-soft' },
   { grade: 2, label: 'Трудно', style: 'border-line hover:bg-accent-soft' },
   { grade: 3, label: 'Хорошо', style: 'border-good/60 hover:bg-good-soft' },
   { grade: 4, label: 'Легко', style: 'border-line hover:bg-good-soft' },

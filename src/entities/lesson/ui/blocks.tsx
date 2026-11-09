@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 
 const CALLOUT = {
   note: { title: 'Важно', className: 'border-accent bg-accent-soft' },
-  mistake: { title: 'Частая ошибка', className: 'border-warn bg-warn-soft' },
+  mistake: { title: 'Частая ошибка', className: 'border-bad bg-bad-soft' },
   interview: { title: 'На собеседовании', className: 'border-good bg-good-soft' },
   deep: { title: 'Под капотом', className: 'border-line bg-surface' },
 } as const

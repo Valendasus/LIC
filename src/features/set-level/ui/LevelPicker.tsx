@@ -42,7 +42,7 @@ export function LevelPicker({ nodeId, level }: { nodeId: string; level: number }
         })}
       </div>
       {state.error && (
-        <p role="alert" className="mt-2 text-sm text-warn">
+        <p role="alert" className="mt-2 text-sm text-bad">
           {state.error}
         </p>
       )}
