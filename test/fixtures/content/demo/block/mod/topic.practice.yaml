@@ -1,0 +1,33 @@
+- key: quiz-one
+  kind: quiz
+  question: Один ответ?
+  code: let x = 1
+  options:
+    - text: Да
+      correct: true
+    - text: Нет
+      why: Потому что.
+  explain: Объяснение.
+- key: quiz-many
+  kind: quiz
+  question: Несколько ответов?
+  options:
+    - text: Первый
+      correct: true
+    - text: Второй
+      correct: true
+    - text: Третий
+  explain: Объяснение.
+- key: out
+  kind: output
+  code: console.log(1)
+  answer: ['1']
+  explain: Объяснение.
+- key: ord
+  kind: order
+  prompt: По порядку
+  steps: [Один, Два, Три]
+  explain: Объяснение.
+- key: unknown
+  kind: weird
+  explain: Неизвестный вид пропускается.

@@ -1,0 +1,18 @@
+- key: term-a
+  type: term
+  front: Термин А
+  back: Определение А
+  example: Пример А
+  reverse: true
+- key: qa-b
+  type: qa
+  front: Вопрос Б
+  back: Ответ Б
+- key: code-c
+  type: code
+  front: Код В
+  back: Ответ В
+- key: qa-d
+  type: qa
+  front: Вопрос Г
+  back: Ответ Г

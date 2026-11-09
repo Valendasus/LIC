@@ -1,0 +1,478 @@
+# Дерево специальности Frontend.
+# Уровни: блок → модуль → тема (лист). Лист с `content: true` имеет файл <путь>.mdx рядом.
+# grade: J — первая работа, M — middle, S — senior или обзор.
+# Полная программа и задачи по блокам: docs/FRONTEND-PLAN.md.
+
+# ───────────────────────── Платформа ─────────────────────────
+- slug: html
+  title: FE1 · HTML
+  group: Платформа
+  summary: Семантика, формы, медиа, нативные интерактивные элементы, SEO-разметка.
+  children:
+    - slug: document
+      title: Документ и метаданные
+      children:
+        - { slug: structure, title: 'Структура документа, head, viewport, lang', grade: J }
+        - { slug: resource-hints, title: 'Подсказки ресурсов: preload, prefetch, preconnect', grade: M }
+    - slug: semantics
+      title: Семантика и структура
+      children:
+        - { slug: landmarks, title: 'Ориентиры страницы: header, nav, main, aside, footer', grade: J }
+        - { slug: headings-sections, title: 'Заголовки, section и article', grade: J }
+        - { slug: button-vs-link, title: 'Кнопка или ссылка', grade: J }
+    - slug: forms
+      title: Формы
+      children:
+        - { slug: inputs, title: 'Типы полей, label, fieldset', grade: J }
+        - { slug: autofill, title: 'autocomplete и inputmode', grade: J }
+        - { slug: validation, title: 'Встроенная валидация и Constraint Validation API', grade: J }
+    - slug: media
+      title: Медиа и изображения
+      children:
+        - { slug: responsive-images, title: 'picture, srcset, sizes, ленивая загрузка', grade: J }
+        - { slug: video-audio, title: 'video и audio', grade: J }
+    - { slug: tables, title: 'Таблицы данных', grade: J }
+    - slug: interactive
+      title: Нативные интерактивные элементы
+      children:
+        - { slug: dialog, title: 'dialog и модальность', grade: M }
+        - { slug: popover, title: 'Popover API и :open', grade: M }
+        - { slug: details, title: 'details и summary', grade: J }
+    - { slug: seo-markup, title: 'SEO-разметка, Open Graph и JSON-LD', grade: M }
+
+- slug: css
+  title: FE2 · CSS
+  group: Платформа
+  summary: Каскад, раскладка, адаптивность, современные селекторы и цвет, анимации, архитектура.
+  children:
+    - slug: cascade
+      title: Каскад
+      children:
+        - slug: specificity
+          title: 'Каскад, специфичность и наследование'
+          grade: J
+          content: true
+          goals:
+            - Предсказать, какое правило победит, по шагам алгоритма каскада
+            - Посчитать специфичность любого селектора, включая :is, :where и :not
+            - Объяснить, почему !important и стили в атрибуте — крайние средства
+            - Управлять порядком через @layer вместо гонки специфичности
+        - { slug: layers-scope, title: '@layer и @scope', grade: M }
+    - slug: box
+      title: Блочная модель и потоки
+      children:
+        - { slug: box-model, title: 'Блочная модель и box-sizing', grade: J }
+        - { slug: flow-overflow, title: 'Нормальный поток, схлопывание отступов, overflow', grade: J }
+    - { slug: flexbox, title: 'Flexbox', grade: J }
+    - { slug: grid, title: 'Grid и subgrid', grade: J }
+    - slug: positioning
+      title: Позиционирование
+      children:
+        - { slug: position, title: 'position и sticky', grade: J }
+        - { slug: stacking, title: 'Контексты наложения и z-index', grade: J }
+        - { slug: anchor, title: 'Anchor positioning', grade: M }
+    - slug: responsive
+      title: Адаптивность
+      children:
+        - { slug: units, title: 'Единицы: rem, em, vw, dvh, clamp', grade: J }
+        - { slug: media-queries, title: 'Медиазапросы и mobile-first', grade: J }
+        - { slug: container-queries, title: 'Container queries: размерные и style', grade: M }
+    - { slug: selectors, title: 'Современные селекторы: :has, :is, :where, вложенность', grade: J }
+    - { slug: color, title: 'Цвет: OKLCH, color-mix, contrast-color', grade: M }
+    - { slug: typography, title: 'Типографика и веб-шрифты', grade: M }
+    - slug: motion
+      title: Анимации
+      children:
+        - { slug: transitions, title: 'Переходы, анимации и @starting-style', grade: J }
+        - { slug: scroll-driven, title: 'Scroll-driven animations', grade: M }
+    - { slug: architecture, title: 'Архитектура CSS и соглашения', grade: M }
+    - { slug: baseline, title: 'Кросс-браузерность и Baseline', grade: M }
+    - { slug: performance, title: 'Производительность CSS', grade: S }
+
+- slug: styling
+  title: FE3 · Подходы к стилизации
+  group: Платформа
+  summary: CSS Modules, BEM, CSS-in-JS и его цена, zero-runtime, выбор подхода.
+  children:
+    - { slug: css-modules-bem, title: 'CSS Modules и BEM', grade: J }
+    - { slug: css-in-js, title: 'CSS-in-JS и серверные компоненты', grade: M }
+    - { slug: zero-runtime, title: 'Zero-runtime: vanilla-extract, Panda', grade: S }
+    - { slug: choosing, title: 'Как выбрать подход', grade: M }
+
+- slug: tailwind
+  title: FE4 · Tailwind CSS
+  group: Платформа
+  summary: Utility-first, Tailwind 4 и @theme, варианты компонентов, shadcn/ui, Tailwind в большом проекте.
+  children:
+    - { slug: utility-first, title: 'Идея utility-first', grade: J }
+    - { slug: utilities-variants, title: 'Утилиты, адаптивные префиксы и состояния', grade: J }
+    - { slug: v4-theme, title: 'Tailwind 4: @theme, @utility, @custom-variant', grade: M }
+    - { slug: dark-mode, title: 'Тёмная тема', grade: J }
+    - { slug: component-variants, title: 'Варианты компонентов: cva, tailwind-merge', grade: M }
+    - { slug: shadcn, title: 'shadcn/ui и Radix', grade: M }
+    - { slug: at-scale, title: 'Tailwind в большом проекте', grade: M }
+
+- slug: browser
+  title: FE5 · Браузер и веб-API
+  group: Платформа
+  summary: Рендеринг, event loop, DOM и события, хранилища, воркеры, сеть, безопасность, DevTools.
+  children:
+    - slug: rendering
+      title: Как браузер рисует
+      children:
+        - { slug: pipeline, title: 'Парсинг, стили, layout, paint, composite', grade: J }
+        - { slug: reflow, title: 'Reflow, repaint и layout thrashing', grade: M }
+    - slug: dom-events
+      title: DOM и события
+      children:
+        - { slug: dom-api, title: 'DOM API', grade: J }
+        - { slug: events, title: 'Всплытие, перехват, делегирование', grade: J }
+        - { slug: pointer-keyboard, title: 'Pointer Events, клавиатура и фокус', grade: M }
+    - slug: storage
+      title: Хранилища
+      children:
+        - { slug: cookies-web-storage, title: 'Cookie, localStorage, sessionStorage', grade: J }
+        - { slug: indexeddb-cache, title: 'IndexedDB, Cache API, OPFS', grade: M }
+    - slug: workers
+      title: Потоки и фон
+      children:
+        - { slug: web-workers, title: 'Web Workers и transferable', grade: M }
+        - { slug: cross-tab, title: 'BroadcastChannel и postMessage', grade: M }
+        - { slug: service-worker, title: 'Service Worker и PWA', grade: M }
+    - slug: observers-navigation
+      title: Наблюдатели и навигация
+      children:
+        - { slug: observers, title: 'Intersection, Resize, Mutation Observer', grade: M }
+        - { slug: navigation, title: 'History API, Navigation API, View Transitions', grade: M }
+    - slug: network
+      title: Сеть из браузера
+      children:
+        - { slug: fetch, title: 'Fetch API, AbortController, таймауты', grade: J }
+        - { slug: realtime, title: 'WebSocket и Server-Sent Events', grade: M }
+    - { slug: web-components, title: 'Web Components и Shadow DOM', grade: M }
+    - { slug: security, title: 'Same-origin, CORS, CSP, Trusted Types', grade: M }
+    - { slug: devtools, title: 'DevTools как рабочий инструмент', grade: J }
+
+# ───────────────────────── Языки ─────────────────────────
+- slug: javascript
+  title: FE6 · JavaScript
+  group: Языки
+  summary: Язык целиком — от приведения типов до асинхронности, памяти и метапрограммирования.
+  children:
+    - slug: types
+      title: Типы и приведение
+      children:
+        - { slug: types-coercion, title: 'Примитивы, объекты и приведение типов', grade: J }
+        - { slug: equality, title: 'Сравнение: ==, === и Object.is', grade: J }
+    - slug: scope
+      title: Области видимости и замыкания
+      children:
+        - { slug: scope-hoisting, title: 'Области видимости, hoisting и TDZ', grade: J }
+        - slug: closures
+          title: Замыкания
+          grade: J
+          content: true
+          goals:
+            - Объяснить замыкание через лексическое окружение, а не «функция помнит переменные»
+            - Предсказать результат классических задач с циклом, таймером и счётчиком
+            - Применять замыкания для приватного состояния, фабрик функций, debounce и мемоизации
+            - Найти и исправить «устаревшее замыкание» в React-компоненте
+    - { slug: this, title: 'this и способы его задать', grade: J }
+    - slug: objects
+      title: Объекты, прототипы и классы
+      children:
+        - { slug: prototypes, title: 'Прототипы и цепочка прототипов', grade: J }
+        - { slug: classes, title: 'Классы, наследование, приватные поля', grade: J }
+    - slug: collections
+      title: Коллекции и итерация
+      children:
+        - { slug: arrays, title: 'Массивы и их методы', grade: J }
+        - { slug: map-set, title: 'Map, Set, WeakMap, WeakRef', grade: J }
+        - { slug: iteration, title: 'Протокол итерации, spread и деструктуризация', grade: J }
+    - slug: async
+      title: Асинхронность
+      children:
+        - slug: event-loop
+          title: Event loop в браузере
+          grade: J
+          content: true
+          goals:
+            - Объяснить, как стек вызовов, очередь задач и очередь микрозадач работают вместе
+            - Предсказать порядок вывода с setTimeout, промисами, await и queueMicrotask
+            - Объяснить, почему тяжёлый синхронный код замораживает страницу и как это исправить
+            - Понять, где в цикле находится отрисовка и requestAnimationFrame
+        - { slug: promises, title: 'Промисы', grade: J }
+        - { slug: async-await, title: 'async/await и обработка ошибок', grade: J }
+        - { slug: combinators, title: 'Promise.all, allSettled, race, any', grade: J }
+        - { slug: cancellation, title: 'Отмена и гонки запросов', grade: M }
+    - { slug: modules, title: 'Модули: ESM и CommonJS', grade: J }
+    - { slug: errors, title: 'Ошибки и их обработка', grade: J }
+    - { slug: generators, title: 'Итераторы, генераторы, асинхронные итераторы', grade: M }
+    - { slug: immutability, title: 'Неизменяемость и копирование', grade: J }
+    - { slug: regex, title: 'Регулярные выражения', grade: M }
+    - { slug: dates-intl, title: 'Даты, Intl и Temporal', grade: M }
+    - { slug: numbers, title: 'Числа, точность, BigInt и деньги', grade: M }
+    - { slug: memory, title: 'Память, сборка мусора, утечки', grade: M }
+    - { slug: functional, title: 'Функциональные приёмы', grade: M }
+    - { slug: metaprogramming, title: 'Proxy, Reflect, Symbol', grade: S }
+    - { slug: modern-es, title: 'Новое в ECMAScript 2024–2026', grade: M }
+
+- slug: typescript
+  title: FE7 · TypeScript
+  group: Языки
+  summary: От основ до type-level программирования, типизация React и API, TypeScript 7.
+  children:
+    - { slug: basics, title: 'Основы и вывод типов', grade: J }
+    - { slug: narrowing, title: 'Сужение типов и type guards', grade: J }
+    - { slug: generics, title: 'Обобщения', grade: J }
+    - { slug: utility-types, title: 'Утилитарные типы', grade: M }
+    - { slug: unions, title: 'Размеченные объединения и never', grade: M }
+    - { slug: type-level, title: 'Mapped и conditional types, infer, шаблонные литералы', grade: M }
+    - { slug: satisfies, title: 'satisfies и as const', grade: M }
+    - { slug: react-types, title: 'Типизация React', grade: M }
+    - { slug: runtime-validation, title: 'Типы API и zod', grade: M }
+    - { slug: tsconfig, title: 'tsconfig и проектные ссылки', grade: M }
+    - { slug: declarations, title: 'Декларации .d.ts', grade: S }
+    - { slug: ts7, title: 'TypeScript 7: что изменилось в инструментах', grade: M }
+
+# ───────────────────────── React ─────────────────────────
+- slug: react-basics
+  title: FE8 · React — основы
+  group: React
+  summary: Компоненты, состояние, списки, события, формы, эффекты, рефы.
+  children:
+    - { slug: components, title: 'Компоненты, JSX, пропсы', grade: J }
+    - { slug: state, title: 'Состояние и неизменяемые обновления', grade: J }
+    - { slug: lists-keys, title: 'Списки и ключи', grade: J }
+    - { slug: events, title: 'Обработка событий', grade: J }
+    - { slug: forms, title: 'Управляемые и неуправляемые поля', grade: J }
+    - { slug: effects, title: 'Эффекты, зависимости, очистка', grade: J }
+    - { slug: refs, title: 'Рефы и доступ к DOM', grade: J }
+
+- slug: react-internals
+  title: FE9 · React — как он работает внутри
+  group: React
+  summary: Рендер и коммит, Fiber, перерисовки, batching, конкурентный рендеринг, гидратация, Compiler.
+  children:
+    - { slug: render-commit, title: 'Рендер и коммит', grade: M }
+    - { slug: reconciliation, title: 'Reconciliation и Fiber', grade: M }
+    - { slug: rerenders, title: 'Когда и почему перерисовка', grade: M }
+    - { slug: batching, title: 'Batching и порядок эффектов', grade: M }
+    - { slug: concurrent, title: 'Конкурентный рендеринг и приоритеты', grade: M }
+    - { slug: strict-mode, title: 'StrictMode', grade: M }
+    - { slug: hydration, title: 'Гидратация и её ошибки', grade: M }
+    - { slug: compiler, title: 'React Compiler 1.0', grade: M }
+
+- slug: react-hooks
+  title: FE10 · React — хуки и API
+  group: React
+  summary: Все стабильные хуки React 19.3, Activity, ViewTransition, Suspense, порталы, свои хуки.
+  children:
+    - { slug: core-hooks, title: 'useState, useEffect, useRef, useContext', grade: J }
+    - { slug: advanced-hooks, title: 'useReducer, useMemo, useCallback, useLayoutEffect, useId', grade: M }
+    - { slug: external-store, title: 'useSyncExternalStore', grade: M }
+    - { slug: effect-event, title: 'useEffectEvent', grade: M }
+    - { slug: actions, title: 'Actions: useActionState, useFormStatus, useOptimistic', grade: M }
+    - { slug: use, title: 'use()', grade: M }
+    - { slug: activity, title: 'Activity', grade: M }
+    - { slug: view-transition, title: 'ViewTransition', grade: M }
+    - { slug: suspense-errors, title: 'Suspense и Error Boundary', grade: M }
+    - { slug: portals-fragment-refs, title: 'Порталы и refs на Fragment', grade: M }
+    - { slug: custom-hooks, title: 'Собственные хуки', grade: J }
+
+- slug: react-patterns
+  title: FE11 · React — паттерны и качество кода
+  group: React
+  summary: Композиция, составные и headless-компоненты, «вам может не понадобиться эффект», антипаттерны.
+  children:
+    - { slug: composition, title: 'Композиция и слоты', grade: M }
+    - { slug: compound, title: 'Составные компоненты', grade: M }
+    - { slug: controlled, title: 'Контролируемые и неконтролируемые компоненты', grade: M }
+    - { slug: headless, title: 'Headless-компоненты', grade: M }
+    - { slug: no-effect, title: 'Вам может не понадобиться эффект', grade: M }
+    - { slug: antipatterns, title: 'Антипаттерны', grade: M }
+    - { slug: accessible-components, title: 'Доступные компоненты по WAI-ARIA APG', grade: M }
+
+- slug: react-performance
+  title: FE12 · React — производительность
+  group: React
+  summary: Измерение, мемоизация до и после Compiler, контекст, виртуализация, переходы.
+  children:
+    - { slug: profiling, title: 'Profiler и причины рендеров', grade: M }
+    - { slug: memoization, title: 'Мемоизация до и после React Compiler', grade: M }
+    - { slug: context-selectors, title: 'Контекст и селекторы', grade: M }
+    - { slug: virtualization, title: 'Виртуализация', grade: M }
+    - { slug: code-splitting, title: 'Разделение кода', grade: M }
+    - { slug: transitions, title: 'Переходы и отложенные значения', grade: M }
+
+- slug: react-ecosystem
+  title: FE13 · React — экосистема
+  group: React
+  summary: Роутинг, серверное и клиентское состояние, формы, таблицы, UI-киты, анимация, i18n.
+  children:
+    - { slug: routing, title: 'React Router 7 и TanStack Router', grade: J }
+    - { slug: tanstack-query, title: 'TanStack Query', grade: M }
+    - { slug: forms, title: 'React Hook Form и zod', grade: M }
+    - { slug: state-libs, title: 'Zustand и Redux Toolkit', grade: M }
+    - { slug: tables, title: 'TanStack Table и AG Grid', grade: M }
+    - { slug: ui-kits, title: 'UI-библиотеки', grade: M }
+    - { slug: motion, title: 'Motion и GSAP в React', grade: M }
+    - { slug: i18n, title: 'Интернационализация', grade: M }
+
+- slug: rsc
+  title: FE14 · React Server Components
+  group: React
+  summary: Серверные компоненты, граница use client, серверные функции, безопасность.
+  children:
+    - { slug: what, title: 'Что такое серверные компоненты', grade: M }
+    - { slug: boundary, title: 'Граница use client и сериализация', grade: M }
+    - { slug: data, title: 'Данные, стриминг и Suspense', grade: M }
+    - { slug: server-functions, title: 'Server Functions и Actions', grade: M }
+    - { slug: security, title: 'Безопасность серверных функций', grade: M }
+
+# ───────────────────────── Next.js ─────────────────────────
+- slug: nextjs
+  title: FE15 · Next.js 16
+  group: Next.js
+  summary: Маршрутизация, рендеринг, Cache Components, Server Actions, proxy.ts, SEO, i18n, деплой.
+  children:
+    - { slug: routing, title: 'Маршрутизация App Router', grade: J }
+    - { slug: navigation, title: 'Навигация и prefetch', grade: M }
+    - { slug: server-client, title: 'Серверные и клиентские компоненты', grade: J }
+    - { slug: fetching, title: 'Загрузка данных', grade: J }
+    - { slug: mutations, title: 'Server Actions и формы', grade: M }
+    - { slug: cache-components, title: 'Cache Components и use cache', grade: M }
+    - { slug: streaming, title: 'Стриминг и частичный пререндер', grade: M }
+    - { slug: errors, title: 'Обработка ошибок', grade: M }
+    - { slug: route-handlers, title: 'Route handlers и BFF', grade: M }
+    - { slug: proxy, title: 'proxy.ts', grade: M }
+    - { slug: auth, title: 'Аутентификация и безопасность данных', grade: M }
+    - { slug: metadata, title: 'Метаданные, OG, JSON-LD, sitemap', grade: M }
+    - { slug: assets, title: 'Изображения, шрифты, скрипты', grade: M }
+    - { slug: i18n, title: 'Интернационализация', grade: M }
+    - { slug: deploy, title: 'Сборка, self-hosting, статический экспорт', grade: M }
+
+# ───────────────────────── Инженерия ─────────────────────────
+- slug: architecture
+  title: FE16 · Архитектура и методологии
+  group: Инженерия
+  summary: Структура проекта, FSD 2.1, Atomic Design, границы модулей, монорепозитории, ADR.
+  children:
+    - { slug: structure, title: 'Структура проекта и colocation', grade: J }
+    - { slug: fsd, title: 'Feature-Sliced Design 2.1', grade: M }
+    - { slug: atomic, title: 'Atomic Design', grade: M }
+    - { slug: clean, title: 'Чистая архитектура на фронтенде', grade: M }
+    - { slug: boundaries, title: 'Границы модулей', grade: M }
+    - { slug: monorepo, title: 'Монорепозитории', grade: M }
+    - { slug: micro-frontends, title: 'Микрофронтенды', grade: S }
+    - { slug: adr-c4, title: 'ADR и C4', grade: M }
+
+- slug: backend-communication
+  title: FE17 · Взаимодействие с бэкендом
+  group: Инженерия
+  summary: HTTP, API, клиентский слой, авторизация на клиенте, контракты, кеш, realtime, файлы, моки.
+  children:
+    - { slug: http, title: 'HTTP глазами фронтенда', grade: J }
+    - { slug: cors-cookies, title: 'CORS, cookies, credentials', grade: J }
+    - { slug: api-design, title: 'Проектирование и чтение API', grade: J }
+    - { slug: graphql, title: 'GraphQL', grade: M }
+    - { slug: api-client, title: 'Клиентский слой API', grade: M }
+    - { slug: auth-client, title: 'Аутентификация на клиенте', grade: M }
+    - { slug: contracts, title: 'Типобезопасный контракт', grade: M }
+    - { slug: caching, title: 'Кеш, инвалидация, оптимистичные обновления', grade: M }
+    - { slug: realtime, title: 'Realtime', grade: M }
+    - { slug: files, title: 'Файлы и загрузка в S3', grade: M }
+    - { slug: errors, title: 'Ошибки и устойчивость', grade: M }
+    - { slug: mocks, title: 'Моки и MSW', grade: M }
+
+- slug: state
+  title: FE18 · Состояние приложения
+  group: Инженерия
+  summary: Виды состояния, URL, Zustand, Redux Toolkit, конечные автоматы.
+  children:
+    - { slug: kinds, title: 'Виды состояния и где их хранить', grade: J }
+    - { slug: url-state, title: 'URL как состояние', grade: M }
+    - { slug: stores, title: 'Сторы: Zustand и Redux Toolkit', grade: M }
+    - { slug: state-machines, title: 'Конечные автоматы', grade: S }
+
+- slug: ui-a11y
+  title: FE19 · UI-инженерия и доступность
+  group: Инженерия
+  summary: WCAG 2.2, ARIA и APG, проверка доступности, дизайн-системы, Figma, состояния интерфейса.
+  children:
+    - { slug: a11y-basics, title: 'Основы доступности', grade: J }
+    - { slug: wcag, title: 'WCAG 2.2 AA', grade: M }
+    - { slug: aria-apg, title: 'ARIA и паттерны APG', grade: M }
+    - { slug: a11y-testing, title: 'Проверка доступности', grade: M }
+    - { slug: design-systems, title: 'Дизайн-системы и токены', grade: M }
+    - { slug: figma, title: 'Работа с Figma', grade: J }
+    - { slug: ui-states, title: 'Состояния интерфейса', grade: J }
+
+- slug: performance
+  title: FE21 · Производительность
+  group: Инженерия
+  summary: Web Vitals, критический путь, бандл, изображения, шрифты, кеш, длинные задачи, бюджеты.
+  children:
+    - { slug: web-vitals, title: 'Core Web Vitals', grade: J }
+    - { slug: field-lab, title: 'Полевые и лабораторные данные', grade: M }
+    - { slug: critical-path, title: 'Критический путь рендеринга', grade: M }
+    - { slug: bundle, title: 'Бандл и разделение кода', grade: M }
+    - { slug: images, title: 'Изображения', grade: M }
+    - { slug: fonts, title: 'Шрифты', grade: M }
+    - { slug: long-tasks, title: 'Длинные задачи и INP', grade: M }
+    - { slug: budgets, title: 'Бюджеты в CI', grade: M }
+
+- slug: testing
+  title: FE22 · Тестирование
+  group: Инженерия
+  summary: Стратегия, Vitest 4, Testing Library, MSW, Playwright, Storybook 10, тесты доступности.
+  children:
+    - { slug: strategy, title: 'Стратегия тестирования', grade: J }
+    - { slug: vitest, title: 'Vitest', grade: J }
+    - { slug: testing-library, title: 'Testing Library и user-event', grade: M }
+    - { slug: playwright, title: 'Playwright', grade: M }
+    - { slug: storybook, title: 'Storybook и тесты компонентов', grade: M }
+    - { slug: tdd, title: 'TDD на практике', grade: M }
+
+- slug: tooling
+  title: FE23 · Сборка и инструменты
+  group: Инженерия
+  summary: Vite 8, Turbopack, бандлер изнутри, линтеры, форматтеры, монорепозитории, публикация пакетов.
+  children:
+    - { slug: bundlers, title: 'Что делает бандлер', grade: J }
+    - { slug: vite, title: 'Vite 8: Rolldown и Oxc', grade: M }
+    - { slug: linting, title: 'ESLint 9, oxlint, Biome', grade: J }
+    - { slug: packages, title: 'Пакеты: exports, ESM, публикация', grade: M }
+
+# ───────────────────────── Специализации ─────────────────────────
+- slug: animation
+  title: FE20 · Анимация и креативный фронтенд
+  group: Специализации
+  summary: Принципы движения, CSS и View Transitions, GSAP, Lenis, SVG, Canvas, three.js и R3F.
+  children:
+    - { slug: principles, title: 'Принципы движения и reduced motion', grade: J }
+    - { slug: web-animations, title: 'Web Animations API', grade: M }
+    - { slug: gsap, title: 'GSAP и ScrollTrigger', grade: M }
+    - { slug: svg-canvas, title: 'SVG и Canvas 2D', grade: M }
+    - { slug: three, title: 'three.js и React Three Fiber', grade: M }
+    - { slug: shaders, title: 'Шейдеры — основы', grade: S }
+
+- slug: complex-ui
+  title: FE24 · Сложные интерфейсы
+  group: Специализации
+  summary: Таблицы, перетаскивание, редакторы, календари, файлы, видео, импорт и экспорт.
+  children:
+    - { slug: tables, title: 'Большие таблицы', grade: M }
+    - { slug: dnd, title: 'Перетаскивание', grade: M }
+    - { slug: editors, title: 'Редакторы текста и кода', grade: M }
+    - { slug: calendars, title: 'Календари и часовые пояса', grade: M }
+    - { slug: media, title: 'Видео и звонки', grade: S }
+    - { slug: import-export, title: 'Импорт и экспорт', grade: M }
+
+- slug: system-design
+  title: FE25 · Frontend system design
+  group: Специализации
+  summary: Метод RADIO и 10 разборов — от автодополнения до совместного редактора.
+  children:
+    - { slug: radio, title: 'Метод RADIO', grade: M }
+    - { slug: cases, title: 'Разборы задач', grade: M }

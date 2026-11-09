@@ -1,0 +1,24 @@
+- slug: frontend
+  title: Frontend
+  summary: HTML, CSS, браузер, JavaScript, TypeScript, React, Next.js, архитектура, производительность, тестирование.
+  status: active
+- slug: fullstack
+  title: Fullstack
+  summary: Фича целиком от базы до интерфейса, контракты, авторизация через весь стек, SaaS.
+  status: planned
+- slug: backend
+  title: Backend на Node.js
+  summary: Node, API, базы данных, безопасность, очереди, архитектура, наблюдаемость.
+  status: planned
+- slug: devops
+  title: DevOps и SRE
+  summary: Linux, сети, контейнеры, CI/CD, облака, Kubernetes, наблюдаемость, надёжность.
+  status: planned
+- slug: seo
+  title: SEO
+  summary: Техническое SEO, Next.js, международное SEO, семантика, аналитика, Google и Яндекс.
+  status: planned
+- slug: other-backends
+  title: Python и Java (знакомство)
+  summary: Как знания из Node переносятся на FastAPI, Django и Spring Boot.
+  status: planned

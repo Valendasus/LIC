@@ -1,0 +1,40 @@
+- key: sum
+  kind: code
+  level: easy
+  title: Сумма
+  prompt: Напишите `sum(a, b)`.
+  starter: |
+    function sum(a, b) {}
+  hints:
+    - Оператор `+`.
+  tests: |
+    test('складывает', () => expect(sum(2, 3)).toBe(5))
+    test('с нулём', () => expect(sum(0, 4)).toBe(4))
+  solution: |
+    function sum(a, b) {
+      return a + b
+    }
+  explain: Разбор суммы.
+- key: bare
+  kind: code
+  level: warmup
+  title: Ноль
+  prompt: Верните ноль из `zero()`.
+  starter: ''
+  tests: |
+    test('ноль', () => expect(zero()).toBe(0))
+  solution: |
+    const zero = () => 0
+  explain: Разбор.
+- key: view
+  kind: react
+  level: easy
+  title: Привет
+  prompt: Компонент `Hi`.
+  starter: 'function Hi() { return null }'
+  hints: [Верните разметку.]
+  tests: |
+    test('рисует', () => { render(<Hi />); expect(screen.getByText('привет')).toBeInTheDocument() })
+  solution: 'function Hi() { return <p>привет</p> }'
+  preview: <Hi />
+  explain: Разбор.

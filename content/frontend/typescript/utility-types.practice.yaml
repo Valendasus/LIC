@@ -1,0 +1,122 @@
+# Задачи на типы: проверяет компилятор TypeScript. Тест — строка с Expect<…> или // @ts-expect-error.
+# Ключи не переименовывать: к ним привязано расписание.
+
+- key: types-pick
+  kind: types
+  level: easy
+  title: Свой Pick
+  prompt: |
+    Напишите `MyPick<T, K>` — как встроенный `Pick`: оставляет в `T` только ключи `K`. Встроенный `Pick` не используйте.
+
+    Ключ, которого нет в `T`, должен быть ошибкой.
+  starter: |
+    type MyPick<T, K> = any
+  hints:
+    - 'Как ограничить `K` только ключами `T`? Вспомните оператор `keyof` и `extends` в параметре.'
+  tests: |
+    interface Todo {
+      title: string
+      description: string
+      done: boolean
+    }
+    type cases = [
+      Expect<Equal<MyPick<Todo, 'title'>, { title: string }>>,
+      Expect<Equal<MyPick<Todo, 'title' | 'done'>, { title: string; done: boolean }>>,
+    ]
+    // @ts-expect-error
+    type invalid = MyPick<Todo, 'title' | 'author'>
+  solution: |
+    type MyPick<T, K extends keyof T> = {
+      [P in K]: T[P]
+    }
+  explain: |
+    **Два приёма:**
+    - `K extends keyof T` — ограничение параметра: передать ключ, которого нет в `T`, нельзя.
+    - `[P in K]: T[P]` — сопоставленный тип (mapped type): для каждого ключа из объединения `K` берём тип свойства по индексу.
+
+    Именно так `Pick` и объявлен в `lib.es5.d.ts`. Модификаторы `readonly` и `?` при этом сохраняются: TypeScript переносит их, когда ключи берутся из `keyof T` (такие mapped types называют гомоморфными).
+
+- key: types-omit
+  kind: types
+  level: medium
+  title: Свой Omit
+  prompt: |
+    Напишите `MyOmit<T, K>` — убирает из `T` ключи `K`. Встроенные `Omit`, `Pick` и `Exclude` не используйте.
+
+    Модификаторы `readonly` и `?` у оставшихся свойств должны сохраниться.
+  starter: |
+    type MyOmit<T, K extends keyof T> = T
+  hints:
+    - Нужно пройти по ключам `T` и некоторые выбросить. Как в mapped type «выбросить» ключ?
+    - 'Переназначение ключей через `as` (TypeScript 4.1+): `[P in keyof T as …]`. Если ключ превращается в `never`, свойство исчезает.'
+    - 'Условие для ключа: `P extends K ? never : P`.'
+  tests: |
+    interface User {
+      readonly id: number
+      name: string
+      email?: string
+      password: string
+    }
+    type cases = [
+      Expect<Equal<MyOmit<User, 'password'>, { readonly id: number; name: string; email?: string }>>,
+      Expect<Equal<MyOmit<User, 'password' | 'email'>, { readonly id: number; name: string }>>,
+      Expect<Equal<MyOmit<User, never>, User>>,
+    ]
+  solution: |
+    type MyOmit<T, K extends keyof T> = {
+      [P in keyof T as P extends K ? never : P]: T[P]
+    }
+  explain: |
+    **Ключевое место** — `as` в mapped type: ключ можно переименовать или, вернув `never`, выбросить.
+
+    **Почему модификаторы сохраняются:** перебор идёт по `keyof T`, такой mapped type гомоморфный — `readonly` и `?` переносятся сами.
+
+    **Разница со встроенным.** Встроенный `Omit<T, K extends keyof any>` принимает любые ключи, даже отсутствующие в `T`. Это частая претензия к нему: опечатка в ключе не ловится. Наш вариант строже.
+
+- key: types-deep-readonly
+  kind: types
+  level: hard
+  title: DeepReadonly
+  prompt: |
+    Напишите `DeepReadonly<T>`: все свойства на всех уровнях — `readonly`, массивы — `readonly`-массивы.
+    Функции оставьте как есть: у функции «свойств только для чтения» не бывает.
+  starter: |
+    type DeepReadonly<T> = Readonly<T>
+  hints:
+    - Это рекурсивный тип. Что должно быть базой рекурсии — когда остановиться?
+    - 'Примитивы и функции возвращаются как есть. Проверка `T extends (...args: any[]) => any`.'
+    - 'Для объектов: `{ readonly [K in keyof T]: DeepReadonly<T[K]> }`.'
+    - 'Отдельная ветка для массивов не нужна: mapped type над массивом даёт массив, а `readonly` делает его `readonly T[]`. Проверьте на тесте с массивом.'
+  tests: |
+    type Config = {
+      name: string
+      tags: string[]
+      nested: { level: { deep: number }; list: { id: number }[] }
+      onChange: (value: string) => void
+    }
+    type Expected = {
+      readonly name: string
+      readonly tags: readonly string[]
+      readonly nested: {
+        readonly level: { readonly deep: number }
+        readonly list: readonly { readonly id: number }[]
+      }
+      readonly onChange: (value: string) => void
+    }
+    type cases = [
+      Expect<Equal<DeepReadonly<Config>, Expected>>,
+      Expect<Equal<DeepReadonly<string>, string>>,
+      Expect<Equal<DeepReadonly<() => 1>, () => 1>>,
+    ]
+  solution: |
+    type DeepReadonly<T> = T extends (...args: any[]) => any
+      ? T
+      : T extends object
+        ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+        : T
+  explain: |
+    **База рекурсии:** функции и примитивы возвращаются как есть. Без проверки на функцию она превратилась бы в пустой объект `{}` — mapped type по функции не сохраняет сигнатуру вызова.
+
+    **Массивы бесплатно.** Гомоморфный mapped type над массивом или кортежем даёт массив, а `readonly` превращает его в `readonly T[]`.
+
+    **На собесе спросят:** почему `Readonly<T>` поверхностный; чем `readonly` в типах отличается от `Object.freeze` (типы стираются, во время выполнения защиты нет); как `as const` даёт глубокий `readonly` для литералов.

@@ -1,0 +1,159 @@
+import { beforeEach, describe, expect, it } from 'vitest'
+import { notFound } from 'next/navigation'
+import RootLayout, { metadata as layoutMetadata } from '@/app/layout'
+import SiteLayout from '@/app/(site)/layout'
+import HomePage from '@/app/(site)/page'
+import SpecialtyPage, { generateMetadata as specialtyMetadata } from '@/app/(site)/[specialty]/page'
+import NodePage, { generateMetadata as nodeMetadata } from '@/app/(site)/[specialty]/[...path]/page'
+import ReviewPage, { metadata as reviewMetadata } from '@/app/(site)/review/page'
+import { LevelPicker } from '@/components/LevelPicker'
+import { PracticeSession } from '@/components/practice/PracticeSession'
+import { NodeRow } from '@/components/ui'
+import { getCurrentUser } from '@/lib/progress'
+import { NEW_PER_DAY } from '@/lib/review'
+import { db, resetDb } from '../db'
+import { byType, findAll, textOf } from '../tree'
+
+const params = <T,>(value: T) => ({ params: Promise.resolve(value) })
+const search = (value: Record<string, string>) => ({ searchParams: Promise.resolve(value) })
+const hrefs = (node: React.ReactNode) => findAll(node, (element) => typeof element.props.href === 'string').map((element) => element.props.href)
+
+async function exhaustNewToday() {
+  const user = await getCurrentUser()
+  const later = new Date(Date.now() + 86_400_000)
+  for (let i = 0; i < NEW_PER_DAY; i++) {
+    await db.reviewItem.create({
+      data: { userId: user.id, itemId: `other#${i}`, kind: 'card', stability: 1, stabilityFast: 1, difficulty: 5, state: 2, scheduleStatus: 'review', dueAt: later, reps: 1, lapses: 0, scheduledDays: 1, learningStep: 0 },
+    })
+  }
+}
+
+beforeEach(resetDb)
+
+describe('каркас', () => {
+  it('корневой макет: язык и метаданные, без шапки — она нужна не везде', () => {
+    const html = RootLayout({ children: <p>контент</p> })
+    expect(html.props.lang).toBe('ru')
+    expect(textOf(html)).toBe('контент')
+    expect(layoutMetadata).toMatchObject({ title: { default: 'LIC', template: '%s · LIC' } })
+  })
+
+  it('макет страниц платформы: шапка и контент', () => {
+    const site = SiteLayout({ children: <p>контент</p> })
+    expect(textOf(site)).toContain('LIC')
+    expect(textOf(site)).toContain('контент')
+  })
+})
+
+describe('главная', () => {
+  it('специальности: активная — ссылка с прогрессом, запланированные — без ссылки', async () => {
+    const page = await HomePage()
+    expect(hrefs(page)).toEqual(['/frontend'])
+    const text = textOf(page)
+    expect(text).toContain('Learn → Implement → Confirm')
+    expect(text).toContain('Начато тем: 0 из')
+    expect(text).toContain('в планах')
+  })
+})
+
+describe('страница специальности', () => {
+  it('блоки сгруппированы, есть заголовок и метаданные', async () => {
+    const page = await SpecialtyPage(params({ specialty: 'frontend' }))
+    expect(textOf(page)).toMatch(/25 блоков · \d+ тем · начато 0/)
+    expect(byType(page, NodeRow)).toHaveLength(25)
+    for (const group of ['Платформа', 'Языки', 'React', 'Next.js', 'Инженерия', 'Специализации']) expect(textOf(page)).toContain(group)
+    expect(await specialtyMetadata(params({ specialty: 'frontend' }))).toEqual({ title: 'Frontend' })
+    expect(await specialtyMetadata(params({ specialty: 'backend' }))).toEqual({ title: 'Не найдено' })
+  })
+
+  it('несуществующая или запланированная специальность — 404', async () => {
+    await expect(SpecialtyPage(params({ specialty: 'backend' }))).rejects.toThrow('NEXT_NOT_FOUND')
+    expect(notFound).toHaveBeenCalled()
+  })
+})
+
+describe('страница узла', () => {
+  it('ветка: список детей с прогрессом и описание блока', async () => {
+    const page = await NodePage(params({ specialty: 'frontend', path: ['javascript'] }))
+    expect(textOf(page)).toContain('Язык целиком')
+    expect(byType(page, NodeRow).length).toBeGreaterThan(5)
+    const module = await NodePage(params({ specialty: 'frontend', path: ['javascript', 'scope'] }))
+    expect(textOf(module)).toMatch(/2 тем · начато 0/)
+  })
+
+  it('наполненная тема: цели, дата проверки, урок, отметка освоения', async () => {
+    const user = await getCurrentUser()
+    await db.nodeProgress.create({ data: { userId: user.id, nodeId: 'frontend/javascript/scope/closures', level: 2 } })
+    const page = await NodePage(params({ specialty: 'frontend', path: ['javascript', 'scope', 'closures'] }))
+    const text = textOf(page)
+    expect(text).toContain('Нужно для первой работы (Junior).')
+    expect(text).toContain('Проверено 08.11.2026')
+    expect(text).toContain('После темы вы сможете')
+    expect(text).not.toContain('Тема ещё не наполнена')
+    expect(byType(page, LevelPicker)[0].props).toEqual({ nodeId: 'frontend/javascript/scope/closures', level: 2 })
+    expect(await nodeMetadata(params({ specialty: 'frontend', path: ['javascript', 'scope', 'closures'] }))).toEqual({ title: 'Замыкания' })
+  })
+
+  it('ненаполненная тема', async () => {
+    const page = await NodePage(params({ specialty: 'frontend', path: ['nextjs', 'routing'] }))
+    expect(textOf(page)).toContain('Тема ещё не наполнена')
+    expect(textOf(page)).not.toContain('Проверено')
+    expect(byType(page, LevelPicker)[0].props.level).toBe(0)
+  })
+
+  it('несуществующий путь — 404', async () => {
+    await expect(NodePage(params({ specialty: 'frontend', path: ['nope'] }))).rejects.toThrow('NEXT_NOT_FOUND')
+    expect(await nodeMetadata(params({ specialty: 'nope', path: ['x'] }))).toEqual({ title: 'Не найдено' })
+  })
+})
+
+describe('страница практики', () => {
+  const session = (page: React.ReactNode) => byType(page, PracticeSession)[0]
+
+  it('ежедневное повторение без ветки', async () => {
+    const page = await ReviewPage(search({}))
+    expect(textOf(page)).toContain('Повторение на сегодня')
+    expect(session(page).props.mode).toBe('review')
+    expect(session(page).props.backHref).toBe('/')
+    expect(reviewMetadata).toEqual({ title: 'Практика' })
+  })
+
+  it('ветка, виды и свободный режим; правильный порядок передаётся отдельно', async () => {
+    const page = await ReviewPage(search({ scope: 'frontend/css/cascade/specificity', mode: 'free', kinds: 'order,bogus' }))
+    expect(textOf(page)).toContain('Свободная тренировка · порядок')
+    const props = session(page).props as { mode: string; items: { item: { kind: string } }[]; orders: Record<string, string[]>; backHref: string }
+    expect(props.mode).toBe('free')
+    expect(props.backHref).toBe('/frontend/css/cascade/specificity')
+    expect(props.items.every((entry) => entry.item.kind === 'order')).toBe(true)
+    expect(Object.keys(props.orders)).toEqual([
+      'frontend/css/cascade/specificity#order-cascade',
+      'frontend/css/cascade/specificity#order-specificity',
+    ])
+  })
+
+  it('практика ветки в обычном режиме', async () => {
+    const page = await ReviewPage(search({ scope: 'frontend/javascript' }))
+    expect(textOf(page)).toContain('Практика')
+    expect(session(page).props.mode).toBe('review')
+  })
+
+  it('ветка без практики', async () => {
+    const page = await ReviewPage(search({ scope: 'frontend/nextjs' }))
+    expect(textOf(page)).toContain('В этой ветке пока нет практики')
+    expect(hrefs(page)).toEqual(['/frontend/nextjs'])
+  })
+
+  it('всё на сегодня сделано: предлагается свободная тренировка с сохранением ветки', async () => {
+    await exhaustNewToday()
+    const scoped = await ReviewPage(search({ scope: 'frontend/javascript' }))
+    expect(textOf(scoped)).toContain('На сегодня всё')
+    expect(hrefs(scoped)).toContain('/review?mode=free&scope=frontend%2Fjavascript')
+    const daily = await ReviewPage(search({}))
+    expect(hrefs(daily)).toContain('/review?mode=free')
+  })
+
+  it('неизвестная ветка или специальность — 404', async () => {
+    await expect(ReviewPage(search({ scope: 'frontend/nope' }))).rejects.toThrow('NEXT_NOT_FOUND')
+    await expect(ReviewPage(search({ scope: 'backend/x' }))).rejects.toThrow('NEXT_NOT_FOUND')
+  })
+})

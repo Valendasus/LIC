@@ -1,0 +1,476 @@
+# Практика темы «Event loop в браузере». Ответы в output проверяются запуском кода.
+
+- key: order-loop-turn
+  kind: order
+  prompt: Расставьте шаги одного оборота цикла событий в браузере.
+  steps:
+    - Взять одну задачу из очереди задач
+    - Выполнить её до опустошения стека
+    - Выполнить все микрозадачи, включая добавленные по ходу
+    - Если пора — отрисовать кадр (requestAnimationFrame, стили, layout, paint)
+  explain: Одна задача → все микрозадачи → отрисовка → снова задача. Поэтому промисы всегда обгоняют таймеры, а длинная задача замораживает экран.
+
+- key: out-basic
+  kind: output
+  code: |
+    setTimeout(() => console.log('A'))
+    Promise.resolve().then(() => console.log('B'))
+    queueMicrotask(() => console.log('C'))
+    console.log('D')
+  answer:
+    - D
+    - B
+    - C
+    - A
+  explain: Сначала синхронный код, затем все микрозадачи в порядке постановки, затем задача-таймер.
+
+- key: out-nested
+  kind: output
+  code: |
+    Promise.resolve().then(() => {
+      console.log(1)
+      setTimeout(() => console.log(2))
+      Promise.resolve().then(() => console.log(3))
+    })
+    setTimeout(() => console.log(4))
+  answer:
+    - '1'
+    - '3'
+    - '4'
+    - '2'
+  explain: Микрозадача, добавленная из микрозадачи, выполняется в ту же контрольную точку. Таймер с `4` поставлен раньше таймера с `2`.
+
+- key: out-await
+  kind: output
+  code: |
+    async function first() {
+      console.log('f1')
+      await second()
+      console.log('f2')
+    }
+    async function second() {
+      console.log('s')
+    }
+    setTimeout(() => console.log('t'))
+    first()
+    Promise.resolve().then(() => console.log('p'))
+    console.log('end')
+  answer:
+    - f1
+    - s
+    - end
+    - f2
+    - p
+    - t
+  explain: До первого `await` всё синхронно. Продолжение `first` встаёт в очередь микрозадач раньше, чем `then` со следующей строки.
+
+- key: out-executor
+  kind: output
+  code: |
+    new Promise((resolve) => {
+      console.log('1')
+      resolve()
+      console.log('2')
+    }).then(() => console.log('3'))
+    console.log('4')
+  answer:
+    - '1'
+    - '2'
+    - '4'
+    - '3'
+  explain: Функция внутри `new Promise` выполняется сразу и синхронно, `resolve()` её не прерывает. Асинхронен только `then`.
+
+- key: out-catch-chain
+  kind: output
+  code: |
+    Promise.resolve()
+      .then(() => {
+        console.log('a')
+        throw new Error('сбой')
+      })
+      .then(() => console.log('b'))
+      .catch(() => console.log('c'))
+      .then(() => console.log('d'))
+  answer:
+    - a
+    - c
+    - d
+  explain: Ошибка пропускает `then` без обработчика ошибки и попадает в `catch`. После `catch` цепочка снова успешна.
+
+- key: quiz-yield
+  kind: quiz
+  question: Нужно обработать 200 000 элементов, не замораживая страницу. Чем уступить поток браузеру между порциями?
+  options:
+    - text: '`await new Promise((r) => setTimeout(r))` или `scheduler.yield()`'
+      correct: true
+    - text: '`await Promise.resolve()`'
+      why: Это микрозадача. Все микрозадачи выполняются до отрисовки, браузер так и не получит управление.
+    - text: '`queueMicrotask(next)`'
+      why: Тоже микрозадача — страница останется замороженной.
+    - text: Разбивать не нужно, `async`-функция сама не блокирует поток
+      why: '`async` не делает код параллельным: синхронная часть между `await` блокирует поток.'
+  explain: Уступить можно только новой задачей. `scheduler.yield()` продолжает работу с более высоким приоритетом, чем обычный таймер, но поддерживается не везде.
+
+- key: quiz-microtasks
+  kind: quiz
+  question: Что из этого — микрозадачи? Отметьте все.
+  options:
+    - text: Обработчик `then` у промиса
+      correct: true
+    - text: Продолжение `async`-функции после `await`
+      correct: true
+    - text: Колбэк `queueMicrotask`
+      correct: true
+    - text: Колбэк `setTimeout(fn, 0)`
+      why: Это задача (macrotask), она выполнится только после всех микрозадач.
+    - text: Обработчик клика
+      why: События ввода — задачи.
+  explain: Ещё к микрозадачам относится `MutationObserver`. Всё остальное — задачи.
+
+- key: quiz-long-task
+  kind: quiz
+  question: С какой длительности задача считается длинной?
+  options:
+    - text: Больше 50 мс
+      correct: true
+    - text: Больше 16 мс
+      why: 16 мс — длительность кадра при 60 Гц. Порог длинной задачи — 50 мс.
+    - text: Больше 200 мс
+      why: 200 мс — порог хорошего INP, а не длинной задачи.
+    - text: Больше 1 секунды
+  explain: Задача дольше 50 мс мешает браузеру вовремя ответить на ввод и ухудшает INP.
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+# Тесты видят функции решения напрямую. Доступны test, expect, spy, sleep.
+
+- key: code-delay
+  kind: code
+  level: warmup
+  title: delay
+  prompt: |
+    Напишите `delay(ms, value)`: возвращает промис, который через `ms` миллисекунд выполняется со значением `value`.
+  starter: |
+    function delay(ms, value) {
+      // ваш код
+    }
+  hints:
+    - '`new Promise((resolve) => …)` и `setTimeout`.'
+  tests: |
+    test('возвращает промис', () => {
+      expect(delay(0)).toBeInstanceOf(Promise)
+    })
+    test('выполняется со значением', async () => {
+      await expect(delay(5, 'готово')).resolves.toBe('готово')
+    })
+    test('ждёт не меньше ms', async () => {
+      const start = Date.now()
+      await delay(40)
+      expect(Date.now() - start).toBeGreaterThan(30)
+    })
+  solution: |
+    function delay(ms, value) {
+      return new Promise((resolve) => setTimeout(() => resolve(value), ms))
+    }
+  explain: |
+    `setTimeout` ставит задачу в очередь таймеров не раньше чем через `ms`, а `resolve` переводит промис в выполненное состояние. Обработчики `.then` и код после `await` пойдут микрозадачами сразу после этого.
+
+    «Не раньше» — важно: если основной поток занят, таймер сработает позже. Поэтому в тесте проверка `> 30`, а не точное равенство.
+
+- key: code-with-timeout
+  kind: code
+  level: medium
+  title: Промис с таймаутом
+  prompt: |
+    Напишите `withTimeout(promise, ms)`.
+    - Если `promise` выполнился или отклонился раньше `ms` — результат тот же.
+    - Иначе возвращённый промис отклоняется с `new Error('Timeout')`.
+    - Таймер должен очищаться, когда исход уже известен: лишние таймеры в долгоживущем приложении копятся.
+  starter: |
+    function withTimeout(promise, ms) {
+      // ваш код
+    }
+  hints:
+    - 'Гонка двух промисов: исходного и «таймерного». Какой метод `Promise` берёт первый завершившийся?'
+    - '`Promise.race([promise, timeout])`, где `timeout` отклоняется через `setTimeout`.'
+    - 'Очистить таймер в любом исходе поможет `.finally`.'
+  tests: |
+    test('успевает — значение промиса', async () => {
+      await expect(withTimeout(sleep(5).then(() => 42), 100)).resolves.toBe(42)
+    })
+    test('не успевает — ошибка Timeout', async () => {
+      await expect(withTimeout(sleep(100), 10)).rejects.toThrow('Timeout')
+    })
+    test('ошибка промиса проходит как есть', async () => {
+      await expect(withTimeout(Promise.reject(new Error('сеть')), 100)).rejects.toThrow('сеть')
+    })
+    test('таймер очищается после успеха', async () => {
+      const original = globalThis.clearTimeout
+      const cleared = spy(original)
+      globalThis.clearTimeout = cleared
+      try {
+        await withTimeout(Promise.resolve(1), 1000)
+        expect(cleared.calls.length).toBeGreaterThan(0)
+      } finally {
+        globalThis.clearTimeout = original
+      }
+    })
+  solution: |
+    function withTimeout(promise, ms) {
+      let timer
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Timeout')), ms)
+      })
+      return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+    }
+  explain: |
+    `Promise.race` завершается вместе с первым завершившимся промисом — успехом или ошибкой. Таймерный промис только отклоняется, поэтому он «выигрывает» лишь когда исходный не успел.
+
+    `.finally` срабатывает при любом исходе и не меняет результат — идеальное место для уборки.
+
+    **Важно на собесе:** таймаут не отменяет сам запрос. Чтобы реально прервать `fetch`, нужен `AbortController`; в современных браузерах есть готовый `AbortSignal.timeout(ms)`.
+
+- key: code-promise-all
+  kind: code
+  level: medium
+  title: Свой Promise.all
+  prompt: |
+    Напишите `promiseAll(values)` — аналог `Promise.all` для массива.
+    - Результаты идут в порядке входного массива, а не в порядке завершения.
+    - В массиве могут быть не промисы — они считаются уже выполненными.
+    - Первая ошибка отклоняет весь результат.
+    - Пустой массив даёт `[]`.
+
+    Встроенные `Promise.all`, `allSettled`, `any` и `race` не используйте.
+  starter: |
+    function promiseAll(values) {
+      // ваш код
+    }
+  hints:
+    - Результат — новый промис. Когда его выполнить? Когда завершатся все элементы — значит, нужен счётчик.
+    - 'Порядок держится, если писать в `results[i]`, а не делать `push`.'
+    - '`Promise.resolve(value)` превращает не промис в промис — одна ветка кода для всех элементов.'
+  tests: |
+    test('порядок входа, а не завершения', async () => {
+      const result = await promiseAll([sleep(30).then(() => 'a'), sleep(5).then(() => 'b'), 'c'])
+      expect(result).toEqual(['a', 'b', 'c'])
+    })
+    test('пустой массив', async () => {
+      await expect(promiseAll([])).resolves.toEqual([])
+    })
+    test('первая ошибка отклоняет результат', async () => {
+      const slow = sleep(50).then(() => { throw new Error('поздно') })
+      const fast = sleep(5).then(() => { throw new Error('рано') })
+      slow.catch(() => {})
+      await expect(promiseAll([slow, fast])).rejects.toThrow('рано')
+    })
+    test('не использует встроенный Promise.all', async () => {
+      const original = Promise.all
+      Promise.all = () => { throw new Error('встроенный Promise.all запрещён') }
+      try {
+        await expect(promiseAll([1, Promise.resolve(2)])).resolves.toEqual([1, 2])
+      } finally {
+        Promise.all = original
+      }
+    })
+  solution: |
+    function promiseAll(values) {
+      return new Promise((resolve, reject) => {
+        const results = new Array(values.length)
+        let left = values.length
+        if (left === 0) return resolve(results)
+        values.forEach((value, i) => {
+          Promise.resolve(value).then((result) => {
+            results[i] = result
+            if (--left === 0) resolve(results)
+          }, reject)
+        })
+      })
+    }
+  explain: |
+    **Счётчик** `left` говорит, сколько ещё ждать. Когда он дошёл до нуля — все результаты на местах.
+
+    **Порядок** держится записью по индексу. `push` дал бы порядок завершения.
+
+    **Ошибка:** `reject` можно вызвать много раз — промис меняет состояние только первый раз, остальные вызовы ничего не делают.
+
+    **Пустой массив** нужно обработать отдельно: иначе `forEach` ничего не вызовет и промис никогда не выполнится.
+
+    **На собесе спросят:** чем отличаются `all`, `allSettled`, `any`, `race`, и почему `await` в цикле — последовательное выполнение, а `Promise.all` — параллельное.
+
+- key: code-map-limit
+  kind: code
+  level: hard
+  title: Параллельно, но не больше N
+  prompt: |
+    Напишите `mapLimit(items, limit, fn)`. Асинхронная `fn(item, index)` вызывается для каждого элемента, но одновременно выполняется не больше `limit` вызовов. Как только один завершился — сразу стартует следующий.
+    - Результат — массив в порядке `items`.
+    - Первая ошибка отклоняет результат, новые вызовы после неё не стартуют.
+    - Пустой `items` даёт `[]`.
+
+    Пример из жизни: загрузить 100 файлов, но не больше 4 запросов одновременно.
+  starter: |
+    async function mapLimit(items, limit, fn) {
+      // ваш код
+    }
+  hints:
+    - 'Представьте `limit` «рабочих», каждый берёт следующий элемент из общей очереди, пока элементы не кончатся.'
+    - 'Общий индекс `next` в замыкании: рабочий забирает `const i = next++` — в JS это безопасно, потому что код между `await` не прерывается.'
+    - 'Рабочий — `async`-функция с циклом `while`. Запустите `Math.min(limit, items.length)` рабочих и дождитесь их всех.'
+    - 'Чтобы после ошибки новые вызовы не стартовали, заведите флаг `failed` и проверяйте его в условии цикла.'
+  tests: |
+    test('результаты в порядке входа', async () => {
+      const result = await mapLimit([30, 5, 20, 1], 2, async (ms, i) => {
+        await sleep(ms)
+        return `${i}:${ms}`
+      })
+      expect(result).toEqual(['0:30', '1:5', '2:20', '3:1'])
+    })
+    test('одновременно не больше limit', async () => {
+      let active = 0
+      let peak = 0
+      await mapLimit([1, 2, 3, 4, 5, 6, 7], 3, async () => {
+        active++
+        peak = Math.max(peak, active)
+        await sleep(10)
+        active--
+      })
+      expect(peak).toBe(3)
+    })
+    test('следующий стартует сразу, без ожидания всей пачки', async () => {
+      const started = []
+      const start = Date.now()
+      await mapLimit([40, 10, 10], 2, async (ms, i) => {
+        started.push([i, Date.now() - start])
+        await sleep(ms)
+      })
+      const third = started.find(([i]) => i === 2)[1]
+      expect(third).toBeLessThan(30)
+    })
+    test('ошибка отклоняет и останавливает новые вызовы', async () => {
+      const calls = []
+      await expect(
+        mapLimit([1, 2, 3, 4, 5], 1, async (x) => {
+          calls.push(x)
+          if (x === 2) throw new Error('сбой на 2')
+          await sleep(1)
+        }),
+      ).rejects.toThrow('сбой на 2')
+      await sleep(20)
+      expect(calls).toEqual([1, 2])
+    })
+    test('пустой список', async () => {
+      await expect(mapLimit([], 3, async () => 1)).resolves.toEqual([])
+    })
+  solution: |
+    async function mapLimit(items, limit, fn) {
+      const results = new Array(items.length)
+      let next = 0
+      let failed = false
+
+      async function worker() {
+        while (!failed && next < items.length) {
+          const i = next++
+          try {
+            results[i] = await fn(items[i], i)
+          } catch (error) {
+            failed = true
+            throw error
+          }
+        }
+      }
+
+      const workers = Array.from({ length: Math.min(limit, items.length) }, worker)
+      await Promise.all(workers)
+      return results
+    }
+  explain: |
+    **Идея — пул рабочих.** `limit` асинхронных циклов делят общий счётчик `next`. Как только рабочий закончил свой вызов, он сразу берёт следующий элемент — без ожидания «пачки». Вариант «резать на пачки по `limit` и `Promise.all` каждую» хуже: одна медленная задача держит всю пачку.
+
+    **Почему `next++` безопасен.** JS однопоточный: между двумя `await` код рабочего не прерывается, поэтому два рабочих не возьмут один индекс.
+
+    **Ошибка.** `Promise.all` по рабочим отклоняется с первой ошибкой, а флаг `failed` не даёт остальным рабочим начинать новые вызовы. Уже начатые вызовы завершатся сами — отменить их можно только через `AbortSignal`.
+
+    **Где это в библиотеках:** `p-limit`, `p-map` с опцией `concurrency`.
+
+- key: code-process-all
+  kind: code
+  level: hard
+  title: Обработка списка без заморозки
+  prompt: |
+    Напишите `processAll(items, process, onProgress, budgetMs = 8)`. Она вызывает `process(item)` для каждого элемента по порядку и возвращает промис, который выполняется, когда всё обработано.
+
+    Главное требование — **не замораживать страницу**: обрабатывайте элементы порциями не дольше `budgetMs`, а между порциями отдавайте управление браузеру, чтобы он успевал обработать клики и перерисовать страницу.
+
+    После каждой порции вызывайте `onProgress(процент)` — целое число от 0 до 100, последний вызов — 100.
+  starter: |
+    async function processAll(items, process, onProgress, budgetMs = 8) {
+      for (const item of items) process(item)
+      onProgress(100)
+    }
+  hints:
+    - Что значит «отдать управление»? Пока выполняется ваш синхронный код, браузер не может ни отрисовать кадр, ни обработать клик.
+    - '`await Promise.resolve()` не поможет: это микрозадача, она выполнится до перерисовки. Нужна новая задача — например, `setTimeout(…, 0)`.'
+    - 'Порция — цикл, который проверяет время: `performance.now() - start < budgetMs`.'
+    - 'Каркас: `while (i < items.length) { const start = performance.now(); while (i < items.length && performance.now() - start < budgetMs) process(items[i++]); onProgress(...); await yieldToBrowser() }`'
+  tests: |
+    // Каждый элемент «работает» около 1 мс.
+    const busy = (ms) => { const end = performance.now() + ms; while (performance.now() < end) {} }
+
+    test('обрабатывает всё по порядку', async () => {
+      const seen = []
+      await processAll([1, 2, 3, 4, 5], (x) => seen.push(x), () => {})
+      expect(seen).toEqual([1, 2, 3, 4, 5])
+    })
+    test('отдаёт управление: таймер успевает сработать во время обработки', async () => {
+      let timerFired = false
+      setTimeout(() => { timerFired = true }, 0)
+      const items = Array.from({ length: 40 }, (_, i) => i)
+      await processAll(items, () => busy(1), () => {}, 8)
+      expect(timerFired).toBe(true)
+    })
+    test('порции не длиннее бюджета (с запасом)', async () => {
+      let last = performance.now()
+      let longest = 0
+      const tick = setInterval(() => {
+        const now = performance.now()
+        longest = Math.max(longest, now - last)
+        last = now
+      }, 0)
+      const items = Array.from({ length: 60 }, (_, i) => i)
+      await processAll(items, () => busy(1), () => {}, 8)
+      clearInterval(tick)
+      expect(longest).toBeLessThan(30)
+    })
+    test('прогресс растёт и заканчивается на 100', async () => {
+      const progress = []
+      const items = Array.from({ length: 30 }, (_, i) => i)
+      await processAll(items, () => busy(1), (p) => progress.push(p), 5)
+      expect(progress.length).toBeGreaterThan(2)
+      expect(progress.at(-1)).toBe(100)
+      expect(progress.every((p, i) => i === 0 || p >= progress[i - 1])).toBe(true)
+      expect(progress.every((p) => Number.isInteger(p))).toBe(true)
+    })
+  solution: |
+    // Новая задача в очереди: перед ней браузер успеет обработать ввод, таймеры и отрисовать кадр.
+    const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+    async function processAll(items, process, onProgress, budgetMs = 8) {
+      let i = 0
+      while (i < items.length) {
+        const start = performance.now()
+        while (i < items.length && performance.now() - start < budgetMs) process(items[i++])
+        onProgress(Math.round((i / items.length) * 100))
+        if (i < items.length) await yieldToBrowser()
+      }
+      if (items.length === 0) onProgress(100)
+    }
+  explain: |
+    **Почему страница замерзает.** Пока задача выполняется, цикл событий стоит: нет ни отрисовки, ни обработки кликов. Задача длиннее 50 мс считается долгой (Long Task) и ухудшает INP.
+
+    **Порции по времени, а не по количеству.** Скорость `process` заранее неизвестна, поэтому порция ограничена бюджетом времени. 8 мс оставляют браузеру место в кадре 16 мс.
+
+    **Как отдать управление.** Нужна новая задача, а не микрозадача: микрозадачи выполняются до перерисовки. Здесь это `setTimeout(…, 0)`.
+
+    **Современный вариант — `scheduler.yield()`.** Он тоже отдаёт управление браузеру (ввод и отрисовка идут первыми), но продолжение работы ставится **впереди** обычных задач, в том числе чужих таймеров. Для интерфейса это обычно лучше: длинная работа не «теряет очередь». Но тест «таймер успевает сработать» с ним может не пройти — это осознанная разница в поведении, а не ошибка. Поддержка неполная, поэтому в проде пишут проверку `if ('scheduler' in globalThis && 'yield' in scheduler)` с запасным `setTimeout`.
+
+    **Альтернатива** для действительно тяжёлых вычислений — Web Worker: работа уходит из основного потока целиком. Кстати, ваши решения в этом тренажёре выполняются именно в воркере.

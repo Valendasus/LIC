@@ -1,0 +1,127 @@
+# React-задачи: компонент собирается в браузере, тесты — Testing Library и user-event.
+
+- key: react-signup
+  kind: react
+  level: medium
+  title: Форма регистрации с проверкой
+  prompt: |
+    Сделайте `SignupForm({ onSubmit })`.
+    - Поля «Почта» и «Пароль» с подписями (`<label>`).
+    - Ошибка поля показывается **после того, как поле покинули** (blur), а не на каждый символ: «Введите почту вида name@example.com», «Пароль — не короче 8 символов». У поля с ошибкой — `aria-invalid="true"` и `aria-describedby` на текст ошибки.
+    - Кнопка «Создать аккаунт». При отправке с ошибками показываются все ошибки, фокус переходит на первое неверное поле, `onSubmit` не вызывается.
+    - Если всё верно — `onSubmit({ email, password })`.
+  starter: |
+    function SignupForm({ onSubmit }) {
+      return (
+        <form>
+          <button>Создать аккаунт</button>
+        </form>
+      )
+    }
+  preview: <SignupForm onSubmit={(data) => alert(JSON.stringify(data))} />
+  hints:
+    - 'Состояние: значения полей и множество «тронутых» полей (`touched`). Ошибки вычисляются из значений, а показываются только для тронутых.'
+    - 'Связь поля и ошибки: `useId()` для уникального id, `aria-describedby={errorId}` на поле, `id={errorId}` на тексте ошибки.'
+    - 'При отправке: отметьте все поля тронутыми; если ошибки есть — `ref.current.focus()` на первом неверном поле.'
+    - 'Рефы для двух полей можно держать в объекте: `const refs = { email: useRef(null), password: useRef(null) }`.'
+  tests: |
+    function setup() {
+      const onSubmit = spy()
+      const user = userEvent.setup()
+      render(<SignupForm onSubmit={onSubmit} />)
+      return { onSubmit, user, email: screen.getByLabelText('Почта'), password: screen.getByLabelText('Пароль') }
+    }
+    test('ошибка не видна, пока поле не покинули', async () => {
+      const { user, email } = setup()
+      await user.type(email, 'abc')
+      expect(screen.queryByText('Введите почту вида name@example.com')).toBeNull()
+      await user.tab()
+      expect(screen.getByText('Введите почту вида name@example.com')).toBeInTheDocument()
+    })
+    test('ошибка связана с полем для скринридера', async () => {
+      const { user, email } = setup()
+      await user.type(email, 'abc')
+      await user.tab()
+      expect(email).toHaveAttribute('aria-invalid', 'true')
+      const error = screen.getByText('Введите почту вида name@example.com')
+      expect(email).toHaveAttribute('aria-describedby', error.id)
+    })
+    test('отправка с ошибками: все ошибки, фокус на первом неверном, onSubmit не вызван', async () => {
+      const { user, onSubmit, password } = setup()
+      await user.type(password, 'short')
+      await user.click(screen.getByRole('button', { name: 'Создать аккаунт' }))
+      expect(screen.getByText('Введите почту вида name@example.com')).toBeInTheDocument()
+      expect(screen.getByText('Пароль — не короче 8 символов')).toBeInTheDocument()
+      expect(screen.getByLabelText('Почта')).toHaveFocus()
+      expect(onSubmit.calls).toHaveLength(0)
+    })
+    test('верные данные уходят в onSubmit', async () => {
+      const { user, onSubmit, email, password } = setup()
+      await user.type(email, 'me@example.com')
+      await user.type(password, 'correct-horse')
+      await user.click(screen.getByRole('button', { name: 'Создать аккаунт' }))
+      expect(onSubmit.calls).toEqual([[{ email: 'me@example.com', password: 'correct-horse' }]])
+      expect(email).not.toHaveAttribute('aria-invalid', 'true')
+    })
+  solution: |
+    const RULES = {
+      email: (value) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? '' : 'Введите почту вида name@example.com'),
+      password: (value) => (value.length >= 8 ? '' : 'Пароль — не короче 8 символов'),
+    }
+
+    function SignupForm({ onSubmit }) {
+      const [values, setValues] = useState({ email: '', password: '' })
+      const [touched, setTouched] = useState({})
+      const refs = { email: useRef(null), password: useRef(null) }
+      const id = useId()
+      const errors = { email: RULES.email(values.email), password: RULES.password(values.password) }
+
+      function submit(event) {
+        event.preventDefault()
+        setTouched({ email: true, password: true })
+        const firstInvalid = Object.keys(RULES).find((name) => errors[name])
+        if (firstInvalid) return refs[firstInvalid].current.focus()
+        onSubmit(values)
+      }
+
+      const field = (name, label, type) => {
+        const shown = touched[name] && errors[name]
+        return (
+          <div>
+            <label htmlFor={`${id}-${name}`}>{label}</label>
+            <input
+              id={`${id}-${name}`}
+              ref={refs[name]}
+              type={type}
+              value={values[name]}
+              aria-invalid={shown ? true : undefined}
+              aria-describedby={shown ? `${id}-${name}-error` : undefined}
+              onChange={(event) => setValues({ ...values, [name]: event.target.value })}
+              onBlur={() => setTouched({ ...touched, [name]: true })}
+            />
+            {shown && <p id={`${id}-${name}-error`}>{errors[name]}</p>}
+          </div>
+        )
+      }
+
+      return (
+        <form onSubmit={submit} noValidate>
+          {field('email', 'Почта', 'email')}
+          {field('password', 'Пароль', 'password')}
+          <button type="submit">Создать аккаунт</button>
+        </form>
+      )
+    }
+  explain: |
+    **Ошибки — производное значение** от `values`, а `touched` решает только, показывать ли их. Так не нужно синхронизировать два источника правды.
+
+    **Когда показывать ошибку.** На каждый символ — раздражает («почта неверна» после первой буквы). После blur — стандарт, так делают React Hook Form (`mode: 'onTouched'`) и Formik.
+
+    **Доступность:**
+    - `aria-invalid` сообщает, что поле неверно.
+    - `aria-describedby` даёт скринридеру прочитать текст ошибки вместе с подписью.
+    - Фокус на первом неверном поле — пользователь клавиатуры сразу там, где надо исправлять.
+
+    **`useId`** даёт стабильные уникальные id, одинаковые на сервере и клиенте: два экземпляра формы на странице не конфликтуют.
+
+    **`noValidate`** выключает встроенные всплывающие сообщения браузера: проверку делаем сами и единообразно.

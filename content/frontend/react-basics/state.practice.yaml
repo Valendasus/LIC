@@ -1,0 +1,69 @@
+# React-задачи: компонент собирается в браузере, тесты — Testing Library и user-event.
+# Хуки и render/screen/userEvent доступны без импорта. preview — что показать после тестов.
+
+- key: react-counter
+  kind: react
+  level: easy
+  title: Счётчик с границами
+  prompt: |
+    Сделайте компонент `Counter` с пропсами `min = 0`, `max = 10`, `step = 1`.
+    - Кнопки «−» и «+» с подписями для скринридера `aria-label="Уменьшить"` и `aria-label="Увеличить"`.
+    - Значение показывается в `<output>` и начинается с `min`.
+    - На границах соответствующая кнопка недоступна (`disabled`), значение за границы не выходит.
+  starter: |
+    function Counter({ min = 0, max = 10, step = 1 }) {
+      return null
+    }
+  preview: <Counter min={0} max={5} step={2} />
+  hints:
+    - 'Какое состояние нужно? Одно число — `useState(min)`.'
+    - 'Кнопка недоступна, когда следующий шаг вышел бы за границу: `disabled={value - step < min}`. Но значение тоже нужно ограничить — `Math.min` / `Math.max`.'
+  tests: |
+    test('начинается с min', () => {
+      render(<Counter min={3} />)
+      expect(screen.getByRole('status')).toHaveTextContent('3')
+    })
+    test('+ и − меняют значение на step', async () => {
+      const user = userEvent.setup()
+      render(<Counter step={2} />)
+      await user.click(screen.getByRole('button', { name: 'Увеличить' }))
+      await user.click(screen.getByRole('button', { name: 'Увеличить' }))
+      await user.click(screen.getByRole('button', { name: 'Уменьшить' }))
+      expect(screen.getByRole('status')).toHaveTextContent('2')
+    })
+    test('на min недоступна «Уменьшить»', () => {
+      render(<Counter />)
+      expect(screen.getByRole('button', { name: 'Уменьшить' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Увеличить' })).not.toBeDisabled()
+    })
+    test('на max недоступна «Увеличить», значение не выходит за max', async () => {
+      const user = userEvent.setup()
+      render(<Counter max={5} step={2} />)
+      for (let i = 0; i < 4; i++) {
+        const plus = screen.getByRole('button', { name: 'Увеличить' })
+        if (!plus.disabled) await user.click(plus)
+      }
+      expect(screen.getByRole('status')).toHaveTextContent('5')
+      expect(screen.getByRole('button', { name: 'Увеличить' })).toBeDisabled()
+    })
+  solution: |
+    function Counter({ min = 0, max = 10, step = 1 }) {
+      const [value, setValue] = useState(min)
+      return (
+        <div>
+          <button aria-label="Уменьшить" disabled={value <= min} onClick={() => setValue((v) => Math.max(min, v - step))}>
+            −
+          </button>
+          <output>{value}</output>
+          <button aria-label="Увеличить" disabled={value >= max} onClick={() => setValue((v) => Math.min(max, v + step))}>
+            +
+          </button>
+        </div>
+      )
+    }
+  explain: |
+    **Функциональное обновление** `setValue((v) => …)` берёт актуальное значение, а не то, что было в замыкании рендера. При быстрых кликах это важно.
+
+    **Граница в двух местах:** `disabled` — для пользователя, `Math.min`/`Math.max` — для данных. С шагом 2 и максимумом 5 значение 4 + 2 упрётся в 5, а не станет 6.
+
+    **Доступность:** у кнопок с символами «−» и «+» обязательно нужна подпись (`aria-label`), иначе скринридер прочитает «минус» или ничего. `<output>` имеет роль `status`, и изменения его текста объявляются вслух.

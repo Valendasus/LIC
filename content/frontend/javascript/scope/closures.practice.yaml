@@ -1,0 +1,440 @@
+# Практика темы «Замыкания»: квизы, «что выведет», порядок.
+# Ключи не переименовывать: к ним привязано расписание. Ответы в output проверяются запуском кода.
+
+- key: quiz-what-captured
+  kind: quiz
+  question: Что именно хранит замыкание?
+  options:
+    - text: Ссылку на лексическое окружение, где функция создана
+      correct: true
+    - text: Копии значений внешних переменных на момент создания функции
+      why: Если бы это были копии, функция не видела бы изменений переменной. А она видит — поэтому цикл с `var` выводит `3, 3, 3`.
+    - text: Ссылку на окружение, где функция вызвана
+      why: Это была бы динамическая область видимости. В JS она лексическая — важно место создания.
+    - text: Только переменные, переданные аргументами
+      why: Аргументы — часть окружения, но функция видит и все внешние переменные по цепочке.
+  explain: Функция получает ссылку на окружение своего создания и ищет переменные по цепочке окружений начиная с него.
+
+- key: quiz-closure-uses
+  kind: quiz
+  question: Где используются замыкания? Отметьте все верные варианты.
+  options:
+    - text: '`debounce` и `throttle`'
+      correct: true
+      why: Таймер и аргументы хранятся между вызовами в замыкании.
+    - text: Приватное состояние без классов
+      correct: true
+    - text: Обработчики событий в React-компонентах
+      correct: true
+      why: Каждый обработчик замыкается на пропсы и состояние своего рендера.
+    - text: Сравнение объектов через `===`
+      why: Это сравнение ссылок, к замыканиям отношения не имеет.
+  explain: Замыкания — основа любой функции, которая хранит состояние между вызовами или видит внешние данные.
+
+- key: quiz-stale-closure-fix
+  kind: quiz
+  question: |
+    Интервал создан в `useEffect` с пустым массивом зависимостей и вызывает `setCount(count + 1)`. Счётчик дошёл до 1 и остановился. Какое исправление **минимальное и правильное**?
+  options:
+    - text: '`setCount((c) => c + 1)`'
+      correct: true
+    - text: Отключить правило `react-hooks/exhaustive-deps`
+      why: Предупреждение пропадёт, а ошибка останется.
+    - text: Объявить `count` через `var` вместо `useState`
+      why: Изменение обычной переменной не вызывает рендер, и при следующем рендере она обнулится.
+    - text: Обернуть колбэк интервала в `useCallback`
+      why: '`useCallback` тоже замыкается на значения своего рендера и ничего не меняет.'
+  explain: Функциональное обновление получает актуальное значение от React и не зависит от того, что видит замыкание.
+
+- key: out-lexical
+  kind: output
+  code: |
+    let x = 'глобальная'
+    function show() {
+      console.log(x)
+    }
+    function run() {
+      let x = 'локальная'
+      show()
+    }
+    run()
+  answer:
+    - глобальная
+  explain: '`show` создана на верхнем уровне и ищет `x` там. Место вызова не важно: область видимости лексическая.'
+
+- key: out-shared-env
+  kind: output
+  code: |
+    function make() {
+      let n = 0
+      return { inc: () => ++n, get: () => n }
+    }
+    const a = make()
+    const b = a
+    const c = make()
+    a.inc()
+    b.inc()
+    c.inc()
+    console.log(a.get(), c.get())
+  answer:
+    - 2 1
+  explain: '`a` и `b` — один объект с одним окружением. `c` создан отдельным вызовом, у него свой `n`.'
+
+- key: out-loop-var-let
+  kind: output
+  code: |
+    const fns = []
+    for (var i = 0; i < 2; i++) fns.push(() => i)
+    for (let j = 0; j < 2; j++) fns.push(() => j)
+    console.log(fns.map((f) => f()).join(' '))
+  answer:
+    - 2 2 0 1
+  explain: У `var` одна переменная на весь цикл, к моменту вызова она равна 2. `let` создаёт новую привязку на каждую итерацию.
+
+- key: out-reference-not-copy
+  kind: output
+  code: |
+    let greeting = 'Привет'
+    const say = () => console.log(greeting)
+    greeting = 'Пока'
+    say()
+  answer:
+    - Пока
+  explain: Замыкание хранит ссылку на переменную, а не копию значения. К моменту вызова переменная уже изменилась.
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+# Тесты видят функции решения напрямую. Доступны test, expect, spy, sleep.
+# content:check проверяет: эталон проходит все тесты, заготовка — нет.
+
+- key: code-counter
+  kind: code
+  level: easy
+  title: Счётчик с границами
+  prompt: |
+    Напишите `createCounter(limit)`. Она возвращает объект с методами `inc()`, `dec()`, `reset()` и `value()`.
+    - Значение начинается с 0 и не выходит за пределы от 0 до `limit`.
+    - `inc` и `dec` возвращают новое значение.
+    - Снаружи поменять значение напрямую нельзя: у объекта нет свойства со счётом.
+  starter: |
+    function createCounter(limit) {
+      // ваш код
+    }
+  hints:
+    - Где хранить состояние, чтобы его не было видно снаружи? Не в свойстве объекта.
+    - '`Math.min` и `Math.max` удержат значение в границах одной строкой.'
+  tests: |
+    test('начинается с нуля', () => {
+      expect(createCounter(3).value()).toBe(0)
+    })
+    test('inc и dec возвращают новое значение', () => {
+      const c = createCounter(3)
+      expect(c.inc()).toBe(1)
+      expect(c.inc()).toBe(2)
+      expect(c.dec()).toBe(1)
+    })
+    test('не выходит за limit', () => {
+      const c = createCounter(2)
+      c.inc(); c.inc(); c.inc(); c.inc()
+      expect(c.value()).toBe(2)
+    })
+    test('не уходит ниже нуля', () => {
+      const c = createCounter(2)
+      expect(c.dec()).toBe(0)
+    })
+    test('reset возвращает к нулю', () => {
+      const c = createCounter(5)
+      c.inc(); c.inc()
+      c.reset()
+      expect(c.value()).toBe(0)
+    })
+    test('счётчики независимы', () => {
+      const a = createCounter(5)
+      const b = createCounter(5)
+      a.inc()
+      expect(b.value()).toBe(0)
+    })
+    test('значение нельзя поменять снаружи', () => {
+      const c = createCounter(5)
+      c.inc()
+      for (const key of Object.keys(c)) if (typeof c[key] !== 'function') c[key] = 100
+      expect(c.value()).toBe(1)
+    })
+  solution: |
+    function createCounter(limit) {
+      let value = 0
+      return {
+        inc: () => (value = Math.min(limit, value + 1)),
+        dec: () => (value = Math.max(0, value - 1)),
+        reset: () => (value = 0),
+        value: () => value,
+      }
+    }
+  explain: |
+    Значение живёт в переменной `value` внутри `createCounter`, а методы замыкаются на неё. Каждый вызов `createCounter` создаёт новое окружение — поэтому счётчики независимы.
+
+    Если хранить счёт в `this.count`, его можно перезаписать снаружи. Замыкание даёт настоящую приватность без классов; у классов для этого есть поля `#count`.
+
+- key: code-once
+  kind: code
+  level: easy
+  title: once
+  prompt: |
+    Напишите `once(fn)`. Возвращённая функция вызывает `fn` только в первый раз, с переданными аргументами и тем же `this`. Все следующие вызовы возвращают первый результат, даже если он `undefined`.
+  starter: |
+    function once(fn) {
+      // ваш код
+    }
+  hints:
+    - Нужно запомнить два факта между вызовами — какие?
+    - Флаг «уже вызывали» и результат храните отдельно. Проверка `if (result === undefined)` сломается, если fn вернула undefined.
+  tests: |
+    test('вызывает fn один раз', () => {
+      const fn = spy(() => 1)
+      const f = once(fn)
+      f(); f(); f()
+      expect(fn.calls).toHaveLength(1)
+    })
+    test('возвращает первый результат', () => {
+      let n = 0
+      const f = once(() => ++n)
+      expect(f()).toBe(1)
+      expect(f()).toBe(1)
+    })
+    test('передаёт аргументы', () => {
+      const f = once((a, b) => a + b)
+      expect(f(2, 3)).toBe(5)
+      expect(f(10, 10)).toBe(5)
+    })
+    test('кеширует и undefined', () => {
+      const fn = spy(() => undefined)
+      const f = once(fn)
+      f(); f()
+      expect(fn.calls).toHaveLength(1)
+    })
+    test('сохраняет this', () => {
+      const obj = { x: 7, get: once(function () { return this.x }) }
+      expect(obj.get()).toBe(7)
+    })
+  solution: |
+    function once(fn) {
+      let called = false
+      let result
+      return function (...args) {
+        if (!called) {
+          called = true
+          result = fn.apply(this, args)
+        }
+        return result
+      }
+    }
+  explain: |
+    В замыкании два значения: `called` и `result`. Флаг отдельно от результата — потому что `undefined` тоже законный результат.
+
+    Обычная `function`, а не стрелка: стрелочная функция берёт `this` снаружи, и метод объекта потерял бы свой `this`. `fn.apply(this, args)` передаёт его дальше.
+
+    Где встречается: инициализация SDK, подписка, которую нельзя оформить дважды, `{ once: true }` у `addEventListener`.
+
+- key: code-memoize
+  kind: code
+  level: medium
+  title: memoize с ключом и лимитом
+  prompt: |
+    Напишите `memoize(fn, options)`.
+    - Результат кешируется по аргументам. Ключ по умолчанию — `JSON.stringify(args)`.
+    - `options.key(...args)` — своя функция ключа.
+    - `options.max` — сколько записей хранить. При переполнении удаляется запись, к которой **дольше всего не обращались** (LRU).
+    - Кешируется и `undefined`.
+    - У результата есть `.clear()`.
+  starter: |
+    function memoize(fn, { key = (...args) => JSON.stringify(args), max = Infinity } = {}) {
+      // ваш код
+    }
+  hints:
+    - 'Хранилище, где проверка наличия отличает «нет записи» от «записано undefined»: `Map` и метод `has`.'
+    - '`Map` помнит порядок вставки. Первый ключ в `map.keys()` — самый старый.'
+    - 'Чтобы запись стала «свежей» при чтении, удалите её и вставьте заново.'
+  tests: |
+    test('кеширует по аргументам', () => {
+      const fn = spy((a, b) => a * b)
+      const m = memoize(fn)
+      expect(m(2, 3)).toBe(6)
+      expect(m(2, 3)).toBe(6)
+      expect(m(3, 2)).toBe(6)
+      expect(fn.calls).toHaveLength(2)
+    })
+    test('кеширует undefined', () => {
+      const fn = spy(() => undefined)
+      const m = memoize(fn)
+      m(1); m(1)
+      expect(fn.calls).toHaveLength(1)
+    })
+    test('своя функция ключа', () => {
+      const fn = spy((user) => user.name.toUpperCase())
+      const m = memoize(fn, { key: (user) => user.id })
+      m({ id: 1, name: 'a' })
+      expect(m({ id: 1, name: 'другое имя' })).toBe('A')
+      expect(fn.calls).toHaveLength(1)
+    })
+    test('max вытесняет самую давнюю по обращению', () => {
+      const fn = spy((x) => x * 10)
+      const m = memoize(fn, { max: 2 })
+      m(1); m(2)
+      m(1)        // 1 стала свежей
+      m(3)        // вытесняется 2
+      m(1)
+      expect(fn.calls).toHaveLength(3)
+      m(2)
+      expect(fn.calls).toHaveLength(4)
+    })
+    test('clear очищает кеш', () => {
+      const fn = spy((x) => x)
+      const m = memoize(fn)
+      m(1)
+      m.clear()
+      m(1)
+      expect(fn.calls).toHaveLength(2)
+    })
+  solution: |
+    function memoize(fn, { key = (...args) => JSON.stringify(args), max = Infinity } = {}) {
+      const cache = new Map()
+      function memoized(...args) {
+        const k = key(...args)
+        if (cache.has(k)) {
+          const value = cache.get(k)
+          cache.delete(k)
+          cache.set(k, value)
+          return value
+        }
+        const value = fn.apply(this, args)
+        cache.set(k, value)
+        if (cache.size > max) cache.delete(cache.keys().next().value)
+        return value
+      }
+      memoized.clear = () => cache.clear()
+      return memoized
+    }
+  explain: |
+    **Почему Map.** Ключи любого типа, `has` отличает отсутствие от `undefined`, и порядок вставки сохраняется. Этим порядком и реализуется LRU: при чтении запись переставляется в конец, при переполнении удаляется первая. Обе операции — O(1).
+
+    **Ограничения ключа по умолчанию.** `JSON.stringify` не различает `undefined` и `null` в массиве, теряет функции и падает на циклических объектах. Поэтому в библиотеках ключ настраивается.
+
+    **На собесе спросят:** почему кеш без лимита — утечка памяти; когда нужен `WeakMap` (ключ — объект, запись должна исчезать вместе с ним); как мемоизировать async-функцию (кешировать промис, а при ошибке удалять запись).
+
+- key: code-debounce
+  kind: code
+  level: hard
+  title: debounce с cancel и flush
+  prompt: |
+    Напишите `debounce(fn, ms)`. Функция вызывает `fn` через `ms` миллисекунд после **последнего** вызова, с последними аргументами и `this`.
+
+    У результата два метода:
+    - `cancel()` — отменить запланированный вызов;
+    - `flush()` — выполнить запланированный вызов сразу и вернуть его результат. Если ничего не запланировано, вернуть `undefined` и ничего не вызывать.
+
+    Так работает поиск: запрос уходит, когда пользователь перестал печатать, а при уходе со страницы последний ввод отправляют сразу.
+  starter: |
+    function debounce(fn, ms) {
+      // ваш код
+    }
+  hints:
+    - Что нужно помнить между вызовами? Таймер и всё, что понадобится fn при запуске.
+    - Каждый вызов отменяет прошлый таймер (`clearTimeout`) и ставит новый.
+    - 'Функция — это объект: `debounced.cancel = …` работает.'
+    - '`flush` должен понять, запланирован ли вызов. Удобно хранить аргументы и обнулять их после запуска: `null` значит «ничего не ждёт».'
+  tests: |
+    test('вызывает один раз после паузы с последними аргументами', async () => {
+      const fn = spy()
+      const d = debounce(fn, 30)
+      d(1); d(2); d(3)
+      expect(fn.calls).toHaveLength(0)
+      await sleep(60)
+      expect(fn.calls).toEqual([[3]])
+    })
+    test('новый вызов отодвигает срок', async () => {
+      const fn = spy()
+      const d = debounce(fn, 40)
+      d('a')
+      await sleep(25)
+      d('b')
+      await sleep(25)
+      expect(fn.calls).toHaveLength(0)
+      await sleep(40)
+      expect(fn.calls).toEqual([['b']])
+    })
+    test('сохраняет this', async () => {
+      let seen
+      const obj = { name: 'поиск', run: debounce(function () { seen = this.name }, 10) }
+      obj.run()
+      await sleep(30)
+      expect(seen).toBe('поиск')
+    })
+    test('cancel отменяет вызов', async () => {
+      const fn = spy()
+      const d = debounce(fn, 20)
+      d(1)
+      d.cancel()
+      await sleep(40)
+      expect(fn.calls).toHaveLength(0)
+    })
+    test('flush вызывает сразу и возвращает результат', async () => {
+      const fn = spy((x) => x * 2)
+      const d = debounce(fn, 50)
+      d(21)
+      expect(d.flush()).toBe(42)
+      await sleep(70)
+      expect(fn.calls).toHaveLength(1)
+    })
+    test('flush без запланированного вызова ничего не делает', () => {
+      const fn = spy()
+      const d = debounce(fn, 20)
+      expect(d.flush()).toBeUndefined()
+      expect(fn.calls).toHaveLength(0)
+    })
+    test('после срабатывания работает заново', async () => {
+      const fn = spy()
+      const d = debounce(fn, 10)
+      d(1)
+      await sleep(25)
+      d(2)
+      await sleep(25)
+      expect(fn.calls).toEqual([[1], [2]])
+    })
+  solution: |
+    function debounce(fn, ms) {
+      let timer = null
+      let pending = null // { args, self } или null, если ничего не ждёт
+
+      function run() {
+        const { args, self } = pending
+        clearTimeout(timer)
+        timer = null
+        pending = null
+        return fn.apply(self, args)
+      }
+
+      function debounced(...args) {
+        pending = { args, self: this }
+        clearTimeout(timer)
+        timer = setTimeout(run, ms)
+      }
+
+      debounced.cancel = () => {
+        clearTimeout(timer)
+        timer = null
+        pending = null
+      }
+
+      debounced.flush = () => (pending ? run() : undefined)
+
+      return debounced
+    }
+  explain: |
+    **Состояние в замыкании:** id таймера и отложенный вызов (`args` и `this`). Каждый `debounce(...)` создаёт независимый экземпляр.
+
+    **Ключевое место** — `pending`: по нему `flush` понимает, есть ли что выполнять, а `run` и `cancel` обнуляют его, поэтому вызов не случится дважды.
+
+    **Отличие от throttle:** debounce ждёт паузы, throttle ограничивает частоту — не чаще раза за `ms`.
+
+    **А если…**
+    - нужен вариант `leading` — первый вызов сразу, а потом пауза? Запускайте `fn`, если таймера ещё нет.
+    - debounce в React? Экземпляр создаётся один раз (`useMemo` или `useRef`), а при размонтировании вызывается `cancel` — иначе вызов придёт в размонтированный компонент.

@@ -1,0 +1,143 @@
+# Задачи на типы: проверяет компилятор TypeScript.
+
+- key: types-tuple-to-union
+  kind: types
+  level: warmup
+  title: Кортеж в объединение
+  prompt: |
+    Напишите `TupleToUnion<T>`: `['a', 'b', 'c']` → `'a' | 'b' | 'c'`.
+  starter: |
+    type TupleToUnion<T extends readonly unknown[]> = T
+  hints:
+    - 'Индексный доступ по `number` возвращает тип любого элемента массива.'
+  tests: |
+    type cases = [
+      Expect<Equal<TupleToUnion<['a', 'b', 'c']>, 'a' | 'b' | 'c'>>,
+      Expect<Equal<TupleToUnion<readonly [1, true]>, 1 | true>>,
+      Expect<Equal<TupleToUnion<[]>, never>>,
+    ]
+  solution: |
+    type TupleToUnion<T extends readonly unknown[]> = T[number]
+  explain: |
+    `T[number]` — тип элемента по любому числовому индексу, то есть объединение всех элементов. У пустого кортежа элементов нет — получается `never`.
+
+    Так из `as const`-массива получают тип допустимых значений: `const ROLES = ['admin', 'user'] as const; type Role = (typeof ROLES)[number]`.
+
+- key: types-awaited
+  kind: types
+  level: medium
+  title: Свой Awaited
+  prompt: |
+    Напишите `MyAwaited<T>` — тип, который получится после `await`. Вложенные промисы разворачиваются до конца, не промис возвращается как есть. Встроенный `Awaited` не используйте.
+  starter: |
+    type MyAwaited<T> = T
+  hints:
+    - Как «достать» тип из `Promise<X>`? Нужен условный тип, который выводит часть типа.
+    - '`infer` внутри условия: `T extends Promise<infer V> ? … : T`.'
+    - Промис внутри промиса — повод для рекурсии.
+  tests: |
+    type cases = [
+      Expect<Equal<MyAwaited<Promise<string>>, string>>,
+      Expect<Equal<MyAwaited<Promise<Promise<number>>>, number>>,
+      Expect<Equal<MyAwaited<boolean>, boolean>>,
+      Expect<Equal<MyAwaited<Promise<string | Promise<1>>>, string | 1>>,
+    ]
+  solution: |
+    type MyAwaited<T> = T extends PromiseLike<infer V> ? MyAwaited<V> : T
+  explain: |
+    **`infer V`** вводит переменную типа прямо в условии: «если `T` — промис чего-то, назови это что-то `V`».
+
+    **Рекурсия** разворачивает вложенные промисы, а объединение внутри (`string | Promise<1>`) разворачивается поэлементно: условные типы распределяются по объединению.
+
+    **`PromiseLike`** вместо `Promise` — так же делает `await`: ему подходит любой объект с методом `then` (thenable).
+
+- key: types-trim
+  kind: types
+  level: medium
+  title: Trim на шаблонных литералах
+  prompt: |
+    Напишите `Trim<S>`: убирает пробелы, переводы строк и табуляции с обоих краёв строкового литерала.
+  starter: |
+    type Trim<S extends string> = S
+  hints:
+    - 'Шаблонные литеральные типы умеют сопоставлять с образцом: условие «строка начинается с пробела, а остаток — `infer Rest`».'
+    - 'Сначала напишите `TrimLeft`, потом то же справа. Набор «пробельных» символов удобно задать объединением.'
+    - 'Рекурсия: после отрезания одного символа снова вызываете тот же тип.'
+  tests: |
+    type cases = [
+      Expect<Equal<Trim<'  hello  '>, 'hello'>>,
+      Expect<Equal<Trim<'\n\t str \n'>, 'str'>>,
+      Expect<Equal<Trim<'no-spaces'>, 'no-spaces'>>,
+      Expect<Equal<Trim<'   '>, ''>>,
+    ]
+  solution: |
+    type Space = ' ' | '\n' | '\t'
+    type TrimLeft<S extends string> = S extends `${Space}${infer Rest}` ? TrimLeft<Rest> : S
+    type TrimRight<S extends string> = S extends `${infer Rest}${Space}` ? TrimRight<Rest> : S
+    type Trim<S extends string> = TrimRight<TrimLeft<S>>
+  explain: |
+    **Шаблонный литеральный тип** с `infer` — регулярное выражение для типов: шаблон «пробельный символ, затем `infer Rest`» совпадает, если строка начинается с пробела, и кладёт остаток в `Rest`.
+
+    **Объединение в шаблоне** (`${Space}`) раскрывается в несколько вариантов, поэтому одно условие покрывает пробел, перевод строки и табуляцию.
+
+    **Где это в жизни:** типизированные маршруты (`'/users/:id'` → `{ id: string }`), ключи переводов, CSS-переменные в дизайн-системах.
+
+- key: types-path-value
+  kind: types
+  level: hard
+  title: Значение по пути
+  prompt: |
+    Напишите два типа:
+    - `Paths<T>` — объединение всех путей к свойствам объекта через точку: `'a' | 'a.b' | 'a.b.c'`.
+    - `PathValue<T, P>` — тип значения по такому пути.
+
+    Массивы считайте значениями: в них не заходите. Так типизируются `get(obj, 'user.address.city')` и имена полей в библиотеках форм.
+  starter: |
+    type Paths<T> = string
+    type PathValue<T, P extends Paths<T>> = unknown
+  hints:
+    - 'Начните с `PathValue`: разбейте путь по первой точке шаблоном `${infer Head}.${infer Rest}`.'
+    - 'Для `Paths` пройдите по ключам: `{ [K in keyof T & string]: … }[keyof T & string]` — так mapped type превращается в объединение.'
+    - 'Для каждого ключа: сам ключ плюс, если значение — объект и не массив, ещё `${K}.${Paths<T[K]>}`.'
+    - 'Проверка «объект, но не массив»: `T[K] extends readonly unknown[] ? K : T[K] extends object ? вглубь : K`.'
+  tests: |
+    type User = {
+      name: string
+      tags: string[]
+      address: { city: string; geo: { lat: number; lng: number } }
+    }
+    type cases = [
+      Expect<Equal<Paths<User>, 'name' | 'tags' | 'address' | 'address.city' | 'address.geo' | 'address.geo.lat' | 'address.geo.lng'>>,
+      Expect<Equal<PathValue<User, 'name'>, string>>,
+      Expect<Equal<PathValue<User, 'address.geo'>, { lat: number; lng: number }>>,
+      Expect<Equal<PathValue<User, 'address.geo.lat'>, number>>,
+      Expect<Equal<PathValue<User, 'tags'>, string[]>>,
+    ]
+    // @ts-expect-error
+    type wrong = PathValue<User, 'address.zip'>
+  solution: |
+    type Paths<T> = {
+      [K in keyof T & string]: T[K] extends readonly unknown[]
+        ? K
+        : T[K] extends object
+          ? K | `${K}.${Paths<T[K]>}`
+          : K
+    }[keyof T & string]
+
+    type PathValue<T, P extends Paths<T>> = P extends `${infer Head}.${infer Rest}`
+      ? Head extends keyof T
+        ? Rest extends Paths<T[Head]>
+          ? PathValue<T[Head], Rest>
+          : never
+        : never
+      : P extends keyof T
+        ? T[P]
+        : never
+  explain: |
+    **`Paths`: mapped type → объединение.** Конструкция `{ [K in …]: X }[…]` строит объект «ключ → пути» и сразу берёт объединение его значений. Это стандартный приём для «перебора с накоплением».
+
+    **`& string`** отсекает числовые и символьные ключи: в шаблонный литерал их не подставить.
+
+    **`PathValue`** идёт по пути рекурсивно: отрезает голову до точки, проверяет, что это ключ, и спускается. Ограничение `P extends Paths<T>` даёт ошибку на неверном пути — это и проверяет `@ts-expect-error`.
+
+    **Где это в жизни:** `react-hook-form` (`register('address.city')`), lodash `get`, i18n-ключи. В больших типах рекурсия упирается в лимит глубины — библиотеки ограничивают её явно.

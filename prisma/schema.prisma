@@ -1,0 +1,80 @@
+// Схема LIC. Контент (дерево тем, тексты, задачи) хранится в репозитории в content/,
+// в базе — только то, что принадлежит пользователю: его прогресс.
+// Поэтому платформу можно открыть другим людям, добавив вход, без миграции данных.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String         @id @default(cuid())
+  /// Короткое имя для входа; пока используется один пользователь «me».
+  handle    String         @unique
+  name      String
+  createdAt DateTime       @default(now()) @map("created_at")
+  progress  NodeProgress[]
+  reviews   ReviewItem[]
+  logs      ReviewLog[]
+
+  @@map("users")
+}
+
+/// Уровень освоения одного узла дерева: 0 не начато, 1 знаю, 2 понимаю, 3 применяю, 4 владею.
+/// Хранится только для листьев; прогресс веток вычисляется из детей.
+model NodeProgress {
+  userId    String   @map("user_id")
+  nodeId    String   @map("node_id")
+  level     Int
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, nodeId])
+  @@map("node_progress")
+}
+
+/// Состояние элемента практики (карточки, квиза, задачи) для пользователя по алгоритму FSRS-7.
+/// itemId = «<id темы>#<ключ>». Контент элемента в базе не хранится.
+model ReviewItem {
+  userId         String    @map("user_id")
+  itemId         String    @map("item_id")
+  kind           String
+  stability      Float
+  stabilityFast  Float     @map("stability_fast")
+  difficulty     Float
+  /// 0 новая, 1 изучение, 2 повторение, 3 переизучение
+  state          Int
+  scheduleStatus String    @map("schedule_status")
+  dueAt          DateTime  @map("due_at")
+  lastReviewAt   DateTime? @map("last_review_at")
+  reps           Int
+  lapses         Int
+  scheduledDays  Float     @map("scheduled_days")
+  learningStep   Int       @map("learning_step")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, itemId])
+  @@index([userId, dueAt])
+  @@map("review_items")
+}
+
+/// Журнал ответов: нужен для статистики и подбора персональных параметров FSRS.
+model ReviewLog {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  itemId      String   @map("item_id")
+  /// 1 снова, 2 трудно, 3 хорошо, 4 легко
+  rating      Int
+  stateBefore Int      @map("state_before")
+  reviewedAt  DateTime @map("reviewed_at")
+  durationMs  Int?     @map("duration_ms")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, reviewedAt])
+  @@map("review_logs")
+}

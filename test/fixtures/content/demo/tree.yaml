@@ -1,0 +1,23 @@
+- slug: block
+  title: Блок
+  group: Группа
+  summary: Описание блока.
+  children:
+    - slug: mod
+      title: Модуль
+      children:
+        - slug: topic
+          title: Тема
+          grade: J
+          content: true
+          goals:
+            - Первая цель
+        - slug: empty
+          title: Пустая тема
+          grade: M
+- slug: other
+  title: Другой блок
+  children:
+    - slug: solo
+      title: Одиночная
+      grade: S

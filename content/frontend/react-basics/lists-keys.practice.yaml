@@ -1,0 +1,138 @@
+# React-задачи: компонент собирается в браузере, тесты — Testing Library и user-event.
+
+- key: react-todo
+  kind: react
+  level: medium
+  title: Список дел с фильтром
+  prompt: |
+    Сделайте `TodoList`.
+    - Поле с подписью «Новое дело» и кнопка «Добавить». Пустое или из одних пробелов дело не добавляется, поле после добавления очищается. Enter в поле тоже добавляет.
+    - Каждое дело — пункт списка с чекбоксом (подпись чекбокса — текст дела) и кнопкой «Удалить» с `aria-label="Удалить: <текст>"`.
+    - Фильтр — три кнопки «Все», «Активные», «Готовые»; у выбранной `aria-pressed="true"`.
+    - Под списком текст «Осталось: N» — число невыполненных.
+  starter: |
+    function TodoList() {
+      return <p>Пока пусто</p>
+    }
+  preview: <TodoList />
+  hints:
+    - 'Состояние: массив дел `{ id, text, done }`, текст поля и фильтр. Список для показа — производное значение, его не хранят отдельно.'
+    - 'Enter и кнопка работают одинаково, если обернуть поле и кнопку в `<form onSubmit>` и вызвать `event.preventDefault()`.'
+    - 'Ключ элемента — `id`, а не индекс: при удалении из середины индексы сдвигаются, и чекбоксы «перепрыгнут» на соседние дела.'
+  tests: |
+    async function add(user, text) {
+      await user.type(screen.getByLabelText('Новое дело'), text)
+      await user.click(screen.getByRole('button', { name: 'Добавить' }))
+    }
+    test('добавляет по кнопке и по Enter, очищает поле', async () => {
+      const user = userEvent.setup()
+      render(<TodoList />)
+      await add(user, 'Купить хлеб')
+      await user.type(screen.getByLabelText('Новое дело'), 'Позвонить{Enter}')
+      expect(screen.getAllByRole('listitem')).toHaveLength(2)
+      expect(screen.getByLabelText('Новое дело')).toHaveValue('')
+    })
+    test('пустое дело не добавляется', async () => {
+      const user = userEvent.setup()
+      render(<TodoList />)
+      await add(user, '   ')
+      expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+    })
+    test('отметка и счётчик оставшихся', async () => {
+      const user = userEvent.setup()
+      render(<TodoList />)
+      await add(user, 'А')
+      await add(user, 'Б')
+      expect(screen.getByText('Осталось: 2')).toBeInTheDocument()
+      await user.click(screen.getByRole('checkbox', { name: 'А' }))
+      expect(screen.getByRole('checkbox', { name: 'А' })).toBeChecked()
+      expect(screen.getByText('Осталось: 1')).toBeInTheDocument()
+    })
+    test('фильтры', async () => {
+      const user = userEvent.setup()
+      render(<TodoList />)
+      await add(user, 'А')
+      await add(user, 'Б')
+      await user.click(screen.getByRole('checkbox', { name: 'Б' }))
+      await user.click(screen.getByRole('button', { name: 'Готовые' }))
+      expect(screen.getByRole('button', { name: 'Готовые' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getAllByRole('listitem')).toHaveLength(1)
+      expect(screen.getByRole('checkbox', { name: 'Б' })).toBeInTheDocument()
+      expect(screen.queryByRole('checkbox', { name: 'А' })).toBeNull()
+      await user.click(screen.getByRole('button', { name: 'Активные' }))
+      expect(screen.getByRole('checkbox', { name: 'А' })).toBeInTheDocument()
+      expect(screen.queryByRole('checkbox', { name: 'Б' })).toBeNull()
+    })
+    test('удаление из середины не сдвигает отметки', async () => {
+      const user = userEvent.setup()
+      render(<TodoList />)
+      await add(user, 'А')
+      await add(user, 'Б')
+      await add(user, 'В')
+      await user.click(screen.getByRole('checkbox', { name: 'В' }))
+      await user.click(screen.getByRole('button', { name: 'Удалить: Б' }))
+      expect(screen.getByRole('checkbox', { name: 'В' })).toBeChecked()
+      expect(screen.getByRole('checkbox', { name: 'А' })).not.toBeChecked()
+    })
+  solution: |
+    const FILTERS = { Все: () => true, Активные: (todo) => !todo.done, Готовые: (todo) => todo.done }
+
+    function TodoList() {
+      const [todos, setTodos] = useState([])
+      const [text, setText] = useState('')
+      const [filter, setFilter] = useState('Все')
+      const nextId = useRef(1)
+
+      function add(event) {
+        event.preventDefault()
+        const value = text.trim()
+        if (!value) return
+        setTodos((list) => [...list, { id: nextId.current++, text: value, done: false }])
+        setText('')
+      }
+      const toggle = (id) => setTodos((list) => list.map((todo) => (todo.id === id ? { ...todo, done: !todo.done } : todo)))
+      const remove = (id) => setTodos((list) => list.filter((todo) => todo.id !== id))
+
+      const visible = todos.filter(FILTERS[filter])
+      const left = todos.filter((todo) => !todo.done).length
+
+      return (
+        <div>
+          <form onSubmit={add}>
+            <label>
+              Новое дело <input value={text} onChange={(event) => setText(event.target.value)} />
+            </label>
+            <button type="submit">Добавить</button>
+          </form>
+          <div>
+            {Object.keys(FILTERS).map((name) => (
+              <button key={name} type="button" aria-pressed={filter === name} onClick={() => setFilter(name)}>
+                {name}
+              </button>
+            ))}
+          </div>
+          <ul>
+            {visible.map((todo) => (
+              <li key={todo.id}>
+                <label>
+                  <input type="checkbox" checked={todo.done} onChange={() => toggle(todo.id)} />
+                  {todo.text}
+                </label>
+                <button type="button" aria-label={`Удалить: ${todo.text}`} onClick={() => remove(todo.id)}>
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p>Осталось: {left}</p>
+        </div>
+      )
+    }
+  explain: |
+    **Производное состояние не хранят.** `visible` и `left` вычисляются из `todos` и `filter` при каждом рендере. Хранить их отдельно — значит синхронизировать вручную и рано или поздно ошибиться.
+
+    **Ключи.** `key={todo.id}` связывает DOM-элемент с делом. С `key={index}` после удаления «Б» React решил бы, что удалён последний элемент, и состояние неуправляемых полей сдвинулось бы. В тесте «удаление из середины» это и проверяется.
+
+    **Форма** даёт Enter бесплатно и работает без JavaScript-обработчика клавиш. `id` берётся из `useRef`-счётчика: он не вызывает рендер и переживает рендеры.
+
+    **На собесе спросят:** почему `crypto.randomUUID()` в рендере как ключ — плохо (новый ключ на каждый рендер); где хранить фильтр, если он должен переживать перезагрузку (URL: `?filter=done`).

@@ -1,0 +1,85 @@
+# React-задачи: компонент собирается в браузере, тесты — Testing Library и user-event.
+
+- key: react-use-debounced
+  kind: react
+  level: medium
+  title: useDebouncedValue
+  prompt: |
+    Напишите хук `useDebouncedValue(value, delay)`: возвращает `value`, но обновляется только когда `value` не менялось `delay` миллисекунд. Так поиск не шлёт запрос на каждую букву.
+
+    Для предпросмотра есть готовый `SearchBox` — он использует ваш хук.
+  starter: |
+    function useDebouncedValue(value, delay) {
+      return value
+    }
+
+    function SearchBox() {
+      const [text, setText] = useState('')
+      const query = useDebouncedValue(text, 400)
+      return (
+        <div>
+          <label>Поиск <input value={text} onChange={(event) => setText(event.target.value)} /></label>
+          <p>Ищем: «{query}»</p>
+        </div>
+      )
+    }
+  preview: <SearchBox />
+  hints:
+    - 'Хук хранит своё значение в `useState` и обновляет его по таймеру.'
+    - 'Таймер ставится в `useEffect`, который зависит от `value` и `delay`.'
+    - 'Функция очистки эффекта (`return () => clearTimeout(id)`) отменяет таймер, если `value` изменилось раньше. Это и есть debounce.'
+  tests: |
+    test('сначала возвращает исходное значение', () => {
+      const { result } = renderHook(() => useDebouncedValue('a', 50))
+      expect(result.current).toBe('a')
+    })
+    test('обновляется только после паузы', async () => {
+      const { result, rerender } = renderHook(({ value }) => useDebouncedValue(value, 60), { initialProps: { value: 'a' } })
+      rerender({ value: 'ab' })
+      await sleep(20)
+      rerender({ value: 'abc' })
+      await sleep(30)
+      expect(result.current).toBe('a')
+      await waitFor(() => expect(result.current).toBe('abc'))
+    })
+    test('при размонтировании таймер отменяется', async () => {
+      const original = globalThis.clearTimeout
+      const cleared = spy(original)
+      globalThis.clearTimeout = cleared
+      try {
+        const { rerender, unmount } = renderHook(({ value }) => useDebouncedValue(value, 1000), { initialProps: { value: 'a' } })
+        rerender({ value: 'b' })
+        unmount()
+        expect(cleared.calls.length).toBeGreaterThan(0)
+      } finally {
+        globalThis.clearTimeout = original
+      }
+    })
+  solution: |
+    function useDebouncedValue(value, delay) {
+      const [debounced, setDebounced] = useState(value)
+      useEffect(() => {
+        const id = setTimeout(() => setDebounced(value), delay)
+        return () => clearTimeout(id)
+      }, [value, delay])
+      return debounced
+    }
+
+    function SearchBox() {
+      const [text, setText] = useState('')
+      const query = useDebouncedValue(text, 400)
+      return (
+        <div>
+          <label>Поиск <input value={text} onChange={(event) => setText(event.target.value)} /></label>
+          <p>Ищем: «{query}»</p>
+        </div>
+      )
+    }
+  explain: |
+    **Очистка эффекта — это и есть debounce.** Каждый новый `value` запускает эффект заново, а перед этим React вызывает очистку прошлого — старый таймер отменяется. Сработает только таймер после последнего изменения.
+
+    **Размонтирование.** Та же очистка срабатывает при уходе компонента со страницы — `setState` не вызовется у размонтированного компонента.
+
+    **Отличие от debounce функции.** Здесь откладывается **значение**, а не вызов: удобно, когда результат нужен в рендере (запрос через TanStack Query по `query`).
+
+    **Альтернатива в React 19:** `useDeferredValue(text)` — не таймер, а приоритет: React сначала рисует поле, а тяжёлую часть с отложенным значением — когда будет время. Для запросов к серверу он не заменяет debounce: запросы всё равно уйдут на каждую букву.

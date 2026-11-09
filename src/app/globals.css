@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+
+/* Токены дизайна. Цвета — в OKLCH: одинаковая светлота читается одинаково при любом оттенке.
+   Тёмная тема — по системной настройке. */
+@theme {
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --color-paper: oklch(98.5% 0.004 250);
+  --color-surface: oklch(100% 0 0);
+  --color-ink: oklch(24% 0.02 260);
+  --color-muted: oklch(50% 0.02 260);
+  --color-line: oklch(90% 0.01 260);
+  --color-accent: oklch(52% 0.17 262);
+  --color-accent-soft: oklch(94% 0.03 262);
+  --color-marker: oklch(90% 0.13 95);
+  --color-good: oklch(55% 0.13 155);
+  --color-good-soft: oklch(94% 0.04 155);
+  --color-warn: oklch(58% 0.15 45);
+  --color-warn-soft: oklch(95% 0.04 60);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-paper: oklch(19% 0.015 260);
+    --color-surface: oklch(23% 0.018 260);
+    --color-ink: oklch(93% 0.01 260);
+    --color-muted: oklch(70% 0.02 260);
+    --color-line: oklch(32% 0.02 260);
+    --color-accent: oklch(74% 0.13 262);
+    --color-accent-soft: oklch(30% 0.06 262);
+    --color-marker: oklch(45% 0.09 95);
+    --color-good: oklch(76% 0.13 155);
+    --color-good-soft: oklch(30% 0.05 155);
+    --color-warn: oklch(78% 0.12 55);
+    --color-warn-soft: oklch(31% 0.05 50);
+    color-scheme: dark;
+  }
+}
+
+/* Переворот карточки: новая сторона появляется поворотом от ребра. */
+@keyframes card-flip {
+  from {
+    transform: perspective(1200px) rotateY(-80deg);
+    opacity: 0.3;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Содержание тем: типографика плагина, подстроенная под токены. */
+.lesson {
+  --tw-prose-body: var(--color-ink);
+  --tw-prose-headings: var(--color-ink);
+  --tw-prose-links: var(--color-accent);
+  --tw-prose-bold: var(--color-ink);
+  --tw-prose-code: var(--color-ink);
+  --tw-prose-quotes: var(--color-muted);
+  --tw-prose-bullets: var(--color-muted);
+  --tw-prose-counters: var(--color-muted);
+  --tw-prose-hr: var(--color-line);
+  --tw-prose-th-borders: var(--color-line);
+  --tw-prose-td-borders: var(--color-line);
+  --tw-prose-pre-bg: oklch(22% 0.02 260);
+  --tw-prose-pre-code: oklch(92% 0.01 260);
+}
+
+.lesson :where(code):not(:where(pre *)) {
+  background: var(--color-accent-soft);
+  border-radius: 0.3rem;
+  padding: 0.1em 0.35em;
+  font-weight: 500;
+}
+
+.lesson :where(code):not(:where(pre *))::before,
+.lesson :where(code):not(:where(pre *))::after {
+  content: none;
+}
+
+/* Широкие таблицы и код прокручиваются внутри себя, а не растягивают страницу на телефоне. */
+.lesson table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.lesson pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.lesson mark {
+  background: var(--color-marker);
+  color: inherit;
+  padding: 0 0.2em;
+  border-radius: 0.2em;
+}

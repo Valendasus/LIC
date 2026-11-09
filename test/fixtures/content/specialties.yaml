@@ -1,0 +1,12 @@
+- slug: demo
+  title: Демо
+  summary: Тестовая специальность.
+  status: active
+- slug: later
+  title: Позже
+  summary: Запланированная специальность.
+  status: planned
+- slug: broken
+  title: Сломанная
+  summary: Карточки с ошибкой YAML.
+  status: active

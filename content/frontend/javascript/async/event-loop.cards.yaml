@@ -1,0 +1,98 @@
+# Карточки темы «Event loop в браузере». Ключи не переименовывать.
+
+- key: event-loop-def
+  type: term
+  front: Event loop (цикл событий)
+  back: Механизм, который берёт задачи из очередей и выполняет их по одной, когда стек вызовов пуст; между задачами выполняет микрозадачи и отрисовку.
+  reverse: true
+
+- key: call-stack
+  type: term
+  front: Стек вызовов
+  back: Список функций, которые выполняются прямо сейчас. Пока он не пуст, браузер не обрабатывает события и не рисует.
+
+- key: macrotask
+  type: term
+  front: Задача (macrotask)
+  back: Единица работы из очереди задач — скрипт, колбэк `setTimeout`, событие ввода, сообщение `message`. За один оборот цикла выполняется одна задача.
+
+- key: microtask
+  type: term
+  front: Микрозадача
+  back: Колбэк, который выполняется сразу после текущей задачи, до отрисовки. Реакции промисов, продолжение после `await`, `queueMicrotask`, `MutationObserver`.
+  reverse: true
+
+- key: loop-turn
+  type: qa
+  front: Порядок одного оборота цикла событий?
+  back: |
+    - одна задача до опустошения стека
+    - все микрозадачи, включая добавленные по ходу
+    - отрисовка, если пора (`requestAnimationFrame`, стили, layout, paint)
+
+- key: promise-vs-timeout
+  type: code
+  front: |
+    Что выведет код?
+    ```js
+    setTimeout(() => console.log('A'))
+    Promise.resolve().then(() => console.log('B'))
+    console.log('C')
+    ```
+  back: '`C, B, A`: синхронный код → микрозадачи → задача.'
+
+- key: timeout-zero
+  type: qa
+  front: Что на самом деле значит `setTimeout(fn, 0)`?
+  back: 'Не «сразу», а «не раньше следующей задачи»: после текущего кода, всех микрозадач и, возможно, отрисовки. Вложенные таймеры к тому же получают минимум 4 мс.'
+
+- key: async-sync-part
+  type: qa
+  front: Какая часть `async`-функции выполняется синхронно?
+  back: Всё до первого `await`. Продолжение после `await` становится микрозадачей.
+
+- key: promise-executor
+  type: qa
+  front: Функция внутри `new Promise((resolve) => { … })` выполняется синхронно или асинхронно?
+  back: Синхронно, сразу при создании промиса. Асинхронны только обработчики `then`, `catch`, `finally`.
+
+- key: microtask-yield
+  type: qa
+  front: Почему `await Promise.resolve()` не помогает разбить тяжёлую работу?
+  back: Это микрозадача. Все микрозадачи выполняются подряд до отрисовки, поэтому браузер не успевает ни обработать ввод, ни перерисовать экран.
+
+- key: how-to-yield
+  type: qa
+  front: Чем уступить поток браузеру между порциями работы?
+  back: Новой задачей — `scheduler.yield()` (где поддерживается) или `setTimeout`. Ещё вариант — перенести работу в Web Worker.
+
+- key: long-task
+  type: term
+  front: Длинная задача
+  back: Задача дольше **50 мс**. Пока она идёт, браузер не реагирует на ввод — это главная причина плохого INP.
+  reverse: true
+
+- key: inp
+  type: term
+  front: INP (Interaction to Next Paint)
+  back: Метрика Core Web Vitals — время от действия пользователя до следующей отрисовки. Хорошо — до **200 мс**.
+
+- key: raf
+  type: qa
+  front: Когда вызываются колбэки `requestAnimationFrame` и почему для анимации они лучше `setInterval`?
+  back: Перед отрисовкой кадра, с частотой экрана; в фоновой вкладке они приостанавливаются. Таймер не привязан к кадрам и даёт рывки.
+
+- key: await-order
+  type: code
+  front: |
+    Что выведет код?
+    ```js
+    async function f() {
+      console.log(1)
+      await null
+      console.log(2)
+    }
+    f()
+    console.log(3)
+    ```
+  back: '`1, 3, 2`. До `await` функция синхронна, остаток — микрозадача после синхронного кода.'

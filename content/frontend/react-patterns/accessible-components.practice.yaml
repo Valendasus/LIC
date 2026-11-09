@@ -1,0 +1,140 @@
+# React-задачи: компонент собирается в браузере, тесты — Testing Library и user-event.
+
+- key: react-tabs
+  kind: react
+  level: hard
+  title: Доступные вкладки по WAI-ARIA APG
+  prompt: |
+    Сделайте `Tabs({ tabs })`, где `tabs` — массив `{ label, content }`. Поведение — по шаблону Tabs из WAI-ARIA Authoring Practices.
+    - Разметка: `role="tablist"` с подписью, `role="tab"` у каждой вкладки, `role="tabpanel"` у содержимого. Вкладка и панель связаны через `aria-controls` и `aria-labelledby`.
+    - У выбранной вкладки `aria-selected="true"`, у остальных `"false"`.
+    - **Плавающий tabindex:** в порядке Tab участвует только выбранная вкладка (`tabIndex={0}`), остальные — `-1`.
+    - Стрелки ←/→ переключают вкладку по кругу и переносят на неё фокус; Home и End — на первую и последнюю.
+  starter: |
+    function Tabs({ tabs }) {
+      return (
+        <div>
+          {tabs.map((tab) => (
+            <button key={tab.label}>{tab.label}</button>
+          ))}
+        </div>
+      )
+    }
+  preview: |
+    <Tabs tabs={[
+      { label: 'Описание', content: 'Кружка на 350 мл.' },
+      { label: 'Состав', content: 'Керамика, глазурь.' },
+      { label: 'Доставка', content: 'Завтра, бесплатно от 2000 ₽.' },
+    ]} />
+  hints:
+    - 'Состояние одно — индекс выбранной вкладки. Всё остальное (aria-selected, tabIndex, какая панель видна) из него вычисляется.'
+    - 'Связь вкладки и панели: `useId()` как префикс, вкладка `id={`${id}-tab-${i}`}` и `aria-controls={`${id}-panel-${i}`}`, у панели наоборот.'
+    - 'Клавиши — один обработчик `onKeyDown` на tablist. Следующий индекс по кругу: `(index + 1) % tabs.length`, предыдущий — `(index - 1 + tabs.length) % tabs.length`.'
+    - 'Фокус после переключения: массив рефов вкладок (`useRef([])`, `ref={(el) => (refs.current[i] = el)}`) и `refs.current[next].focus()`.'
+  tests: |
+    const TABS = [
+      { label: 'Первая', content: 'Текст 1' },
+      { label: 'Вторая', content: 'Текст 2' },
+      { label: 'Третья', content: 'Текст 3' },
+    ]
+    test('роли и подписи', () => {
+      render(<Tabs tabs={TABS} />)
+      expect(screen.getByRole('tablist')).toBeInTheDocument()
+      expect(screen.getAllByRole('tab')).toHaveLength(3)
+      const panel = screen.getByRole('tabpanel')
+      expect(panel).toHaveTextContent('Текст 1')
+      const first = screen.getByRole('tab', { name: 'Первая' })
+      expect(first).toHaveAttribute('aria-controls', panel.id)
+      expect(panel).toHaveAttribute('aria-labelledby', first.id)
+    })
+    test('aria-selected и плавающий tabindex', () => {
+      render(<Tabs tabs={TABS} />)
+      const [first, second] = screen.getAllByRole('tab')
+      expect(first).toHaveAttribute('aria-selected', 'true')
+      expect(second).toHaveAttribute('aria-selected', 'false')
+      expect(first).toHaveAttribute('tabindex', '0')
+      expect(second).toHaveAttribute('tabindex', '-1')
+    })
+    test('клик выбирает вкладку', async () => {
+      const user = userEvent.setup()
+      render(<Tabs tabs={TABS} />)
+      await user.click(screen.getByRole('tab', { name: 'Третья' }))
+      expect(screen.getByRole('tabpanel')).toHaveTextContent('Текст 3')
+    })
+    test('Tab попадает на выбранную вкладку, стрелки переключают по кругу с фокусом', async () => {
+      const user = userEvent.setup()
+      render(<Tabs tabs={TABS} />)
+      await user.tab()
+      expect(screen.getByRole('tab', { name: 'Первая' })).toHaveFocus()
+      await user.keyboard('{ArrowRight}')
+      expect(screen.getByRole('tab', { name: 'Вторая' })).toHaveFocus()
+      expect(screen.getByRole('tabpanel')).toHaveTextContent('Текст 2')
+      await user.keyboard('{ArrowLeft}{ArrowLeft}')
+      expect(screen.getByRole('tab', { name: 'Третья' })).toHaveFocus()
+    })
+    test('Home и End', async () => {
+      const user = userEvent.setup()
+      render(<Tabs tabs={TABS} />)
+      await user.tab()
+      await user.keyboard('{End}')
+      expect(screen.getByRole('tab', { name: 'Третья' })).toHaveFocus()
+      await user.keyboard('{Home}')
+      expect(screen.getByRole('tab', { name: 'Первая' })).toHaveFocus()
+      expect(screen.getByRole('tab', { name: 'Первая' })).toHaveAttribute('aria-selected', 'true')
+    })
+  solution: |
+    function Tabs({ tabs, label = 'Вкладки' }) {
+      const [selected, setSelected] = useState(0)
+      const refs = useRef([])
+      const id = useId()
+
+      function select(index) {
+        setSelected(index)
+        refs.current[index].focus()
+      }
+
+      function onKeyDown(event) {
+        const last = tabs.length - 1
+        const next = { ArrowRight: selected === last ? 0 : selected + 1, ArrowLeft: selected === 0 ? last : selected - 1, Home: 0, End: last }[event.key]
+        if (next === undefined) return
+        event.preventDefault()
+        select(next)
+      }
+
+      return (
+        <div>
+          <div role="tablist" aria-label={label} onKeyDown={onKeyDown}>
+            {tabs.map((tab, i) => (
+              <button
+                key={tab.label}
+                ref={(element) => (refs.current[i] = element)}
+                type="button"
+                role="tab"
+                id={`${id}-tab-${i}`}
+                aria-controls={`${id}-panel-${i}`}
+                aria-selected={i === selected}
+                tabIndex={i === selected ? 0 : -1}
+                onClick={() => setSelected(i)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div role="tabpanel" id={`${id}-panel-${selected}`} aria-labelledby={`${id}-tab-${selected}`} tabIndex={0}>
+            {tabs[selected].content}
+          </div>
+        </div>
+      )
+    }
+  explain: |
+    **Плавающий tabindex (roving tabindex).** В порядке Tab — только одна вкладка, остальные достижимы стрелками. Так Tab с вкладок сразу ведёт в панель, а не перебирает десять вкладок подряд. Это требование APG для составных виджетов: tablist, menu, listbox, toolbar.
+
+    **Одно состояние — индекс.** `aria-selected`, `tabIndex` и видимая панель вычисляются из него и не могут разойтись.
+
+    **Фокус.** Стрелка не только выбирает, но и переносит фокус — через массив рефов. Callback-ref `ref={(el) => …}` удобен для списков.
+
+    **`tabIndex={0}` у панели** — по APG, если в панели нет фокусируемых элементов: пользователь клавиатуры может до неё дойти.
+
+    **Автоматическая или ручная активация.** Здесь вкладка активируется сразу при фокусе (automatic). Если панель тяжёлая (загрузка данных), APG советует ручную: стрелки двигают фокус, Enter или пробел — выбирают.
+
+    **В жизни** такие компоненты берут из headless-библиотек (Radix, React Aria, Ark UI) — но на собеседовании просят написать самому именно ради этих деталей.

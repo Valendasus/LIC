@@ -1,0 +1,276 @@
+# Практика темы «Каскад, специфичность и наследование».
+
+- key: order-cascade
+  kind: order
+  prompt: Расставьте шаги каскада в порядке, в котором браузер их проверяет.
+  steps:
+    - Источник и важность (`!important`)
+    - Контекст (Shadow DOM)
+    - Стили в атрибуте `style`
+    - Слои `@layer`
+    - Специфичность селектора
+    - Порядок в коде
+  explain: Браузер останавливается на первом шаге, где у объявлений есть разница. Специфичность — только пятый шаг.
+
+- key: order-specificity
+  kind: order
+  prompt: Расставьте селекторы от самого слабого к самому сильному.
+  steps:
+    - '`:where(#nav) a`'
+    - '`ul li a`'
+    - '`.nav a`'
+    - '`.nav .item a:hover`'
+    - '`#nav a`'
+  explain: (0,0,1) → (0,0,3) → (0,1,1) → (0,3,1) → (1,0,1). У `:where()` нулевая специфичность, а один id сильнее любого числа классов.
+
+- key: quiz-who-wins
+  kind: quiz
+  question: Какого цвета будет ссылка?
+  code: |
+    <nav id="top"><a class="link" href="/">Главная</a></nav>
+
+    #top a     { color: green; }
+    .link      { color: red !important; }
+    nav .link  { color: blue; }
+  options:
+    - text: Красная
+      correct: true
+    - text: Зелёная
+      why: У `#top a` самая высокая специфичность, но важность проверяется раньше специфичности.
+    - text: Синяя
+      why: '`nav .link` объявлено последним, но порядок в коде — последний шаг каскада.'
+  explain: На шаге «источник и важность» `!important` побеждает обычные объявления, до специфичности дело не доходит.
+
+- key: quiz-layers
+  kind: quiz
+  question: |
+    Какой фон у кнопки?
+  code: |
+    @layer base, components;
+
+    @layer components { .btn { background: blue; } }
+    @layer base { #app .btn { background: gray; } }
+    .btn { background: green; }
+  options:
+    - text: Зелёный
+      correct: true
+    - text: Синий
+      why: '`components` — самый поздний слой, но обычные стили вне слоёв сильнее любых слоёв.'
+    - text: Серый
+      why: 'Высокая специфичность внутри слоя не помогает: слои сравниваются раньше специфичности.'
+  explain: Обычное объявление вне слоёв сильнее всех слоёв. С `!important` было бы наоборот.
+
+- key: quiz-is-where
+  kind: quiz
+  question: 'Какая специфичность у селектора `:is(.a, #b) span`?'
+  options:
+    - text: (1, 0, 1)
+      correct: true
+    - text: (0, 1, 1)
+      why: '`:is()` берёт не первый и не самый слабый аргумент, а самый специфичный — `#b`.'
+    - text: (0, 0, 1)
+      why: Так было бы с `:where()` — он всегда весит ноль.
+    - text: (1, 1, 1)
+      why: Аргументы `:is()` не суммируются, берётся только самый специфичный.
+  explain: '`:is()`, `:not()` и `:has()` получают специфичность самого специфичного аргумента.'
+
+- key: quiz-inherited
+  kind: quiz
+  question: Какие свойства наследуются по умолчанию? Отметьте все.
+  options:
+    - text: '`color`'
+      correct: true
+    - text: '`font-family`'
+      correct: true
+    - text: '`line-height`'
+      correct: true
+    - text: '`margin`'
+      why: Отступы не наследуются, иначе каждый вложенный блок получал бы отступ родителя.
+    - text: '`border`'
+      why: Рамки не наследуются.
+  explain: Наследуются в основном текстовые свойства. Для остальных можно явно указать `inherit`.
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+# Специфичность — это тройка чисел, и её удобно «потрогать» кодом.
+
+- key: code-compare
+  kind: code
+  level: easy
+  title: Сравнить специфичность
+  prompt: |
+    Специфичность записана тройкой `[a, b, c]`: id, классы (атрибуты и псевдоклассы), типы (и псевдоэлементы).
+
+    Напишите `compareSpecificity(x, y)`: возвращает `1`, если `x` сильнее, `-1`, если слабее, и `0`, если равны.
+  starter: |
+    function compareSpecificity(x, y) {
+      return 0
+    }
+  hints:
+    - Как сравнивают версии программ «1.10.0» и «1.9.5»? Так же — по разрядам слева направо.
+  tests: |
+    test('id сильнее любого числа классов', () => {
+      expect(compareSpecificity([1, 0, 0], [0, 15, 0])).toBe(1)
+    })
+    test('класс сильнее любого числа типов', () => {
+      expect(compareSpecificity([0, 0, 9], [0, 1, 0])).toBe(-1)
+    })
+    test('при равенстве старших сравниваются младшие', () => {
+      expect(compareSpecificity([0, 2, 1], [0, 2, 3])).toBe(-1)
+    })
+    test('равные', () => {
+      expect(compareSpecificity([1, 2, 3], [1, 2, 3])).toBe(0)
+    })
+  solution: |
+    function compareSpecificity(x, y) {
+      for (let i = 0; i < 3; i++) {
+        if (x[i] !== y[i]) return x[i] > y[i] ? 1 : -1
+      }
+      return 0
+    }
+  explain: |
+    Разряды не «переносятся»: 15 классов не дают одного id. Поэтому специфичность сравнивают покомпонентно слева направо, как номера версий, а не складывают в одно число.
+
+    Старая запись «id = 100, класс = 10» неверна ровно поэтому: 11 классов не сильнее одного id.
+
+- key: code-specificity
+  kind: code
+  level: hard
+  title: Посчитать специфичность селектора
+  prompt: |
+    Напишите `specificity(selector)` для одного сложного селектора (без запятых на верхнем уровне). Вернуть `[a, b, c]`.
+    - `#id` → a.
+    - `.class`, `[attr]`, псевдоклассы `:hover`, `:nth-child(2n)` → b.
+    - Типы `div`, псевдоэлементы `::before` и старые `:before`, `:after`, `:first-line`, `:first-letter` → c.
+    - `*` и комбинаторы (пробел, `>`, `+`, `~`) не считаются.
+    - `:is()`, `:not()`, `:has()` берут специфичность **самого сильного** аргумента.
+    - `:where()` всегда даёт ноль.
+
+    Функция `compareSpecificity` из прошлой задачи уже объявлена ниже — пользуйтесь.
+  starter: |
+    function compareSpecificity(x, y) {
+      for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i] ? 1 : -1
+      return 0
+    }
+
+    function specificity(selector) {
+      return [0, 0, 0]
+    }
+  hints:
+    - 'Регулярное выражение на весь селектор не справится со вложенными `:is(…)`. Проще идти по строке символ за символом.'
+    - 'По первому символу понятно, что дальше: `#` — id, `.` — класс, `[` — атрибут до `]`, `:` — псевдо, буква — тип.'
+    - 'Для `:is(…)` нужен конец скобки с учётом вложенности (счётчик глубины) и разбиение аргументов по запятым верхнего уровня. Каждый аргумент — рекурсивный вызов `specificity`.'
+    - 'Ключевое: у `:is`/`:not`/`:has` к счёту добавляется максимум по аргументам, а не сумма; `:where` пропускается целиком.'
+  tests: |
+    const cases = [
+      ['a', [0, 0, 1]],
+      ['*', [0, 0, 0]],
+      ['#nav .item a:hover', [1, 2, 1]],
+      ['ul li::before', [0, 0, 3]],
+      ['p:first-line', [0, 0, 2]],
+      ['input[type="text"]:focus', [0, 2, 1]],
+      ['div > p + span ~ em', [0, 0, 4]],
+      ['li:nth-child(2n + 1)', [0, 1, 1]],
+      [':is(#a, .b) p', [1, 0, 1]],
+      [':where(#a .b) p', [0, 0, 1]],
+      ['a:not(.x, #y)', [1, 0, 1]],
+      ['.card:has(> img.cover)', [0, 2, 1]],
+      [':is(:not(#x), .y)', [1, 0, 0]],
+    ]
+    for (const [selector, expected] of cases) {
+      test(selector, () => expect(specificity(selector)).toEqual(expected))
+    }
+  solution: |
+    function compareSpecificity(x, y) {
+      for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i] ? 1 : -1
+      return 0
+    }
+
+    const LEGACY_ELEMENTS = ['before', 'after', 'first-line', 'first-letter']
+    const isNameChar = (ch) => /[\w-]/.test(ch) || ch > '\x7f'
+
+    function readName(s, i) {
+      while (i < s.length && isNameChar(s[i])) i++
+      return i
+    }
+
+    // Позиция сразу после парной закрывающей скобки.
+    function closeParen(s, i) {
+      let depth = 0
+      for (; i < s.length; i++) {
+        if (s[i] === '(') depth++
+        if (s[i] === ')' && --depth === 0) return i + 1
+      }
+      return s.length
+    }
+
+    // Разбиение по запятым верхнего уровня: «#a, :is(.b, .c)» → два аргумента.
+    function splitArgs(s) {
+      const parts = []
+      let depth = 0
+      let start = 0
+      for (let i = 0; i < s.length; i++) {
+        if (s[i] === '(') depth++
+        if (s[i] === ')') depth--
+        if (s[i] === ',' && depth === 0) {
+          parts.push(s.slice(start, i))
+          start = i + 1
+        }
+      }
+      return [...parts, s.slice(start)]
+    }
+
+    function specificity(selector) {
+      const s = selector.trim()
+      const total = [0, 0, 0]
+      const add = ([a, b, c]) => {
+        total[0] += a
+        total[1] += b
+        total[2] += c
+      }
+      let i = 0
+      while (i < s.length) {
+        const ch = s[i]
+        if (ch === '#') {
+          add([1, 0, 0])
+          i = readName(s, i + 1)
+        } else if (ch === '.') {
+          add([0, 1, 0])
+          i = readName(s, i + 1)
+        } else if (ch === '[') {
+          add([0, 1, 0])
+          i = s.indexOf(']', i) + 1
+        } else if (ch === ':' && s[i + 1] === ':') {
+          add([0, 0, 1])
+          i = readName(s, i + 2)
+          if (s[i] === '(') i = closeParen(s, i)
+        } else if (ch === ':') {
+          const end = readName(s, i + 1)
+          const name = s.slice(i + 1, end).toLowerCase()
+          i = end
+          if (s[i] === '(') {
+            const after = closeParen(s, i)
+            const inner = s.slice(i + 1, after - 1)
+            i = after
+            if (name === 'where') continue
+            if (['is', 'not', 'has', 'matches'].includes(name)) {
+              add(splitArgs(inner).map(specificity).reduce((best, next) => (compareSpecificity(next, best) > 0 ? next : best)))
+            } else add([0, 1, 0])
+          } else add(LEGACY_ELEMENTS.includes(name) ? [0, 0, 1] : [0, 1, 0])
+        } else if (isNameChar(ch)) {
+          add([0, 0, 1])
+          i = readName(s, i)
+        } else i++ // *, пробелы и комбинаторы
+      }
+      return total
+    }
+  explain: |
+    **Почему посимвольно.** Селекторы вложенные: `:is(:not(#x), .y)`. Регулярка не считает парные скобки, а проход со счётчиком глубины — легко.
+
+    **Три правила, которые чаще всего забывают:**
+    - `:is`, `:not`, `:has` сами по себе ничего не весят, но приносят **максимум** по своим аргументам. `:not(.x, #y)` весит как id.
+    - `:where` всегда ноль — на этом построены «мягкие» сбросы и базовые стили библиотек, которые легко переопределить.
+    - Комбинаторы и `*` не весят ничего.
+
+    **Где проверить себя:** спецификация Selectors Level 4, раздел «Calculating a selector’s specificity», и DevTools — при наведении на селектор во вкладке Styles показывается его специфичность.
+
+    **Чего здесь нет** ради простоты: `:nth-child(2n of .x)` добавляет специфичность аргумента `of`, а экранированные символы вроде `.a\:b` читаются как часть имени.

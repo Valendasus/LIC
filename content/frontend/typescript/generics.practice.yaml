@@ -1,0 +1,47 @@
+# Задачи на типы: проверяет компилятор TypeScript.
+
+- key: types-group-by
+  kind: types
+  level: medium
+  title: Типизированный groupBy
+  prompt: |
+    Допишите сигнатуру `groupBy`: функция группирует элементы массива по ключу, который возвращает `getKey`.
+    - Тип элементов выводится из массива.
+    - Ключ — строка или число, и в результате остаётся именно его тип: если `getKey` возвращает `'admin' | 'user'`, у результата только такие ключи.
+    - Тело уже написано — меняйте только типы.
+  starter: |
+    function groupBy(items: any[], getKey: (item: any) => any): any {
+      const result: any = {}
+      for (const item of items) (result[getKey(item)] ??= []).push(item)
+      return result
+    }
+  hints:
+    - Нужны два параметра типа — какие? Один для элемента, второй для ключа.
+    - '`<T, K extends PropertyKey>`. Возвращаемый тип — `Partial<Record<K, T[]>>`: не каждый ключ обязательно встретится.'
+  tests: |
+    type User = { name: string; role: 'admin' | 'user' }
+    declare const users: User[]
+
+    const byRole = groupBy(users, (user) => user.role)
+    const byLength = groupBy(['a', 'bb', 'cc'], (word) => word.length)
+
+    type cases = [
+      Expect<Equal<typeof byRole, Partial<Record<'admin' | 'user', User[]>>>>,
+      Expect<Equal<typeof byLength, Partial<Record<number, string[]>>>>,
+    ]
+    // @ts-expect-error
+    groupBy(users, (user) => ({ nested: user.role }))
+  solution: |
+    function groupBy<T, K extends PropertyKey>(items: readonly T[], getKey: (item: T) => K): Partial<Record<K, T[]>> {
+      const result: Partial<Record<K, T[]>> = {}
+      for (const item of items) (result[getKey(item)] ??= []).push(item)
+      return result
+    }
+  explain: |
+    **Вывод типов из аргументов.** `T` выводится из массива, `K` — из возвращаемого значения колбэка. Писать `groupBy<User, Role>(…)` не нужно.
+
+    **`K extends PropertyKey`** (`string | number | symbol`) — ключом объекта может быть только такое значение. Объект как ключ — ошибка, это проверяет `@ts-expect-error`.
+
+    **`Partial`** честнее, чем `Record<K, T[]>`: если ни один пользователь не `admin`, ключа не будет, и обращение `byRole.admin.length` должно требовать проверки.
+
+    **Встроенный аналог:** `Object.groupBy` (ES2024) типизирован почти так же — `Partial<Record<K, T[]>>`.
