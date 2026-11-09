@@ -52,7 +52,7 @@ function build(raw: RawNode, parent: string[], specialty: string): TreeNode {
   }
 }
 
-/** Корень дерева специальности: его дети — блоки (FE1, FE2 …). */
+/** Корень дерева специальности: его дети — блоки (HTML, CSS, JavaScript …). */
 export const getTree = cache(async (specialty: string): Promise<TreeNode | null> => {
   const specialties = await getSpecialties()
   if (!specialties.some((item) => item.slug === specialty && item.status === 'active')) return null

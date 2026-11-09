@@ -5,7 +5,7 @@
 
 # ───────────────────────── Платформа ─────────────────────────
 - slug: html
-  title: FE1 · HTML
+  title: HTML
   group: Платформа
   summary: Семантика, формы, медиа, нативные интерактивные элементы, SEO-разметка.
   children:
@@ -41,7 +41,7 @@
     - { slug: seo-markup, title: 'SEO-разметка, Open Graph и JSON-LD', grade: M }
 
 - slug: css
-  title: FE2 · CSS
+  title: CSS
   group: Платформа
   summary: Каскад, раскладка, адаптивность, современные селекторы и цвет, анимации, архитектура.
   children:
@@ -90,7 +90,7 @@
     - { slug: performance, title: 'Производительность CSS', grade: S }
 
 - slug: styling
-  title: FE3 · Подходы к стилизации
+  title: Подходы к стилизации
   group: Платформа
   summary: CSS Modules, BEM, CSS-in-JS и его цена, zero-runtime, выбор подхода.
   children:
@@ -100,7 +100,7 @@
     - { slug: choosing, title: 'Как выбрать подход', grade: M }
 
 - slug: tailwind
-  title: FE4 · Tailwind CSS
+  title: Tailwind CSS
   group: Платформа
   summary: Utility-first, Tailwind 4 и @theme, варианты компонентов, shadcn/ui, Tailwind в большом проекте.
   children:
@@ -113,7 +113,7 @@
     - { slug: at-scale, title: 'Tailwind в большом проекте', grade: M }
 
 - slug: browser
-  title: FE5 · Браузер и веб-API
+  title: Браузер и веб-API
   group: Платформа
   summary: Рендеринг, event loop, DOM и события, хранилища, воркеры, сеть, безопасность, DevTools.
   children:
@@ -155,7 +155,7 @@
 
 # ───────────────────────── Языки ─────────────────────────
 - slug: javascript
-  title: FE6 · JavaScript
+  title: JavaScript
   group: Языки
   summary: Язык целиком — от приведения типов до асинхронности, памяти и метапрограммирования.
   children:
@@ -218,7 +218,7 @@
     - { slug: modern-es, title: 'Новое в ECMAScript 2024–2026', grade: M }
 
 - slug: typescript
-  title: FE7 · TypeScript
+  title: TypeScript
   group: Языки
   summary: От основ до type-level программирования, типизация React и API, TypeScript 7.
   children:
@@ -237,7 +237,7 @@
 
 # ───────────────────────── React ─────────────────────────
 - slug: react-basics
-  title: FE8 · React — основы
+  title: React — основы
   group: React
   summary: Компоненты, состояние, списки, события, формы, эффекты, рефы.
   children:
@@ -250,7 +250,7 @@
     - { slug: refs, title: 'Рефы и доступ к DOM', grade: J }
 
 - slug: react-internals
-  title: FE9 · React — как он работает внутри
+  title: React — как он работает внутри
   group: React
   summary: Рендер и коммит, Fiber, перерисовки, batching, конкурентный рендеринг, гидратация, Compiler.
   children:
@@ -264,7 +264,7 @@
     - { slug: compiler, title: 'React Compiler 1.0', grade: M }
 
 - slug: react-hooks
-  title: FE10 · React — хуки и API
+  title: React — хуки и API
   group: React
   summary: Все стабильные хуки React 19.3, Activity, ViewTransition, Suspense, порталы, свои хуки.
   children:
@@ -281,7 +281,7 @@
     - { slug: custom-hooks, title: 'Собственные хуки', grade: J }
 
 - slug: react-patterns
-  title: FE11 · React — паттерны и качество кода
+  title: React — паттерны и качество кода
   group: React
   summary: Композиция, составные и headless-компоненты, «вам может не понадобиться эффект», антипаттерны.
   children:
@@ -294,7 +294,7 @@
     - { slug: accessible-components, title: 'Доступные компоненты по WAI-ARIA APG', grade: M }
 
 - slug: react-performance
-  title: FE12 · React — производительность
+  title: React — производительность
   group: React
   summary: Измерение, мемоизация до и после Compiler, контекст, виртуализация, переходы.
   children:
@@ -306,7 +306,7 @@
     - { slug: transitions, title: 'Переходы и отложенные значения', grade: M }
 
 - slug: react-ecosystem
-  title: FE13 · React — экосистема
+  title: React — экосистема
   group: React
   summary: Роутинг, серверное и клиентское состояние, формы, таблицы, UI-киты, анимация, i18n.
   children:
@@ -320,7 +320,7 @@
     - { slug: i18n, title: 'Интернационализация', grade: M }
 
 - slug: rsc
-  title: FE14 · React Server Components
+  title: React Server Components
   group: React
   summary: Серверные компоненты, граница use client, серверные функции, безопасность.
   children:
@@ -332,7 +332,7 @@
 
 # ───────────────────────── Next.js ─────────────────────────
 - slug: nextjs
-  title: FE15 · Next.js 16
+  title: Next.js 16
   group: Next.js
   summary: Маршрутизация, рендеринг, Cache Components, Server Actions, proxy.ts, SEO, i18n, деплой.
   children:
@@ -354,7 +354,7 @@
 
 # ───────────────────────── Инженерия ─────────────────────────
 - slug: architecture
-  title: FE16 · Архитектура и методологии
+  title: Архитектура и методологии
   group: Инженерия
   summary: Структура проекта, FSD 2.1, Atomic Design, границы модулей, монорепозитории, ADR.
   children:
@@ -368,7 +368,7 @@
     - { slug: adr-c4, title: 'ADR и C4', grade: M }
 
 - slug: backend-communication
-  title: FE17 · Взаимодействие с бэкендом
+  title: Взаимодействие с бэкендом
   group: Инженерия
   summary: HTTP, API, клиентский слой, авторизация на клиенте, контракты, кеш, realtime, файлы, моки.
   children:
@@ -386,7 +386,7 @@
     - { slug: mocks, title: 'Моки и MSW', grade: M }
 
 - slug: state
-  title: FE18 · Состояние приложения
+  title: Состояние приложения
   group: Инженерия
   summary: Виды состояния, URL, Zustand, Redux Toolkit, конечные автоматы.
   children:
@@ -396,7 +396,7 @@
     - { slug: state-machines, title: 'Конечные автоматы', grade: S }
 
 - slug: ui-a11y
-  title: FE19 · UI-инженерия и доступность
+  title: UI-инженерия и доступность
   group: Инженерия
   summary: WCAG 2.2, ARIA и APG, проверка доступности, дизайн-системы, Figma, состояния интерфейса.
   children:
@@ -409,7 +409,7 @@
     - { slug: ui-states, title: 'Состояния интерфейса', grade: J }
 
 - slug: performance
-  title: FE21 · Производительность
+  title: Производительность
   group: Инженерия
   summary: Web Vitals, критический путь, бандл, изображения, шрифты, кеш, длинные задачи, бюджеты.
   children:
@@ -423,7 +423,7 @@
     - { slug: budgets, title: 'Бюджеты в CI', grade: M }
 
 - slug: testing
-  title: FE22 · Тестирование
+  title: Тестирование
   group: Инженерия
   summary: Стратегия, Vitest 4, Testing Library, MSW, Playwright, Storybook 10, тесты доступности.
   children:
@@ -435,7 +435,7 @@
     - { slug: tdd, title: 'TDD на практике', grade: M }
 
 - slug: tooling
-  title: FE23 · Сборка и инструменты
+  title: Сборка и инструменты
   group: Инженерия
   summary: Vite 8, Turbopack, бандлер изнутри, линтеры, форматтеры, монорепозитории, публикация пакетов.
   children:
@@ -446,7 +446,7 @@
 
 # ───────────────────────── Специализации ─────────────────────────
 - slug: animation
-  title: FE20 · Анимация и креативный фронтенд
+  title: Анимация и креативный фронтенд
   group: Специализации
   summary: Принципы движения, CSS и View Transitions, GSAP, Lenis, SVG, Canvas, three.js и R3F.
   children:
@@ -458,7 +458,7 @@
     - { slug: shaders, title: 'Шейдеры — основы', grade: S }
 
 - slug: complex-ui
-  title: FE24 · Сложные интерфейсы
+  title: Сложные интерфейсы
   group: Специализации
   summary: Таблицы, перетаскивание, редакторы, календари, файлы, видео, импорт и экспорт.
   children:
@@ -470,7 +470,7 @@
     - { slug: import-export, title: 'Импорт и экспорт', grade: M }
 
 - slug: system-design
-  title: FE25 · Frontend system design
+  title: Frontend system design
   group: Специализации
   summary: Метод RADIO и 10 разборов — от автодополнения до совместного редактора.
   children:

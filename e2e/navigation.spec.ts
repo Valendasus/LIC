@@ -18,8 +18,8 @@ test('дерево: специальность → блок → модуль →
     await expect(page.getByRole('heading', { level: 2, name: group })).toBeVisible()
   }
 
-  await page.getByRole('link', { name: /FE6 · JavaScript/ }).click()
-  await expect(page.getByRole('heading', { level: 1, name: /FE6 · JavaScript/ })).toBeVisible()
+  await page.getByRole('link', { name: /^JavaScript/ }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'JavaScript' })).toBeVisible()
   await page.getByRole('link', { name: /Области видимости и замыкания/ }).click()
   await page.getByRole('link', { name: /Замыкания/ }).click()
 
@@ -33,7 +33,7 @@ test('дерево: специальность → блок → модуль →
   }
 
   // Хлебные крошки ведут обратно.
-  await page.getByRole('navigation', { name: 'Путь' }).getByRole('link', { name: 'FE6 · JavaScript' }).click()
+  await page.getByRole('navigation', { name: 'Путь' }).getByRole('link', { name: 'JavaScript', exact: true }).click()
   await expect(page).toHaveURL('/frontend/javascript')
 })
 
