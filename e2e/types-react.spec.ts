@@ -22,7 +22,7 @@ const result = (page: Page) => page.getByRole('status', { name: 'Результ�
 
 test('задача на типы: компилятор в воркере, ошибки по тестам, эталон проходит', async ({ page }) => {
   const topic = 'typescript/utility-types'
-  await page.goto(`/review?scope=frontend/${topic}`)
+  await page.goto(`/practice?scope=frontend/${topic}`)
   const task = await currentTask(page, topic)
   await expect(page.getByText(/^Задача на типы · /)).toBeVisible()
 
@@ -47,7 +47,7 @@ test('все задачи на типы решаются эталоном в б�
   test.setTimeout(120_000)
   for (const topic of ['typescript/utility-types', 'typescript/type-level', 'typescript/generics']) {
     const tasks = practice(topic)
-    await page.goto(`/review?scope=frontend/${topic}&mode=free`)
+    await page.goto(`/practice?scope=frontend/${topic}&mode=free`)
     for (let i = 0; i < tasks.length; i++) {
       const task = await currentTask(page, topic)
       await setCode(page, task.solution!)
@@ -61,7 +61,7 @@ test('все задачи на типы решаются эталоном в б�
 
 test('React-задача: тесты в песочнице, предпросмотр живой, эталон скрыт до решения', async ({ page }) => {
   const topic = 'react-basics/state'
-  await page.goto(`/review?scope=frontend/${topic}`)
+  await page.goto(`/practice?scope=frontend/${topic}`)
   const task = await currentTask(page, topic)
   expect(await page.content()).not.toContain('Math.max(min, v - step)')
   await expect(page.getByText('Предпросмотр появится после запуска тестов')).toBeVisible()
@@ -82,7 +82,7 @@ test('React-задача: тесты в песочнице, предпросмо
 
 test('React-задача: синтаксическая ошибка и бесконечный цикл не вешают страницу', async ({ page }) => {
   const topic = 'react-basics/state'
-  await page.goto(`/review?scope=frontend/${topic}`)
+  await page.goto(`/practice?scope=frontend/${topic}`)
   const task = await currentTask(page, topic)
 
   await setCode(page, 'function Counter( {')
@@ -101,7 +101,7 @@ test('React-задача: синтаксическая ошибка и беск�
 test('все React-задачи решаются эталоном в браузере', async ({ page }) => {
   test.setTimeout(180_000)
   for (const topic of ['react-basics/state', 'react-basics/lists-keys', 'react-basics/forms', 'react-hooks/custom-hooks', 'react-patterns/accessible-components']) {
-    await page.goto(`/review?scope=frontend/${topic}&mode=free`)
+    await page.goto(`/practice?scope=frontend/${topic}&mode=free`)
     const task = await currentTask(page, topic)
     await setCode(page, task.solution!)
     await run(page)

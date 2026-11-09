@@ -23,7 +23,7 @@ async function currentTask(page: Page): Promise<RawPractice> {
 }
 
 test('решение с ошибкой, подсказка, затем верное решение: тесты в воркере, эталон после решения, оценка «Трудно»', async ({ page }) => {
-  await page.goto(`/review?scope=frontend/${TOPIC}&kinds=code`)
+  await page.goto(`/practice?scope=frontend/${TOPIC}&kinds=code`)
   const task = await currentTask(page)
   // Эталон не лежит на странице до решения.
   expect(await page.content()).not.toContain(task.solution!.trim().split('\n')[1].trim())
@@ -50,7 +50,7 @@ test('решение с ошибкой, подсказка, затем верн�
 })
 
 test('с первого запуска — «Хорошо»; «Показать решение» — «Снова» и задача возвращается в сессию', async ({ page }) => {
-  await page.goto(`/review?scope=frontend/${TOPIC}&kinds=code`)
+  await page.goto(`/practice?scope=frontend/${TOPIC}&kinds=code`)
   const first = await currentTask(page)
   await setCode(page, first.solution!)
   await page.getByRole('button', { name: /Запустить тесты/ }).click()
@@ -70,7 +70,7 @@ test('с первого запуска — «Хорошо»; «Показать 
 })
 
 test('бесконечный цикл останавливается, страница остаётся живой', async ({ page }) => {
-  await page.goto(`/review?scope=frontend/${TOPIC}&kinds=code`)
+  await page.goto(`/practice?scope=frontend/${TOPIC}&kinds=code`)
   const task = await currentTask(page)
   await setCode(page, `${task.starter}\nwhile (true) {}`)
   await page.getByRole('button', { name: /Запустить тесты/ }).click()
@@ -85,7 +85,7 @@ test('бесконечный цикл останавливается, стран
 })
 
 test('черновик переживает перезагрузку и сбрасывается к заготовке', async ({ page }) => {
-  await page.goto(`/review?scope=frontend/${TOPIC}&kinds=code&mode=free`)
+  await page.goto(`/practice?scope=frontend/${TOPIC}&kinds=code&mode=free`)
   const task = await currentTask(page)
   await setCode(page, '// мой черновик')
   await page.reload()
@@ -97,7 +97,7 @@ test('черновик переживает перезагрузку и сбра
 })
 
 test('ошибки решения видны: синтаксис, исключение, console.log', async ({ page }) => {
-  await page.goto(`/review?scope=frontend/${TOPIC}&kinds=code`)
+  await page.goto(`/practice?scope=frontend/${TOPIC}&kinds=code`)
   await setCode(page, 'function (')
   await page.getByRole('button', { name: /Запустить тесты/ }).click()
   await expect(page.getByText(/Код не запустился\. Синтаксическая ошибка/)).toBeVisible()
@@ -113,7 +113,7 @@ test('все задачи всех тем решаются своим этало
   test.setTimeout(120_000)
   for (const topic of ['javascript/scope/closures', 'javascript/async/event-loop', 'css/cascade/specificity']) {
     const keys = practice(topic).filter((item) => item.kind === 'code')
-    await page.goto(`/review?scope=frontend/${topic}&kinds=code&mode=free`)
+    await page.goto(`/practice?scope=frontend/${topic}&kinds=code&mode=free`)
     for (let i = 0; i < keys.length; i++) {
       const title = await page.getByRole('heading', { level: 2 }).innerText()
       const task = keys.find((item) => item.title === title)!

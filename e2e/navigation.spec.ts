@@ -65,7 +65,7 @@ test('ненаполненная тема и страницы, которых н
   await page.goto('/frontend/nextjs/routing')
   await expect(page.getByText('Тема ещё не наполнена.', { exact: false })).toBeVisible()
 
-  for (const url of ['/frontend/nope', '/frontend/javascript/nope/deeper', '/backend', '/review?scope=frontend/nope']) {
+  for (const url of ['/frontend/nope', '/frontend/javascript/nope/deeper', '/backend', '/practice?scope=frontend/nope']) {
     const response = await page.goto(url)
     expect(response?.status(), url).toBe(404)
   }

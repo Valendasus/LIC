@@ -66,7 +66,7 @@ export async function ReviewPage({ searchParams }: Props) {
           </p>
           {counts.total > 0 && (
             <Link
-              href={`/review?mode=free${scope ? `&scope=${encodeURIComponent(scope)}` : ''}`}
+              href={`/practice?mode=free${scope ? `&scope=${encodeURIComponent(scope)}` : ''}`}
               className="mt-4 inline-block rounded-md border border-line px-4 py-2 text-sm hover:border-accent"
             >
               Свободная тренировка

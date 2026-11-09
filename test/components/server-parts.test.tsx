@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { PracticePanel } from '@/widgets/practice-panel/ui/PracticePanel'
-import { ReviewBadge } from '@/widgets/app-shell/ui/ReviewBadge'
+import { AppShell } from '@/widgets/app-shell/ui/AppShell'
+import { CommandPalette } from '@/widgets/app-shell/ui/CommandPalette'
+import { NavLinks } from '@/widgets/app-shell/ui/NavLinks'
+import type { SearchEntry } from '@/widgets/app-shell/model/nav'
 import { getCurrentUser } from '@/entities/user/api/user'
 import { NEW_PER_DAY } from '@/entities/review/api/session'
 import { db, resetDb } from '../db'
@@ -26,13 +29,13 @@ describe('блок «Практика»', () => {
     expect(text).toMatch(/\d+ элементов · в изучении 0 · к повторению 0/)
     expect(text).toMatch(/Учить и повторять \(\d+\)/)
     expect(hrefs(panel)).toEqual([
-      '/review?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop',
-      '/review?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free',
-      '/review?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free&kinds=card',
-      '/review?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free&kinds=quiz',
-      '/review?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free&kinds=output',
-      '/review?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free&kinds=order',
-      '/review?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free&kinds=code',
+      '/practice?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop',
+      '/practice?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free',
+      '/practice?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free&kinds=card',
+      '/practice?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free&kinds=quiz',
+      '/practice?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free&kinds=output',
+      '/practice?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free&kinds=order',
+      '/practice?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&mode=free&kinds=code',
     ])
   })
 
@@ -46,15 +49,24 @@ describe('блок «Практика»', () => {
   })
 })
 
-describe('счётчик повторения в шапке', () => {
-  it('показывает, сколько ждёт сегодня', async () => {
-    const badge = await ReviewBadge()
-    expect(textOf(badge)).toBe('Повторение20')
-    expect(badge.props.href).toBe('/review')
+describe('каркас', () => {
+  it('навигация получает число ожидающих, поиск — темы и команды', async () => {
+    const shell = await AppShell({ children: <p>контент</p> })
+    const navs = findAll(shell, (element) => element.type === NavLinks)
+    expect(navs.map((nav) => [nav.props.layout, nav.props.practiceCount])).toEqual([
+      ['side', 20],
+      ['bottom', 20],
+    ])
+    const palette = findAll(shell, (element) => element.type === CommandPalette)[0]
+    const entries = palette.props.entries as SearchEntry[]
+    expect(entries.slice(0, 3).map((entry) => entry.title)).toEqual(['Начать повторение', 'Сегодня', 'Курс Frontend'])
+    expect(entries).toContainEqual({ title: 'Замыкания', href: '/frontend/javascript/scope/closures', context: 'Frontend › JavaScript › Области видимости и замыкания', kind: 'node' })
+    expect(textOf(shell)).toContain('контент')
   })
 
-  it('без счётчика, когда ничего не ждёт', async () => {
+  it('когда ждать нечего, счётчик ноль', async () => {
     await exhaustNewToday()
-    expect(textOf(await ReviewBadge())).toBe('Повторение')
+    const shell = await AppShell({ children: null })
+    expect(findAll(shell, (element) => element.type === NavLinks)[0].props.practiceCount).toBe(0)
   })
 })

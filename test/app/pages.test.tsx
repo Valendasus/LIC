@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { notFound } from 'next/navigation'
 import RootLayout, { metadata as layoutMetadata } from '@/app/layout'
 import SiteLayout from '@/app/(site)/layout'
+import FocusLayout from '@/app/(focus)/layout'
+import { AppShell } from '@/widgets/app-shell/ui/AppShell'
 import HomePage from '@/app/(site)/page'
 import SpecialtyPage, { generateMetadata as specialtyMetadata } from '@/app/(site)/[specialty]/page'
 import NodePage, { generateMetadata as nodeMetadata } from '@/app/(site)/[specialty]/[...path]/page'
-import ReviewPage, { metadata as reviewMetadata } from '@/app/(site)/review/page'
+import ReviewPage, { metadata as reviewMetadata } from '@/app/(focus)/practice/page'
 import { LevelPicker } from '@/features/set-level/ui/LevelPicker'
 import { PracticeSession } from '@/widgets/practice-session/ui/PracticeSession'
 import { NodeRow } from '@/entities/topic/ui/NodeRow'
@@ -38,10 +40,16 @@ describe('каркас', () => {
     expect(layoutMetadata).toMatchObject({ title: { default: 'LIC', template: '%s · LIC' } })
   })
 
-  it('макет страниц платформы: шапка и контент', () => {
+  it('макет страниц платформы оборачивает их в каркас с навигацией', () => {
     const site = SiteLayout({ children: <p>контент</p> })
-    expect(textOf(site)).toContain('LIC')
-    expect(textOf(site)).toContain('контент')
+    expect(site.type).toBe(AppShell)
+    expect(textOf(site)).toBe('контент')
+  })
+
+  it('режим фокуса — без каркаса', () => {
+    const focus = FocusLayout({ children: <p>задание</p> })
+    expect(focus.type).toBe('main')
+    expect(textOf(focus)).toBe('задание')
   })
 })
 
@@ -147,9 +155,9 @@ describe('страница практики', () => {
     await exhaustNewToday()
     const scoped = await ReviewPage(search({ scope: 'frontend/javascript' }))
     expect(textOf(scoped)).toContain('На сегодня всё')
-    expect(hrefs(scoped)).toContain('/review?mode=free&scope=frontend%2Fjavascript')
+    expect(hrefs(scoped)).toContain('/practice?mode=free&scope=frontend%2Fjavascript')
     const daily = await ReviewPage(search({}))
-    expect(hrefs(daily)).toContain('/review?mode=free')
+    expect(hrefs(daily)).toContain('/practice?mode=free')
   })
 
   it('неизвестная ветка или специальность — 404', async () => {

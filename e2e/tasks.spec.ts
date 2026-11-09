@@ -22,7 +22,7 @@ async function answerQuiz(page: Page, item: RawPractice, correctly: boolean) {
 
 test('квиз: верный ответ, неверный ответ и объяснение вариантов', async ({ page }) => {
   const topic = 'javascript/async/event-loop'
-  await page.goto(`/review?scope=frontend/${topic}&mode=free&kinds=quiz`)
+  await page.goto(`/practice?scope=frontend/${topic}&mode=free&kinds=quiz`)
 
   const first = await currentQuiz(page, topic)
   await answerQuiz(page, first, true)
@@ -43,7 +43,7 @@ test('квиз с несколькими ответами отмечает пр�
   const index = quizzes.findIndex((item) => item.options!.filter((o) => o.correct).length > 1)
   const multi = quizzes[index]
   // В обычном режиме новые задания идут в порядке темы: пропускаем квизы до нужного.
-  await page.goto(`/review?scope=frontend/${topic}&kinds=quiz`)
+  await page.goto(`/practice?scope=frontend/${topic}&kinds=quiz`)
   for (let i = 0; i < index; i++) {
     await answerQuiz(page, await currentQuiz(page, topic), true)
     await page.getByRole('button', { name: /^Дальше/ }).click()
@@ -58,7 +58,7 @@ test('квиз с несколькими ответами отмечает пр�
 
 test('«Что выведет»: верный и неверный ответ', async ({ page }) => {
   const topic = 'javascript/async/event-loop'
-  await page.goto(`/review?scope=frontend/${topic}&mode=free&kinds=output`)
+  await page.goto(`/practice?scope=frontend/${topic}&mode=free&kinds=output`)
   for (const correctly of [true, false]) {
     const code = (await page.locator('main pre').first().innerText()).trim()
     const item = practice(topic).find((candidate) => candidate.kind === 'output' && candidate.code!.trim() === code)!
@@ -76,7 +76,7 @@ test('«Что выведет»: верный и неверный ответ', a
 test('«Порядок»: верная и неверная последовательность', async ({ page }) => {
   const topic = 'css/cascade/specificity'
   for (const correctly of [true, false]) {
-    await page.goto(`/review?scope=frontend/${topic}&mode=free&kinds=order`)
+    await page.goto(`/practice?scope=frontend/${topic}&mode=free&kinds=order`)
     const prompt = norm(await page.locator('main .text-lg').first().innerText())
     const item = practice(topic).find((candidate) => candidate.kind === 'order' && norm(candidate.prompt!) === prompt)!
     const steps = correctly ? item.steps! : [...item.steps!].reverse()
@@ -87,7 +87,7 @@ test('«Порядок»: верная и неверная последоват�
 })
 
 test('«Порядок»: последний шаг можно убрать', async ({ page }) => {
-  await page.goto('/review?scope=frontend/css/cascade/specificity&mode=free&kinds=order')
+  await page.goto('/practice?scope=frontend/css/cascade/specificity&mode=free&kinds=order')
   const firstStep = page.locator('main ul button').first()
   const text = await firstStep.innerText()
   await firstStep.click()
@@ -98,7 +98,7 @@ test('«Порядок»: последний шаг можно убрать', as
 
 test('автооценка заданий записывается в расписание: верно, «угадал» и ошибка', async ({ page }) => {
   const topic = 'javascript/scope/closures'
-  await page.goto(`/review?scope=frontend/${topic}&kinds=quiz`)
+  await page.goto(`/practice?scope=frontend/${topic}&kinds=quiz`)
   const counter = page.locator('main .font-mono').first()
   const total = Number((await counter.innerText()).split('/')[1])
 
@@ -118,7 +118,7 @@ test('автооценка заданий записывается в распи
 })
 
 test('в смешанной сессии задания перемежаются с карточками', async ({ page }) => {
-  await page.goto('/review?scope=frontend/javascript/scope/closures')
+  await page.goto('/practice?scope=frontend/javascript/scope/closures')
   const kinds: string[] = []
   for (let i = 0; i < 8; i++) {
     if (await page.getByRole('button', { name: /^Карточка:/ }).count()) {

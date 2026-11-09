@@ -9,6 +9,8 @@ vi.mock('next/navigation', () => ({
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND')
   }),
+  usePathname: vi.fn(() => '/'),
+  useRouter: vi.fn(() => ({ push: vi.fn() })),
 }))
 vi.mock('next/link', async () => {
   const { createElement } = await import('react')

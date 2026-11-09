@@ -24,12 +24,12 @@ export async function PracticePanel({ scope }: { scope: string }) {
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <Link
-          href={`/review?scope=${query}`}
+          href={`/practice?scope=${query}`}
           className={`rounded-md px-4 py-2 text-sm font-medium ${ready ? 'bg-primary text-on-primary' : 'border border-line text-muted'}`}
         >
           {ready ? `Учить и повторять (${ready})` : 'На сегодня всё'}
         </Link>
-        <Link href={`/review?scope=${query}&mode=free`} className="rounded-md border border-line px-4 py-2 text-sm hover:border-accent">
+        <Link href={`/practice?scope=${query}&mode=free`} className="rounded-md border border-line px-4 py-2 text-sm hover:border-accent">
           Свободная тренировка
         </Link>
       </div>
@@ -37,7 +37,7 @@ export async function PracticePanel({ scope }: { scope: string }) {
         <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
           <span>Только:</span>
           {kinds.map((kind) => (
-            <Link key={kind} href={`/review?scope=${query}&mode=free&kinds=${kind}`} className="underline-offset-2 hover:text-accent hover:underline">
+            <Link key={kind} href={`/practice?scope=${query}&mode=free&kinds=${kind}`} className="underline-offset-2 hover:text-accent hover:underline">
               {KIND_LABEL[kind]} ({counts.byKind[kind]})
             </Link>
           ))}
