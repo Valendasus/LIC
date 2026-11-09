@@ -11,9 +11,9 @@ import { createRoot } from 'react-dom/client'
 import ts from 'ts6'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { isSolved } from '@/lib/code-runner'
-import { compileReact } from '@/lib/react-compile'
-import { runReactTask } from '@/lib/react-runner'
+import { isSolved } from '@/features/solve-task/lib/code-runner'
+import { compileReact } from '@/features/solve-task/lib/react-compile'
+import { runReactTask } from '@/features/solve-task/lib/react-runner'
 
 interface RawTask {
   key: string

@@ -21,19 +21,20 @@ LIC (Learn → Implement → Confirm) — личная платформа для
   - iframe `/sandbox` с `@testing-library/dom` и user-event — React-задачи.
 - **Тесты:** Vitest (jsdom) с порогом покрытия 100% и Playwright.
 
-## Структура (текущая, до перехода на FSD)
+## Структура
 
 ```
 content/<специальность>/      темы: tree.yaml, <тема>.mdx, .cards.yaml, .practice.yaml
-src/app/(site)/               страницы платформы (с шапкой)
-src/app/sandbox/              песочница React-задач (без шапки)
-src/app/ts-lib/               стандартная библиотека TypeScript для браузера
-src/lib/                      логика: дерево, прогресс, FSRS, сессии, раннеры задач
-src/components/practice/      тренажёры
+src/app/                      маршруты Next.js (тонкие: переэкспорт из views), layout, globals.css, sandbox, ts-lib
+src/views/                    страницы: home, specialty, node (тема и ветка), practice
+src/widgets/                  app-shell, practice-session, practice-panel
+src/features/                 set-level, answer-item, grade-item, solve-task (раннеры, воркеры, песочница)
+src/entities/                 topic, progress, user, practice-item, schedule, review, lesson
+src/shared/                   ui (кит), api/db
 scripts/                      content:check — проверка контента
-test/                         юнит- и интеграционные тесты (Vitest)
+test/                         юнит- и интеграционные тесты (Vitest), test/architecture.test.ts — правила FSD
 e2e/                          e2e-тесты (Playwright)
-docs/                         планы
+docs/                         планы и дизайн
 ```
 
 ## Архитектура: Feature-Sliced Design
@@ -53,7 +54,8 @@ docs/                         планы
 - **Внутри слайса** — сегменты: `ui/` (компоненты), `model/` (состояние и логика), `api/` (серверные функции и запросы), `lib/` (вспомогательное), `config/`.
 - **Слайсы одного слоя не импортируют друг друга.** Если двум фичам нужно общее — оно спускается в `entities` или `shared`.
 - **Серверное и клиентское разделено.** Модуль с `node:fs` или базой не попадает в клиентский импорт: такие модули лежат в `api/` и отдают только серверные функции.
-- **Миграция.** Текущий код ещё в старой структуре (`src/lib`, `src/components`). Перенос в FSD — отдельный шаг из [docs/PLAN.md](docs/PLAN.md). Новый код пишется сразу по FSD.
+- **Публичный API слайса:** `index.ts` — безопасное для клиента (компоненты, типы, чистые функции, серверные действия); `server.ts` — модули с базой и файлами. Связь слайсов одного слоя — только через `@x/<потребитель>.ts`.
+- **Правила проверяются тестом** `test/architecture.test.ts`: направление слоёв, публичный API, `@x`, клиент не импортирует серверное.
 
 ## Компоненты и переиспользование
 

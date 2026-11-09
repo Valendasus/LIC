@@ -1,5 +1,5 @@
 import { describe, expect as vexpect, it } from 'vitest'
-import { deepEqual, expect, isSolved, runCode, show, sleep, spy } from '@/lib/code-runner'
+import { deepEqual, expect, isSolved, runCode, show, sleep, spy } from '@/features/solve-task/lib/code-runner'
 
 /** Ошибка проверки или undefined, если проверка прошла. */
 function failure(check: () => void) {

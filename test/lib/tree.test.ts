@@ -4,7 +4,7 @@ vi.hoisted(() => {
   process.env.LIC_CONTENT_DIR = `${process.cwd()}/test/fixtures/content`
 })
 
-import { findNode, getSpecialties, getTree, GRADE_LABEL, hrefOf, leavesOf } from '@/lib/tree'
+import { findNode, getSpecialties, getTree, GRADE_LABEL, hrefOf, leavesOf } from '@/entities/topic/api/tree'
 
 describe('дерево тем', () => {
   it('читает список специальностей', async () => {

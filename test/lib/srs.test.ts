@@ -1,6 +1,6 @@
 import type { ReviewItem } from '@prisma/client'
 import { describe, expect, it } from 'vitest'
-import { formatInterval, fromSchedulerCard, getScheduler, GRADES, previewIntervals, toSchedulerCard } from '@/lib/srs'
+import { formatInterval, fromSchedulerCard, getScheduler, GRADES, previewIntervals, toSchedulerCard } from '@/entities/schedule/model/srs'
 
 const now = new Date('2026-11-08T10:00:00Z')
 const after = (ms: number) => new Date(now.getTime() + ms)

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { SandboxRuntime } from '@/components/sandbox/SandboxRuntime'
+import { SandboxRuntime } from '@/features/solve-task'
 
 export const metadata: Metadata = { title: 'Песочница', robots: { index: false } }
 

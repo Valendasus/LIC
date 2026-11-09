@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ReviewBadge } from '@/components/ReviewBadge'
+import { ReviewBadge } from '@/widgets/app-shell'
 
 /** Шапка и рамка страниц платформы. Песочница React-задач (/sandbox) живёт вне этой группы — без шапки. */
 export default function SiteLayout({ children }: { children: React.ReactNode }) {

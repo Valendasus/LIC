@@ -6,8 +6,8 @@ import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import ts from 'ts6'
 import { describe, expect, it } from 'vitest'
-import { compileReact } from '@/lib/react-compile'
-import { createTestingApi, runReactTask } from '@/lib/react-runner'
+import { compileReact } from '@/features/solve-task/lib/react-compile'
+import { createTestingApi, runReactTask } from '@/features/solve-task/lib/react-runner'
 
 const deps = { React, createRoot, flushSync, dom, userEvent }
 

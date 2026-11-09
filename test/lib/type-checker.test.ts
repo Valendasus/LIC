@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'ts6'
 import { describe, expect, it, vi } from 'vitest'
-import { checkTypes, collectLibs, createHost, PRELUDE, ROOT_LIBS } from '@/lib/type-checker'
+import { checkTypes, collectLibs, createHost, PRELUDE, ROOT_LIBS } from '@/features/solve-task/lib/type-checker'
 
 const read = (file: string) => readFileSync(path.join(process.cwd(), 'node_modules/ts6/lib', file), 'utf8')
 const libs = collectLibs(read)

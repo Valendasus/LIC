@@ -2,25 +2,25 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RunResult } from '@/lib/code-runner'
+import type { RunResult } from '@/features/solve-task/lib/code-runner'
 
 // Редактор подменяем полем ввода: сам CodeMirror проверяется отдельно, здесь важна логика тренажёра.
-vi.mock('@/components/practice/code/CodeEditor', () => ({
+vi.mock('@/features/solve-task/ui/CodeEditor', () => ({
   CodeEditor: ({ value, onChange, onRun, label, language }: { value: string; onChange: (v: string) => void; onRun: () => void; label: string; language: string }) => (
     <textarea aria-label={label} data-language={language} value={value} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && event.ctrlKey && onRun()} />
   ),
 }))
-vi.mock('@/components/practice/code/run', () => ({ runInWorker: vi.fn() }))
-vi.mock('@/components/practice/code/compiler', () => ({ checkTypesInWorker: vi.fn(), compileReactInWorker: vi.fn() }))
+vi.mock('@/features/solve-task/lib/run', () => ({ runInWorker: vi.fn() }))
+vi.mock('@/features/solve-task/lib/compiler', () => ({ checkTypesInWorker: vi.fn(), compileReactInWorker: vi.fn() }))
 const sandboxRun = vi.fn()
 let sandboxFrame: React.ReactNode = null
-vi.mock('@/components/practice/code/useSandbox', () => ({ useSandbox: () => ({ run: sandboxRun, frame: sandboxFrame }) }))
-vi.mock('@/app/(site)/review/actions', () => ({ revealSolution: vi.fn(), reviewItem: vi.fn() }))
+vi.mock('@/features/solve-task/model/useSandbox', () => ({ useSandbox: () => ({ run: sandboxRun, frame: sandboxFrame }) }))
+vi.mock('@/features/solve-task/api/actions', () => ({ revealSolution: vi.fn() }))
 
-import { revealSolution } from '@/app/(site)/review/actions'
-import { codeGrade, CodeView } from '@/components/practice/CodeView'
-import { checkTypesInWorker, compileReactInWorker } from '@/components/practice/code/compiler'
-import { runInWorker } from '@/components/practice/code/run'
+import { revealSolution } from '@/features/solve-task/api/actions'
+import { codeGrade, CodeView } from '@/features/solve-task/ui/CodeView'
+import { checkTypesInWorker, compileReactInWorker } from '@/features/solve-task/lib/compiler'
+import { runInWorker } from '@/features/solve-task/lib/run'
 import { code, intervals } from './fixtures'
 
 const run = vi.mocked(runInWorker)

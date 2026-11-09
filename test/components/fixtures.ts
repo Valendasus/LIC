@@ -1,5 +1,5 @@
-import type { CardItem, CodeItem, OrderItem, OutputItem, QuizItem } from '@/lib/items'
-import type { SessionItem } from '@/lib/review'
+import type { CardItem, CodeItem, OrderItem, OutputItem, QuizItem } from '@/entities/practice-item/api/items'
+import type { SessionItem } from '@/entities/review/api/session'
 
 const topic = { topicId: 'f/t', topicTitle: 'Тема', topicHref: '/f/t' }
 export const intervals = { 1: '1 мин', 2: '1 дн.', 3: '3 дн.', 4: '9 дн.' } as const

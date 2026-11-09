@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { collectLibs } from '@/lib/type-checker'
+import { collectLibs } from '@/features/solve-task/server'
 
 /**
  * Файлы стандартной библиотеки TypeScript для проверки задач на типы в браузере.

@@ -1,6 +1,6 @@
 import ts from 'ts6'
 import { describe, expect, it } from 'vitest'
-import { compileReact, LOOP_ERROR, LOOP_LIMIT, loopLimit } from '@/lib/react-compile'
+import { compileReact, LOOP_ERROR, LOOP_LIMIT, loopLimit } from '@/features/solve-task/lib/react-compile'
 
 /** Выполняет собранный модуль: exports, лимит циклов и сбор console.log. */
 function execute(code: string) {

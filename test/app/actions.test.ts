@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { revalidatePath } from 'next/cache'
-import { setLevel } from '@/app/(site)/actions'
-import { revealSolution, reviewItem } from '@/app/(site)/review/actions'
+import { setLevel } from '@/features/set-level/api/actions'
+import { reviewItem } from '@/features/grade-item/api/actions'
+import { revealSolution } from '@/features/solve-task/api/actions'
 import { db, resetDb } from '../db'
 
 const form = (values: Record<string, string>) => {

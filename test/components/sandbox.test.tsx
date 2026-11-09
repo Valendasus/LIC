@@ -2,12 +2,12 @@
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/react-runner', () => ({ runReactTask: vi.fn() }))
+vi.mock('@/features/solve-task/lib/react-runner', () => ({ runReactTask: vi.fn() }))
 
-import { SandboxRuntime } from '@/components/sandbox/SandboxRuntime'
-import { SANDBOX_TIMEOUT_MS, useSandbox } from '@/components/practice/code/useSandbox'
-import { runReactTask } from '@/lib/react-runner'
-import type { RunResult } from '@/lib/code-runner'
+import { SandboxRuntime } from '@/features/solve-task/ui/SandboxRuntime'
+import { SANDBOX_TIMEOUT_MS, useSandbox } from '@/features/solve-task/model/useSandbox'
+import { runReactTask } from '@/features/solve-task/lib/react-runner'
+import type { RunResult } from '@/features/solve-task/lib/code-runner'
 
 const runTask = vi.mocked(runReactTask)
 const ok: RunResult = { status: 'ok', tests: [{ name: 't', passed: true }], logs: [] }

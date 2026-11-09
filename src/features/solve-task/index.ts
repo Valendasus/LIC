@@ -1,0 +1,13 @@
+// Публичный API слайса: то, что можно импортировать откуда угодно, в том числе из клиента.
+export * from './api/actions'
+export * from './lib/code-runner'
+export * from './lib/compiler'
+export * from './lib/react-compile'
+export * from './lib/react-runner'
+export * from './lib/run'
+export * from './model/protocol'
+export * from './model/useSandbox'
+export * from './ui/CodeEditor'
+export * from './ui/CodeView'
+export * from './ui/SandboxRuntime'
+export type * from './lib/type-checker'

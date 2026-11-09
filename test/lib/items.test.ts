@@ -4,8 +4,8 @@ vi.hoisted(() => {
   process.env.LIC_CONTENT_DIR = `${process.cwd()}/test/fixtures/content`
 })
 
-import { getItems, inScope, isTask, type CodeItem, type QuizItem } from '@/lib/items'
-import { isTaskKind, ITEM_KINDS, KIND_LABEL, LEVEL_LABEL, TASK_KINDS, TASK_LEVELS } from '@/lib/kinds'
+import { getItems, inScope, isTask, type CodeItem, type QuizItem } from '@/entities/practice-item/api/items'
+import { isTaskKind, ITEM_KINDS, KIND_LABEL, LEVEL_LABEL, TASK_KINDS, TASK_LEVELS } from '@/entities/practice-item/model/kinds'
 
 describe('элементы практики', () => {
   it('собирает карточки, обратные карточки и задания темы', async () => {

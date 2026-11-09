@@ -14,15 +14,15 @@ describe('подключение к базе', () => {
     delete process.env.DATABASE_URL
     delete (globalThis as { prisma?: unknown }).prisma
     vi.resetModules()
-    await expect(import('@/lib/db')).rejects.toThrow('Не задан DATABASE_URL')
+    await expect(import('@/shared/api/db')).rejects.toThrow('Не задан DATABASE_URL')
   })
 
   it('в разработке клиент один на процесс', async () => {
     delete (globalThis as { prisma?: unknown }).prisma
     vi.resetModules()
-    const first = (await import('@/lib/db')).db
+    const first = (await import('@/shared/api/db')).db
     vi.resetModules()
-    const second = (await import('@/lib/db')).db
+    const second = (await import('@/shared/api/db')).db
     expect(second).toBe(first)
   })
 
@@ -30,7 +30,7 @@ describe('подключение к базе', () => {
     vi.stubEnv('NODE_ENV', 'production')
     delete (globalThis as { prisma?: unknown }).prisma
     vi.resetModules()
-    await import('@/lib/db')
+    await import('@/shared/api/db')
     expect((globalThis as { prisma?: unknown }).prisma).toBeUndefined()
   })
 })

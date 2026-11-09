@@ -3,10 +3,10 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/app/(site)/actions', () => ({ setLevel: vi.fn() }))
+vi.mock('@/features/set-level/api/actions', () => ({ setLevel: vi.fn() }))
 
-import { setLevel } from '@/app/(site)/actions'
-import { LevelPicker } from '@/components/LevelPicker'
+import { setLevel } from '@/features/set-level/api/actions'
+import { LevelPicker } from '@/features/set-level/ui/LevelPicker'
 
 const mocked = vi.mocked(setLevel)
 beforeEach(() => mocked.mockReset())

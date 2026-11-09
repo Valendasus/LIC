@@ -2,7 +2,7 @@
 import { render } from '@testing-library/react'
 import { EditorView } from '@codemirror/view'
 import { describe, expect, it, vi } from 'vitest'
-import { CodeEditor } from '@/components/practice/code/CodeEditor'
+import { CodeEditor } from '@/features/solve-task/ui/CodeEditor'
 
 const viewOf = (container: HTMLElement) => EditorView.findFromDOM(container.querySelector('.cm-editor') as HTMLElement)!
 

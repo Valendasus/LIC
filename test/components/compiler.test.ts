@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CompilerRequest, CompilerResponse } from '@/components/practice/code/compiler'
+import type { CompilerRequest, CompilerResponse } from '@/features/solve-task/lib/compiler'
 
 type Behaviour = (request: CompilerRequest, worker: FakeWorker) => void
 
@@ -34,7 +34,7 @@ const ok = { status: 'ok' as const, tests: [{ name: 't', passed: true }], logs: 
 // Модуль хранит воркер между запросами — каждый тест начинает с чистого модуля.
 async function load() {
   vi.resetModules()
-  return import('@/components/practice/code/compiler')
+  return import('@/features/solve-task/lib/compiler')
 }
 
 beforeEach(() => {
@@ -107,15 +107,15 @@ describe('код воркера компилятора', () => {
     vi.stubGlobal('self', { addEventListener: (type: string, fn: never) => (listeners[type] = fn), postMessage })
     const fetchMock = vi.fn(fetchImpl)
     vi.stubGlobal('fetch', fetchMock)
-    vi.doMock('@/lib/type-checker', () => ({ checkTypes: vi.fn((_ts, code: string, _tests, libs) => ({ status: 'ok', tests: [], logs: [code, Object.keys(libs).join()] })) }))
-    vi.doMock('@/lib/react-compile', () => ({ compileReact: vi.fn((_ts, code: string, tests: string, preview?: string) => ({ code: `${code}${tests}${preview}` })) }))
-    await import('@/components/practice/code/compiler.worker')
+    vi.doMock('@/features/solve-task/lib/type-checker', () => ({ checkTypes: vi.fn((_ts, code: string, _tests, libs) => ({ status: 'ok', tests: [], logs: [code, Object.keys(libs).join()] })) }))
+    vi.doMock('@/features/solve-task/lib/react-compile', () => ({ compileReact: vi.fn((_ts, code: string, tests: string, preview?: string) => ({ code: `${code}${tests}${preview}` })) }))
+    await import('@/features/solve-task/lib/compiler.worker')
     const send = (data: CompilerRequest) => listeners.message({ data } as MessageEvent)
     return { send, postMessage, fetchMock }
   }
   afterEach(() => {
-    vi.doUnmock('@/lib/type-checker')
-    vi.doUnmock('@/lib/react-compile')
+    vi.doUnmock('@/features/solve-task/lib/type-checker')
+    vi.doUnmock('@/features/solve-task/lib/react-compile')
   })
 
   it('типы: библиотека загружается один раз; React: сборка', async () => {

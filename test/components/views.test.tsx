@@ -2,11 +2,12 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { CardView } from '@/components/practice/CardView'
-import { OrderView } from '@/components/practice/OrderView'
-import { OutputView } from '@/components/practice/OutputView'
-import { QuizView } from '@/components/practice/QuizView'
-import { CodeBlock, Outcome, Panel } from '@/components/practice/shared'
+import { CardView } from '@/features/answer-item/ui/CardView'
+import { OrderView } from '@/features/answer-item/ui/OrderView'
+import { OutputView } from '@/features/answer-item/ui/OutputView'
+import { QuizView } from '@/features/answer-item/ui/QuizView'
+import { Outcome } from '@/features/answer-item/ui/Outcome'
+import { CodeBlock, Panel } from '@/shared/ui'
 import { card, intervals, order, output, quiz } from './fixtures'
 
 const props = (free = false) => ({ intervals: { ...intervals }, free, onGrade: vi.fn(), status: 'Новое' })

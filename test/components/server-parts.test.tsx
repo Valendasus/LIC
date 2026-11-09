@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { PracticePanel } from '@/components/practice/PracticePanel'
-import { ReviewBadge } from '@/components/ReviewBadge'
-import { getCurrentUser } from '@/lib/progress'
-import { NEW_PER_DAY } from '@/lib/review'
+import { PracticePanel } from '@/widgets/practice-panel/ui/PracticePanel'
+import { ReviewBadge } from '@/widgets/app-shell/ui/ReviewBadge'
+import { getCurrentUser } from '@/entities/user/api/user'
+import { NEW_PER_DAY } from '@/entities/review/api/session'
 import { db, resetDb } from '../db'
 import { findAll, textOf } from '../tree'
 

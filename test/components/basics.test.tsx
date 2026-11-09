@@ -2,12 +2,16 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { Hints } from '@/components/lesson/Hints'
-import { Callout, Example, Question, Sources, Task } from '@/components/lesson/blocks'
-import { RichText } from '@/components/RichText'
-import { Breadcrumbs, GRADE_TEXT, GradeBadge, levelName, NodeRow, ProgressBar } from '@/components/ui'
+import { Hints } from '@/entities/lesson/ui/Hints'
+import { Callout, Example, Question, Sources, Task } from '@/entities/lesson/ui/blocks'
+import { RichText } from '@/shared/ui/RichText'
+import { levelName } from '@/entities/progress/model/levels'
+import { Breadcrumbs } from '@/entities/topic/ui/Breadcrumbs'
+import { GRADE_TEXT, GradeBadge } from '@/entities/topic/ui/GradeBadge'
+import { NodeRow } from '@/entities/topic/ui/NodeRow'
+import { ProgressBar } from '@/shared/ui'
 import { useMDXComponents } from '@/mdx-components'
-import type { TreeNode } from '@/lib/tree'
+import type { TreeNode } from '@/entities/topic/api/tree'
 
 const node = (overrides: Partial<TreeNode>): TreeNode => ({ id: 'f/a', slug: 'a', title: 'Узел', path: ['a'], children: [], ...overrides })
 

@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db } from '@/shared/api/db'
 
 /** Чистая тестовая база перед каждым интеграционным тестом. */
 export async function resetDb() {

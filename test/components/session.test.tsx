@@ -3,11 +3,12 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/app/(site)/review/actions', () => ({ reviewItem: vi.fn(), revealSolution: vi.fn() }))
-vi.mock('@/components/practice/code/CodeEditor', () => ({ CodeEditor: ({ label }: { label: string }) => <textarea aria-label={label} /> }))
+vi.mock('@/features/grade-item/api/actions', () => ({ reviewItem: vi.fn() }))
+vi.mock('@/features/solve-task/api/actions', () => ({ revealSolution: vi.fn() }))
+vi.mock('@/features/solve-task/ui/CodeEditor', () => ({ CodeEditor: ({ label }: { label: string }) => <textarea aria-label={label} /> }))
 
-import { reviewItem, type ReviewResult } from '@/app/(site)/review/actions'
-import { PracticeSession } from '@/components/practice/PracticeSession'
+import { reviewItem, type ReviewResult } from '@/features/grade-item/api/actions'
+import { PracticeSession } from '@/widgets/practice-session/ui/PracticeSession'
 import { card, code, entry, intervals, order, output, quiz } from './fixtures'
 
 const mocked = vi.mocked(reviewItem)

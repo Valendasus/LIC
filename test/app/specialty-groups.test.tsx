@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 // Блок без группы попадает в «Другое». В реальном контенте у всех блоков группа есть, поэтому дерево подменено.
-vi.mock('@/lib/tree', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@/lib/tree')>()
+vi.mock('@/entities/topic/api/tree', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/entities/topic/api/tree')>()
   return {
     ...original,
     getTree: vi.fn(async () => ({

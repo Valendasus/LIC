@@ -10,9 +10,9 @@ import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import { parse } from 'yaml'
 // Тот же модуль, что запускает тесты в браузере: эталон проверяется ровно так, как решение ученика.
-import { isSolved, runCode } from '../src/lib/code-runner.ts'
-import { compileReact } from '../src/lib/react-compile.ts'
-import { checkTypes, collectLibs } from '../src/lib/type-checker.ts'
+import { isSolved, runCode } from '../src/features/solve-task/lib/code-runner.ts'
+import { compileReact } from '../src/features/solve-task/lib/react-compile.ts'
+import { checkTypes, collectLibs } from '../src/features/solve-task/lib/type-checker.ts'
 import ts from 'ts6'
 
 const CARD_TYPES = ['term', 'qa', 'code']

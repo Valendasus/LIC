@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import SandboxPage, { metadata } from '@/app/sandbox/page'
 import { dynamic, GET } from '@/app/ts-lib/route'
-import { SandboxRuntime } from '@/components/sandbox/SandboxRuntime'
+import { SandboxRuntime } from '@/features/solve-task/ui/SandboxRuntime'
 
 describe('песочница и библиотека TypeScript', () => {
   it('страница песочницы — только среда выполнения, без индексации', () => {

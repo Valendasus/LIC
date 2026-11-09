@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runCode, type RunResult } from '@/lib/code-runner'
-import { RUN_TIMEOUT_MS, runInWorker } from '@/components/practice/code/run'
+import { runCode, type RunResult } from '@/features/solve-task/lib/code-runner'
+import { RUN_TIMEOUT_MS, runInWorker } from '@/features/solve-task/lib/run'
 
 /** Подмена Web Worker: выполняет то же ядро, но в этом же потоке. Поведение задаётся сценарием. */
 function installWorker(scenario: 'run' | 'hang' | 'crash' | 'crash-silent') {
@@ -74,7 +74,7 @@ describe('воркер', () => {
     const listeners: Record<string, (event: never) => unknown> = {}
     const postMessage = vi.fn()
     vi.stubGlobal('self', { addEventListener: (type: string, fn: (event: never) => unknown) => (listeners[type] = fn), postMessage })
-    await import('@/components/practice/code/runner.worker')
+    await import('@/features/solve-task/lib/runner.worker')
 
     const rejection = { preventDefault: vi.fn() }
     listeners.unhandledrejection(rejection as never)

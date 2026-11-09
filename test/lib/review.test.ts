@@ -4,9 +4,9 @@ vi.hoisted(() => {
   process.env.LIC_CONTENT_DIR = `${process.cwd()}/test/fixtures/content`
 })
 
-import { getCurrentUser } from '@/lib/progress'
-import { buildSession, getReviewCounts, LEARN_AHEAD_MINUTES, NEW_PER_DAY, SESSION_LIMIT } from '@/lib/review'
-import type { CodeItem, OrderItem } from '@/lib/items'
+import { getCurrentUser } from '@/entities/user/api/user'
+import { buildSession, getReviewCounts, LEARN_AHEAD_MINUTES, NEW_PER_DAY, SESSION_LIMIT } from '@/entities/review/api/session'
+import type { CodeItem, OrderItem } from '@/entities/practice-item/api/items'
 import { db, resetDb } from '../db'
 
 const TOPIC = 'demo/block/mod/topic'

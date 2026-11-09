@@ -5,8 +5,9 @@ vi.hoisted(() => {
 })
 
 import { connection } from 'next/server'
-import { getCurrentUser, getProgressMap, MAX_LEVEL, rollup } from '@/lib/progress'
-import { getTree } from '@/lib/tree'
+import { getProgressMap, MAX_LEVEL, rollup } from '@/entities/progress/api/progress'
+import { getCurrentUser } from '@/entities/user/api/user'
+import { getTree } from '@/entities/topic/api/tree'
 import { db, resetDb } from '../db'
 
 beforeEach(resetDb)
