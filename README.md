@@ -10,7 +10,8 @@
 - [TOPIC-TREE.md](docs/TOPIC-TREE.md) — дерево тем всех специальностей;
 - [FRONTEND-PLAN.md](docs/FRONTEND-PLAN.md) — подробная программа Frontend;
 - [PROJECTS-KB.md](docs/PROJECTS-KB.md) — примеры из реальных проектов;
-- [TRAINERS.md](docs/TRAINERS.md) — устройство тренажёров и интервального повторения.
+- [TRAINERS.md](docs/TRAINERS.md) — устройство тренажёров и интервального повторения;
+- [DESIGN.md](docs/DESIGN.md) — логика интерфейса, экраны и визуальный язык.
 
 ## Стек
 

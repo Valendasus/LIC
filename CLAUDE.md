@@ -3,6 +3,7 @@
 LIC (Learn → Implement → Confirm) — личная платформа для обучения разработке. Пока для одного человека, но прогресс всегда хранится по пользователю: позже платформу можно открыть другим.
 
 Связанные документы:
+- **Дизайн — логика интерфейса, экраны, визуальный язык:** [docs/DESIGN.md](docs/DESIGN.md). Любой новый экран сначала сверяется с ним.
 - **План и статус этапов:** [docs/PLAN.md](docs/PLAN.md). Подробно по Frontend — [docs/FRONTEND-PLAN.md](docs/FRONTEND-PLAN.md), по тренажёрам — [docs/TRAINERS.md](docs/TRAINERS.md), дерево тем — [docs/TOPIC-TREE.md](docs/TOPIC-TREE.md).
 - **История изменений:** [CHANGELOG.md](CHANGELOG.md).
 - **Запуск, форматы контента, команды:** [README.md](README.md).
