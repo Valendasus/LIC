@@ -16,9 +16,11 @@ test('отметка освоения сохраняется, считается
   await page.goto('/frontend/javascript/scope')
   await expect(page.getByRole('link', { name: /Замыкания/ })).toContainText('Понимаю')
   await page.goto('/frontend')
-  await expect(page.getByText(/начато 1$/)).toBeVisible()
-  // Ветка JavaScript показывает долю: 2 из 4 у одной темы из многих — больше нуля.
-  await expect(page.getByRole('link', { name: /^JavaScript/ }).getByRole('progressbar')).not.toHaveAttribute('aria-valuenow', '0')
+  await expect(page.getByText(/1 из 231 темы начато/)).toBeVisible()
+  // Блок JavaScript показывает долю: 2 из 4 у одной темы из многих — больше нуля; это блок, где вы сейчас.
+  const block = page.getByRole('link', { name: /JavaScript.*из \d+ тем/ })
+  await expect(block).toContainText('вы здесь')
+  await expect(block.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow', '0')
 
   await page.goto('/frontend/javascript/scope/closures#confirm')
   await page.getByRole('button', { name: /^Понимаю/ }).click()

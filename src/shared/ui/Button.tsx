@@ -36,7 +36,8 @@ interface Common {
 
 export function buttonClass({ variant = 'primary', size = 'md', className }: Pick<Common, 'variant' | 'size' | 'className'>) {
   return cn(
-    'inline-flex shrink-0 items-center justify-center rounded-full whitespace-nowrap transition-colors duration-150 disabled:pointer-events-none disabled:opacity-45',
+    // Не шире контейнера: длинная подпись обрезается многоточием, а не растягивает страницу на телефоне.
+    'inline-flex max-w-full min-w-0 items-center justify-center rounded-full whitespace-nowrap transition-colors duration-150 disabled:pointer-events-none disabled:opacity-45',
     VARIANT[variant],
     SIZE[size],
     className,
@@ -47,7 +48,7 @@ function Content({ icon, iconEnd, kbd, children, variant = 'primary' }: Common) 
   return (
     <>
       {icon}
-      <span>{children}</span>
+      <span className="min-w-0 truncate">{children}</span>
       {iconEnd}
       {kbd && <Kbd tone={variant === 'primary' ? 'on-primary' : 'default'}>{kbd}</Kbd>}
     </>

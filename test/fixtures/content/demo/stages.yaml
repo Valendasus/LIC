@@ -1,0 +1,5 @@
+- title: Первый
+  blocks: [block, nope]
+- title: Второй
+  summary: Описание этапа
+  blocks: [other]

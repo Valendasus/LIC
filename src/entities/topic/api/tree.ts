@@ -61,6 +61,7 @@ export const getTree = cache(async (specialty: string): Promise<TreeNode | null>
   return {
     slug: specialty,
     title: specialties.find((item) => item.slug === specialty)!.title,
+    summary: specialties.find((item) => item.slug === specialty)!.summary,
     id: specialty,
     path: [],
     children: blocks.map((block) => build(block, [], specialty)),
@@ -95,3 +96,26 @@ export const GRADE_LABEL: Record<Grade, string> = {
   M: 'Middle',
   S: 'Senior',
 }
+
+export interface Stage {
+  title: string
+  summary: string
+  blocks: TreeNode[]
+}
+
+/**
+ * Этапы траектории специальности (content/<специальность>/stages.yaml). Без файла этапов — один этап из всех блоков:
+ * курс всё равно показывается путём.
+ */
+export const getStages = cache(async (specialty: string): Promise<Stage[]> => {
+  const tree = await getTree(specialty)
+  if (!tree) return []
+  const raw = await readFile(path.join(/*turbopackIgnore: true*/ CONTENT_DIR, specialty, 'stages.yaml'), 'utf8').catch(() => null)
+  if (raw === null) return [{ title: tree.title, summary: '', blocks: tree.children }]
+  const bySlug = new Map(tree.children.map((block) => [block.slug, block]))
+  return (parse(raw) as { title: string; summary?: string; blocks: string[] }[]).map((stage) => ({
+    title: stage.title,
+    summary: stage.summary ?? '',
+    blocks: stage.blocks.map((slug) => bySlug.get(slug)).filter((block) => block !== undefined),
+  }))
+})

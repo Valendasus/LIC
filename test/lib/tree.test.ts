@@ -52,3 +52,21 @@ describe('дерево тем', () => {
     expect(GRADE_LABEL).toEqual({ J: 'Junior', M: 'Middle', S: 'Senior' })
   })
 })
+
+describe('этапы траектории', () => {
+  it('этапы из файла: неизвестные блоки пропускаются, описание необязательно', async () => {
+    const { getStages } = await import('@/entities/topic/api/tree')
+    const stages = await getStages('demo')
+    expect(stages.map((stage) => [stage.title, stage.summary, stage.blocks.map((block) => block.slug)])).toEqual([
+      ['Первый', '', ['block']],
+      ['Второй', 'Описание этапа', ['other']],
+    ])
+    expect(await getStages('later')).toEqual([])
+  })
+
+  it('без файла этапов — один этап из всех блоков', async () => {
+    const { getStages } = await import('@/entities/topic/api/tree')
+    const stages = await getStages('broken')
+    expect(stages).toEqual([expect.objectContaining({ title: 'Сломанная', summary: '' })])
+  })
+})

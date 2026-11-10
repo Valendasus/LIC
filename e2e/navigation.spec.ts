@@ -13,15 +13,18 @@ test('«Сегодня»: специальности, открытые и зап
 test('дерево: специальность → блок → модуль → тема', async ({ page }) => {
   await page.goto('/frontend')
   await expect(page.getByRole('heading', { level: 1, name: 'Frontend' })).toBeVisible()
-  await expect(page.getByText(/25 блоков · \d+ тем · начато 0/)).toBeVisible()
-  for (const group of ['Платформа', 'Языки', 'React', 'Next.js', 'Инженерия', 'Специализации']) {
-    await expect(page.getByRole('heading', { level: 2, name: group })).toBeVisible()
+  // Курс — путь по этапам, первый этап текущий.
+  const path = page.getByRole('list', { name: 'Путь по этапам' })
+  for (const stage of ['Фундамент', 'Типы и React', 'Данные и Next.js', 'Инженерия', 'Специализация и собеседования']) {
+    await expect(path.getByRole('heading', { level: 2, name: new RegExp(stage) })).toBeVisible()
   }
+  await expect(path.getByRole('heading', { level: 2, name: /Фундамент/ })).toContainText('текущий этап')
 
-  await page.getByRole('link', { name: /^JavaScript/ }).click()
+  await page.getByRole('link', { name: /JavaScript.*из \d+ тем/ }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'JavaScript' })).toBeVisible()
-  await page.getByRole('link', { name: /Области видимости и замыкания/ }).click()
-  await page.getByRole('link', { name: /Замыкания/ }).click()
+  await page.getByRole('link', { name: 'Области видимости и замыкания', exact: true }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Области видимости и замыкания' })).toBeVisible()
+  await page.getByRole('link', { name: /^Замыкания/ }).click()
 
   await expect(page).toHaveURL('/frontend/javascript/scope/closures')
   await expect(page.getByRole('heading', { level: 1, name: /Замыкания/ })).toBeVisible()

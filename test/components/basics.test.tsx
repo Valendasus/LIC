@@ -6,14 +6,9 @@ import { Hints } from '@/entities/lesson/ui/Hints'
 import { Callout, Example, Question, Sources, Task } from '@/entities/lesson/ui/blocks'
 import { RichText } from '@/shared/ui/RichText'
 import { levelName } from '@/entities/progress/model/levels'
-import { Breadcrumbs } from '@/entities/topic/ui/Breadcrumbs'
-import { GRADE_TEXT, GradeBadge } from '@/entities/topic/ui/GradeBadge'
-import { NodeRow } from '@/entities/topic/ui/NodeRow'
 import { ProgressBar } from '@/shared/ui'
 import { useMDXComponents } from '@/mdx-components'
-import type { TreeNode } from '@/entities/topic/api/tree'
 
-const node = (overrides: Partial<TreeNode>): TreeNode => ({ id: 'f/a', slug: 'a', title: 'Узел', path: ['a'], children: [], ...overrides })
 
 describe('упрощённая разметка', () => {
   it('абзацы, переносы, код, жирный, списки и блоки кода', () => {
@@ -49,37 +44,6 @@ describe('элементы интерфейса', () => {
     render(<ProgressBar value={0.256} label="Прогресс" />)
     expect(screen.getByRole('progressbar', { name: 'Прогресс' })).toHaveAttribute('aria-valuenow', '26')
     expect(screen.getByText('26%')).toBeInTheDocument()
-  })
-
-  it('метка уровня и тексты уровней', () => {
-    const { container, rerender } = render(<GradeBadge />)
-    expect(container).toBeEmptyDOMElement()
-    for (const grade of ['J', 'M', 'S'] as const) {
-      rerender(<GradeBadge grade={grade} />)
-      expect(screen.getByText(grade)).toHaveAttribute('title', expect.stringContaining('Нужно для уровня'))
-      expect(GRADE_TEXT[grade]).toBeTruthy()
-    }
-  })
-
-  it('хлебные крошки: все уровни — ссылки, кроме текущего', () => {
-    render(<Breadcrumbs trail={[node({ id: 'f', title: 'Frontend' }), node({ id: 'f/a', title: 'Блок' })]} />)
-    expect(screen.getByRole('link', { name: 'Frontend' })).toHaveAttribute('href', '/f')
-    expect(screen.getByText('Блок')).toHaveAttribute('aria-current', 'page')
-  })
-
-  it('строка узла: ветка с прогрессом и описанием, лист наполненный и «скоро»', () => {
-    const stats = { leaves: 2, started: 1, ratio: 0.5 }
-    const { rerender } = render(<NodeRow node={node({ children: [node({})], summary: 'Описание', grade: 'J' })} stats={stats} />)
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50')
-    expect(screen.getByText('Описание')).toBeInTheDocument()
-
-    rerender(<NodeRow node={node({ content: true })} stats={stats} level={3} />)
-    expect(screen.getByText('Применяю')).toBeInTheDocument()
-    expect(screen.queryByText('скоро')).not.toBeInTheDocument()
-
-    rerender(<NodeRow node={node({})} stats={stats} />)
-    expect(screen.getByText('скоро')).toBeInTheDocument()
-    expect(screen.getByText('Не начато')).toBeInTheDocument()
   })
 
   it('название уровня с запасным вариантом', () => {

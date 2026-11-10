@@ -1,0 +1,22 @@
+# Этапы траектории Frontend (docs/FRONTEND-PLAN.md, раздел 8): курс показывается как путь, а не каталог.
+# Каждый блок дерева входит ровно в один этап — это проверяет npm run content:check.
+
+- title: Фундамент
+  summary: Вёрстка, браузер и язык — то, на чём держится всё остальное
+  blocks: [html, css, styling, tailwind, browser, javascript]
+
+- title: Типы и React
+  summary: TypeScript, компоненты, внутреннее устройство React, хуки и паттерны
+  blocks: [typescript, react-basics, react-internals, react-hooks, react-patterns]
+
+- title: Данные и Next.js
+  summary: Производительность React, экосистема, серверные компоненты, Next.js, работа с API и состоянием
+  blocks: [react-performance, react-ecosystem, rsc, nextjs, backend-communication, state]
+
+- title: Инженерия
+  summary: Архитектура, доступность, производительность, тесты и сборка
+  blocks: [architecture, ui-a11y, performance, testing, tooling]
+
+- title: Специализация и собеседования
+  summary: Анимация, сложные интерфейсы, system design и подготовка к интервью
+  blocks: [animation, complex-ui, system-design]

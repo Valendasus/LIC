@@ -56,7 +56,7 @@ export async function HomePage() {
         <p className="text-sm text-muted">На этой неделе {week.activeDays} из 7 дней</p>
       </header>
 
-      <section aria-label="На сегодня" className="grid gap-5 lg:grid-cols-[2fr_1fr]">
+      <section aria-label="На сегодня" className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <ReviewCard counts={counts} firstVisit={firstVisit} firstTopic={next[0]} />
         <WeekCard week={week} />
       </section>

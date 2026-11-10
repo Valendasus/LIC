@@ -1,12 +1,11 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { PracticePanel } from '@/widgets/practice-panel'
-import { getTopicPractice, getTopicStatuses, getTopicSteps } from '@/entities/review/server'
-import { Breadcrumbs, GradeBadge, NodeRow } from '@/entities/topic'
+import { getReviewCounts, getTopicPractice, getTopicStatuses, getTopicSteps } from '@/entities/review/server'
 import { getProgressMap, rollup } from '@/entities/progress/server'
 import { getCurrentUser } from '@/entities/user/server'
 import { type TreeNode } from '@/entities/topic'
 import { findNode, getTree, leavesOf } from '@/entities/topic/server'
+import { BranchView } from './BranchView'
 import { TopicView, type LessonModule } from './TopicView'
 
 type Props = { params: Promise<{ specialty: string; path: string[] }> }
@@ -40,29 +39,8 @@ export async function NodePage({ params }: Props) {
   const isLeaf = node.children.length === 0
 
   if (!isLeaf) {
-    const stats = rollup(node, progress)
-    return (
-      <div>
-        <Breadcrumbs trail={trail} />
-        <header className="mb-6">
-          <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight">
-            {node.title} <GradeBadge grade={node.grade} />
-          </h1>
-          {node.summary && <p className="mt-2 max-w-3xl text-muted">{node.summary}</p>}
-          <p className="mt-2 text-sm text-muted">
-            {stats.leaves} тем · начато {stats.started}
-          </p>
-        </header>
-        <div className="mb-6">
-          <PracticePanel scope={node.id} />
-        </div>
-        <ul className="grid gap-2">
-          {node.children.map((child) => (
-            <NodeRow key={child.id} node={child} stats={rollup(child, progress)} level={progress.get(child.id)} />
-          ))}
-        </ul>
-      </div>
-    )
+    const [statuses, counts] = await Promise.all([getTopicStatuses(user.id, trail[0].slug, leavesOf(node)), getReviewCounts(user.id, trail[0].slug, node.id)])
+    return <BranchView node={node} trail={trail} stats={rollup(node, progress)} progress={progress} statuses={statuses} practice={{ total: counts.total, ready: counts.ready }} />
   }
 
   const tree = trail[0]

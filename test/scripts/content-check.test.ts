@@ -205,4 +205,18 @@ describe('проверка контента', () => {
       expect.stringMatching(/^a\.practice\.yaml #5 \(react-broken\): starter не собирается — Синтаксическая ошибка, строка \d+: /),
     ])
   })
+
+  it('этапы траектории: каждый блок ровно в одном этапе', async () => {
+    const tree = '- { slug: a, title: A }\n- { slug: b, title: B }\n- { slug: c, title: C }\n'
+    const ok = await content({ 's/tree.yaml': tree, 's/stages.yaml': '- { title: Один, blocks: [a, b] }\n- { title: Два, blocks: [c] }\n' })
+    expect(ok.errors).toEqual([])
+    const { errors } = await content({ 's/tree.yaml': tree, 's/stages.yaml': '- { title: Один, blocks: [a, nope] }\n- { blocks: [a] }\n- { title: Пусто }\n' })
+    expect(errors).toEqual([
+      'stages.yaml #1: блока «nope» нет в дереве',
+      'stages.yaml #2: нет title',
+      'stages.yaml #2: блок «a» уже есть в этапе #1',
+      'stages.yaml: блок «b» не входит ни в один этап',
+      'stages.yaml: блок «c» не входит ни в один этап',
+    ])
+  })
 })

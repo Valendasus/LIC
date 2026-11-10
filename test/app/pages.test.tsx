@@ -12,7 +12,6 @@ import ReviewPage, { metadata as reviewMetadata } from '@/app/(focus)/practice/p
 import { TopicView } from '@/views/node/ui/TopicView'
 import { getTree, leavesOf } from '@/entities/topic/api/tree'
 import { PracticeSession } from '@/widgets/practice-session/ui/PracticeSession'
-import { NodeRow } from '@/entities/topic/ui/NodeRow'
 import { getCurrentUser } from '@/entities/user/api/user'
 import { NEW_PER_DAY } from '@/entities/review/api/session'
 import { db, resetDb } from '../db'
@@ -119,13 +118,31 @@ describe('«Сегодня»', () => {
 })
 
 describe('страница специальности', () => {
-  it('блоки сгруппированы, есть заголовок и метаданные', async () => {
-    const page = await SpecialtyPage(params({ specialty: 'frontend' }))
-    expect(textOf(page)).toMatch(/25 блоков · \d+ тем · начато 0/)
-    expect(byType(page, NodeRow)).toHaveLength(25)
-    for (const group of ['Платформа', 'Языки', 'React', 'Next.js', 'Инженерия', 'Специализации']) expect(textOf(page)).toContain(group)
+  it('первый вход: путь по этапам, первый этап текущий, «Начать» с первой темы по пути', async () => {
+    const { text, hrefs: links } = rendered(await SpecialtyPage(params({ specialty: 'frontend' })))
+    for (const stage of ['Фундамент', 'Типы и React', 'Данные и Next.js', 'Инженерия', 'Специализация и собеседования']) expect(text).toContain(stage)
+    expect(text).toMatch(/Фундамент\s*текущий этап/)
+    expect(text).toContain('Начать: Каскад, специфичность и наследование')
+    expect(text).toMatch(/0 из 231 темы начато/)
+    expect(text).toContain('5 этапов')
+    expect(links).toContain('/frontend/javascript')
+    expect(links.filter((href) => /^\/frontend\/[\w-]+$/.test(href))).toHaveLength(25)
+    expect(text).toContain('готовится')
     expect(await specialtyMetadata(params({ specialty: 'frontend' }))).toEqual({ title: 'Frontend' })
     expect(await specialtyMetadata(params({ specialty: 'backend' }))).toEqual({ title: 'Не найдено' })
+  })
+
+  it('продолжить последнюю тему: её блок «вы здесь»; полностью освоенный этап — пройден', async () => {
+    const user = await getCurrentUser()
+    const tree = (await getTree('frontend'))!
+    const last = tree.children.filter((block) => ['animation', 'complex-ui', 'system-design'].includes(block.slug)).flatMap((block) => leavesOf(block))
+    await db.nodeProgress.createMany({ data: last.map((leaf) => ({ userId: user.id, nodeId: leaf.id, level: 4 })) })
+    await db.nodeProgress.create({ data: { userId: user.id, nodeId: 'frontend/javascript/scope/closures', level: 1 } })
+    const { text } = rendered(await SpecialtyPage(params({ specialty: 'frontend' })))
+    expect(text).toContain('Продолжить: Замыкания')
+    expect(text).toContain('вы здесь')
+    expect(text).toMatch(/Фундамент\s*текущий этап/)
+    expect(text).toMatch(/Специализация и собеседования\s*пройден/)
   })
 
   it('несуществующая или запланированная специальность — 404', async () => {
@@ -135,12 +152,28 @@ describe('страница специальности', () => {
 })
 
 describe('страница узла', () => {
-  it('ветка: список детей с прогрессом и описание блока', async () => {
-    const page = await NodePage(params({ specialty: 'frontend', path: ['javascript'] }))
-    expect(textOf(page)).toContain('Язык целиком')
-    expect(byType(page, NodeRow).length).toBeGreaterThan(5)
-    const module = await NodePage(params({ specialty: 'frontend', path: ['javascript', 'scope'] }))
-    expect(textOf(module)).toMatch(/2 тем · начато 0/)
+  it('блок: разделы модулей и тем, статусы, практика по блоку', async () => {
+    const user = await getCurrentUser()
+    await db.nodeProgress.create({ data: { userId: user.id, nodeId: 'frontend/javascript/scope/closures', level: 2 } })
+    const { text, hrefs: links } = rendered(await NodePage(params({ specialty: 'frontend', path: ['javascript'] })))
+    expect(text).toContain('Язык целиком')
+    expect(text).toContain('Области видимости и замыкания')
+    expect(text).toContain('Темы')
+    expect(text).toContain('Замыкания, освоена')
+    expect(text).toContain('Понимаю')
+    expect(text).toMatch(/Учить и повторять · \d+/)
+    expect(text).not.toContain(', готовитсяготовится')
+    expect(links).toContain('/practice?scope=frontend%2Fjavascript&mode=free')
+    expect(links).toContain('/frontend/javascript/scope')
+    const module = rendered(await NodePage(params({ specialty: 'frontend', path: ['javascript', 'scope'] }))).text
+    expect(module).toMatch(/1 из 2 тем\s*начато/)
+    expect(rendered(await NodePage(params({ specialty: 'frontend', path: ['typescript'] }))).text).toContain('Утилитарные типы, не начататолько практика')
+  })
+
+  it('ветка без практики — без кнопок; когда на сегодня всё — так и сказано', async () => {
+    expect(rendered(await NodePage(params({ specialty: 'frontend', path: ['nextjs'] }))).text).not.toContain('Свободная тренировка')
+    await exhaustNewToday()
+    expect(rendered(await NodePage(params({ specialty: 'frontend', path: ['css'] }))).text).toContain('На сегодня всё')
   })
 
   it('наполненная тема: шаги, урок без заголовков шагов, оглавление, данные для шагов', async () => {

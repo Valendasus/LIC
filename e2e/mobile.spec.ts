@@ -19,7 +19,7 @@ const PAGES = [
 test('на телефоне страницы не прокручиваются по горизонтали', async ({ page }) => {
   for (const url of PAGES) {
     await page.goto(url)
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
     expect(overflow, url).toBeLessThanOrEqual(0)
   }
 })
@@ -39,7 +39,7 @@ test('задача на код на телефоне: редактор, запу
   await page.getByRole('button', { name: /Запустить тесты/ }).tap()
   // Касание ставит курсор в случайное место кода — результат может быть и ошибкой синтаксиса. Важна ширина страницы.
   await expect(page.getByRole('status', { name: 'Результат запуска' })).toBeVisible()
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
 })
 

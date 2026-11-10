@@ -170,6 +170,25 @@ async function checkCode(item, label, errors) {
   if (isSolved(starter)) errors.push(`${label}: заготовка уже проходит все тесты — тесты ничего не проверяют`)
 }
 
+/** Этапы траектории (stages.yaml, если есть): каждый блок — ровно в одном этапе, лишних нет. */
+async function checkStages(dir, blocks, errors) {
+  const text = await readFile(path.join(dir, 'stages.yaml'), 'utf8').catch(() => null)
+  if (text === null) return
+  const stages = parseYaml(text, 'stages.yaml', errors)
+  const known = new Set(blocks.map((block) => block.slug))
+  const seen = new Map()
+  for (const [index, stage] of stages.entries()) {
+    const label = `stages.yaml #${index + 1}`
+    if (!isText(stage.title)) errors.push(`${label}: нет title`)
+    for (const slug of Array.isArray(stage.blocks) ? stage.blocks : []) {
+      if (!known.has(slug)) errors.push(`${label}: блока «${slug}» нет в дереве`)
+      else if (seen.has(slug)) errors.push(`${label}: блок «${slug}» уже есть в этапе #${seen.get(slug)}`)
+      seen.set(slug, index + 1)
+    }
+  }
+  for (const slug of known) if (!seen.has(slug)) errors.push(`stages.yaml: блок «${slug}» не входит ни в один этап`)
+}
+
 /**
  * Проверяет каталог content/. Возвращает список ошибок и статистику.
  * @param {string} root путь к каталогу content
@@ -229,6 +248,7 @@ export async function checkContent(root) {
     }
 
     await walk(blocks, [])
+    await checkStages(dir, blocks, errors)
     for (const file of await listContentFiles(dir)) {
       if (!expected.has(file)) errors.push(`${path.relative(root, file)}: файл есть, но в дереве нет такой темы (или у неё нет content: true)`)
     }
