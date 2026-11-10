@@ -109,6 +109,14 @@ body {
   }
 }
 
+/* То же по настройке «Уменьшить анимации» в LIC. */
+[data-motion='reduce'] *,
+[data-motion='reduce'] *::before,
+[data-motion='reduce'] *::after {
+  animation-duration: 1ms !important;
+  transition-duration: 1ms !important;
+}
+
 /* Текст уроков: типографика плагина, подстроенная под токены. Колонка 64–72 знака, 17 px, интерлиньяж 1,7. */
 .lesson {
   --tw-prose-body: var(--color-fg);

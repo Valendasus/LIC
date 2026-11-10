@@ -17,10 +17,12 @@ const ENTRIES: SearchEntry[] = [
 
 describe('навигация: модель', () => {
   it('разделы и активный раздел по адресу', () => {
-    expect(NAV_ITEMS.map((item) => item.label)).toEqual(['Сегодня', 'Курс', 'Практика'])
+    expect(NAV_ITEMS.map((item) => item.label)).toEqual(['Сегодня', 'Курс', 'Практика', 'Прогресс'])
     expect(activeNav('/')).toBe('today')
     expect(activeNav('/practice')).toBe('practice')
     expect(activeNav('/frontend/javascript')).toBe('course')
+    expect(activeNav('/progress')).toBe('progress')
+    expect(activeNav('/settings')).toBeNull()
     expect(activeNav('/sandbox')).toBeNull()
   })
 

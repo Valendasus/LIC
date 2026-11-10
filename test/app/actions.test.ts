@@ -3,6 +3,8 @@ import { revalidatePath } from 'next/cache'
 import { setLevel } from '@/features/set-level/api/actions'
 import { reviewItem } from '@/features/grade-item/api/actions'
 import { revealSolution } from '@/features/solve-task/api/actions'
+import { setPace } from '@/features/settings/api/actions'
+import { getCurrentUser } from '@/entities/user/api/user'
 import { db, resetDb } from '../db'
 
 const form = (values: Record<string, string>) => {
@@ -87,5 +89,14 @@ describe('эталон задачи на код', () => {
     expect(answer.explain).toContain('called')
     expect(await revealSolution('frontend/javascript/scope/closures#quiz-what-captured')).toEqual({ error: 'Такой задачи нет' })
     expect(await revealSolution('frontend/javascript/scope/closures#nope')).toEqual({ error: 'Такой задачи нет' })
+  })
+})
+
+describe('темп', () => {
+  it('сохраняет допустимый темп и обновляет страницы; чужие значения отклоняет', async () => {
+    expect(await setPace({}, form({ value: '30' }))).toEqual({ value: 30 })
+    expect((await getCurrentUser()).newPerDay).toBe(30)
+    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout')
+    for (const value of ['7', '', 'abc']) expect(await setPace({}, form({ value }))).toEqual({ error: 'Такого темпа нет' })
   })
 })

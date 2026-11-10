@@ -1,12 +1,12 @@
 'use client'
 
-import { BookOpen, RotateCcw, Sun } from 'lucide-react'
+import { BookOpen, ChartLine, RotateCcw, Sun } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/shared/lib'
 import { activeNav, NAV_ITEMS, type NavKey } from '../model/nav'
 
-const ICONS: Record<NavKey, typeof Sun> = { today: Sun, course: BookOpen, practice: RotateCcw }
+const ICONS: Record<NavKey, typeof Sun> = { today: Sun, course: BookOpen, practice: RotateCcw, progress: ChartLine }
 
 /**
  * Пункты навигации. layout="side" — боковая панель (от 1280 px с подписями, от 1024 — только иконки),
@@ -16,7 +16,7 @@ export function NavLinks({ layout, practiceCount }: { layout: 'side' | 'bottom';
   const active = activeNav(usePathname())
   const side = layout === 'side'
   return (
-    <ul className={side ? 'flex flex-col gap-1' : 'grid grid-cols-3'}>
+    <ul className={side ? 'flex flex-col gap-1' : 'grid grid-cols-4'}>
       {NAV_ITEMS.map((item) => {
         const Icon = ICONS[item.key]
         const isActive = active === item.key

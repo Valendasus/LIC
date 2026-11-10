@@ -1,5 +1,5 @@
 /** Разделы основной навигации. Иконки и активность — в NavLinks. */
-export type NavKey = 'today' | 'course' | 'practice'
+export type NavKey = 'today' | 'course' | 'practice' | 'progress'
 
 export interface NavItem {
   key: NavKey
@@ -11,6 +11,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'today', label: 'Сегодня', href: '/' },
   { key: 'course', label: 'Курс', href: '/frontend' },
   { key: 'practice', label: 'Практика', href: '/practice' },
+  { key: 'progress', label: 'Прогресс', href: '/progress' },
 ]
 
 /** Какой раздел активен на этом адресе. */
@@ -18,6 +19,7 @@ export function activeNav(pathname: string): NavKey | null {
   if (pathname === '/') return 'today'
   if (pathname.startsWith('/practice')) return 'practice'
   if (pathname.startsWith('/frontend')) return 'course'
+  if (pathname.startsWith('/progress')) return 'progress'
   return null
 }
 

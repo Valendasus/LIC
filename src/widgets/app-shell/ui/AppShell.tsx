@@ -1,3 +1,4 @@
+import { Settings } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { getReviewCounts } from '@/entities/review/server'
@@ -12,6 +13,8 @@ export async function searchIndex(): Promise<SearchEntry[]> {
   const entries: SearchEntry[] = [
     { title: 'Начать повторение', href: '/practice', context: 'Команда', kind: 'command' },
     { title: 'Сегодня', href: '/', context: 'Команда', kind: 'command' },
+    { title: 'Прогресс', href: '/progress', context: 'Команда', kind: 'command' },
+    { title: 'Настройки', href: '/settings', context: 'Команда', kind: 'command' },
   ]
   for (const specialty of (await getSpecialties()).filter((item) => item.status === 'active')) {
     const tree = (await getTree(specialty.slug))!
@@ -48,8 +51,12 @@ export async function AppShell({ children }: { children: ReactNode }) {
         <nav aria-label="Основная навигация">
           <NavLinks layout="side" practiceCount={counts.ready} />
         </nav>
-        <div className="mt-auto">
+        <div className="mt-auto flex flex-col gap-1">
           <SearchButton />
+          <Link href="/settings" className="flex h-11 items-center gap-3 rounded-xl px-3 text-muted transition-colors duration-150 hover:bg-surface hover:text-fg lg:justify-center xl:justify-start">
+            <Settings aria-hidden size={19} strokeWidth={1.75} />
+            <span className="lg:sr-only xl:not-sr-only">Настройки</span>
+          </Link>
         </div>
       </aside>
 

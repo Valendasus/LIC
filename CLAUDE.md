@@ -26,11 +26,11 @@ LIC (Learn → Implement → Confirm) — личная платформа для
 ```
 content/<специальность>/      темы: tree.yaml, <тема>.mdx, .cards.yaml, .practice.yaml
 src/app/                      маршруты Next.js (тонкие: переэкспорт из views), layout, globals.css, sandbox, ts-lib
-src/views/                    страницы: home, specialty, node (тема и ветка), practice
-src/widgets/                  app-shell, practice-session, practice-panel
-src/features/                 set-level, answer-item, grade-item, solve-task (раннеры, воркеры, песочница)
+src/views/                    страницы: home («Сегодня»), specialty (курс), node (тема и ветка), practice, progress, settings
+src/widgets/                  app-shell (навигация, поиск ⌘K), practice-session (режим фокуса)
+src/features/                 set-level, answer-item, grade-item, solve-task (раннеры, воркеры, песочница), settings
 src/entities/                 topic, progress, user, practice-item, schedule, review, lesson
-src/shared/                   ui (кит), api/db
+src/shared/                   ui (кит), lib (cn, plural), api/db
 scripts/                      content:check — проверка контента
 test/                         юнит- и интеграционные тесты (Vitest), test/architecture.test.ts — правила FSD
 e2e/                          e2e-тесты (Playwright)

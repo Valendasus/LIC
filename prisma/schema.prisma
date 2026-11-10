@@ -15,6 +15,8 @@ model User {
   /// Короткое имя для входа; пока используется один пользователь «me».
   handle    String         @unique
   name      String
+  /// Темп: сколько новых элементов практики можно начать за день (настройки).
+  newPerDay Int            @default(20) @map("new_per_day")
   createdAt DateTime       @default(now()) @map("created_at")
   progress  NodeProgress[]
   reviews   ReviewItem[]

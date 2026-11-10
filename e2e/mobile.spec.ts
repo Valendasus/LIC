@@ -14,6 +14,8 @@ const PAGES = [
   '/practice?scope=frontend/javascript/async/event-loop&mode=free&kinds=code',
   '/practice?scope=frontend/typescript/type-level&mode=free',
   '/practice?scope=frontend/react-patterns/accessible-components&mode=free',
+  '/progress',
+  '/settings',
 ]
 
 test('на телефоне страницы не прокручиваются по горизонтали', async ({ page }) => {

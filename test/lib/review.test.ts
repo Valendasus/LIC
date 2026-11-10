@@ -201,4 +201,11 @@ describe('сессия практики', () => {
       expect(task.tests).toContain('test(')
     }
   })
+
+  it('лимит новых — из темпа пользователя; без пользователя — по умолчанию', async () => {
+    const user = await getCurrentUser()
+    await db.user.update({ where: { id: user.id }, data: { newPerDay: 3 } })
+    expect((await buildSession(user.id, 'demo', 'review')).filter((entry) => entry.status === 'new')).toHaveLength(3)
+    expect(await buildSession('нет-такого', 'demo', 'review')).toHaveLength(11)
+  })
 })

@@ -10,6 +10,11 @@ import SpecialtyPage, { generateMetadata as specialtyMetadata } from '@/app/(sit
 import NodePage, { generateMetadata as nodeMetadata } from '@/app/(site)/[specialty]/[...path]/page'
 import ReviewPage, { metadata as reviewMetadata } from '@/app/(focus)/practice/page'
 import { TopicView } from '@/views/node/ui/TopicView'
+import ProgressPage, { metadata as progressMetadata } from '@/app/(site)/progress/page'
+import SettingsPage, { metadata as settingsMetadata } from '@/app/(site)/settings/page'
+import { heatLevel } from '@/views/progress/ui/ProgressPage'
+import { PaceForm } from '@/features/settings/ui/PaceForm'
+import { MotionToggle } from '@/features/settings/ui/Motion'
 import { getTree, leavesOf } from '@/entities/topic/api/tree'
 import { PracticeSession } from '@/widgets/practice-session/ui/PracticeSession'
 import { getCurrentUser } from '@/entities/user/api/user'
@@ -273,5 +278,44 @@ describe('страница практики', () => {
   it('неизвестная ветка или специальность — 404', async () => {
     await expect(ReviewPage(search({ scope: 'frontend/nope' }))).rejects.toThrow('NEXT_NOT_FOUND')
     await expect(ReviewPage(search({ scope: 'backend/x' }))).rejects.toThrow('NEXT_NOT_FOUND')
+  })
+})
+
+describe('прогресс и настройки', () => {
+  it('прогресс без занятий: пустая активность, нет слабых мест, задачи по уровням', async () => {
+    const { text } = rendered(await ProgressPage())
+    expect(text).toContain('0 дней с занятиями · 0 ответов')
+    expect(text).toContain('Слабых мест пока нет')
+    expect(text).toContain('Отметок освоения пока нет')
+    expect(text).toContain('Разминка')
+    expect(text).toContain('сегодня')
+    expect(progressMetadata).toEqual({ title: 'Прогресс' })
+  })
+
+  it('прогресс с занятиями: дни и ответы, слабая тема с тренировкой, уровни освоения по этапу', async () => {
+    const user = await getCurrentUser()
+    const topic = 'frontend/javascript/scope/closures'
+    await db.reviewLog.createMany({ data: [1, 1, 3].map((rating) => ({ userId: user.id, itemId: `${topic}#closure-def`, rating, stateBefore: 0, reviewedAt: new Date() })) })
+    await db.nodeProgress.create({ data: { userId: user.id, nodeId: topic, level: 3 } })
+    await db.reviewItem.create({ data: { userId: user.id, itemId: `${topic}#closure-def`, kind: 'card', stability: 1, stabilityFast: 1, difficulty: 5, state: 2, scheduleStatus: 'review', dueAt: new Date(Date.now() + 86_400_000), reps: 1, lapses: 0, scheduledDays: 1, learningStep: 0 } })
+    const { text, hrefs: links, html } = rendered(await ProgressPage())
+    expect(html).toContain('aria-label="завтра: 1"')
+    expect(text).toContain('1 день с занятиями · 3 ответа')
+    expect(text).toContain('Замыкания')
+    expect(text).toContain('2 ошибки')
+    expect(links).toContain(`/practice?scope=${encodeURIComponent(topic)}&mode=free`)
+    expect(text).toContain('Применяю 1')
+    expect(html).toContain('bg-accent')
+  })
+
+  it('ступени тепловой карты', () => {
+    expect([0, 1, 2, 3, 4, 8].map((answers) => heatLevel(answers, 8))).toEqual([0, 1, 1, 2, 2, 4])
+  })
+
+  it('настройки: текущий темп и переключатель анимаций', async () => {
+    const page = await SettingsPage()
+    expect(byType(page, PaceForm)[0].props.value).toBe(20)
+    expect(byType(page, MotionToggle)).toHaveLength(1)
+    expect(settingsMetadata).toEqual({ title: 'Настройки' })
   })
 })

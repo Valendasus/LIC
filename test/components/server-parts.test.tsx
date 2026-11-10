@@ -31,7 +31,7 @@ describe('каркас', () => {
     ])
     const palette = findAll(shell, (element) => element.type === CommandPalette)[0]
     const entries = palette.props.entries as SearchEntry[]
-    expect(entries.slice(0, 3).map((entry) => entry.title)).toEqual(['Начать повторение', 'Сегодня', 'Курс Frontend'])
+    expect(entries.slice(0, 5).map((entry) => entry.title)).toEqual(['Начать повторение', 'Сегодня', 'Прогресс', 'Настройки', 'Курс Frontend'])
     expect(entries).toContainEqual({ title: 'Замыкания', href: '/frontend/javascript/scope/closures', context: 'Frontend › JavaScript › Области видимости и замыкания', kind: 'node' })
     expect(textOf(shell)).toContain('контент')
   })

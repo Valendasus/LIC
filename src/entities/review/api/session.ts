@@ -70,10 +70,13 @@ const siblingOf = (id: string) => id.replace(/~r$/, '')
  * На этом же плане строятся счётчики, поэтому число на кнопке «Учить» совпадает с длиной сессии.
  */
 async function planSession(userId: string, items: PracticeItem[], now: Date) {
-  const [rows, introducedToday] = await Promise.all([
+  const [rows, introducedToday, settings] = await Promise.all([
     db.reviewItem.findMany({ where: { userId, itemId: { in: items.map((item) => item.id) } } }),
     db.reviewItem.count({ where: { userId, createdAt: { gte: startOfToday(now) } } }),
+    db.user.findUnique({ where: { id: userId }, select: { newPerDay: true } }),
   ])
+  // Темп из настроек пользователя; NEW_PER_DAY — значение по умолчанию.
+  const perDay = settings?.newPerDay ?? NEW_PER_DAY
   const byId = new Map(rows.map((row) => [row.itemId, row]))
   const aheadUntil = now.getTime() + LEARN_AHEAD_MINUTES * 60_000
 
@@ -115,7 +118,7 @@ async function planSession(userId: string, items: PracticeItem[], now: Date) {
     })
   const dueKept = bury(due)
   const aheadKept = bury(ahead)
-  const fresh = bury(freshAll).slice(0, Math.max(0, NEW_PER_DAY - introducedToday))
+  const fresh = bury(freshAll).slice(0, Math.max(0, perDay - introducedToday))
   const ordered = [...interleave(dueKept, fresh), ...aheadKept].slice(0, SESSION_LIMIT)
 
   return { rows, byId, ordered, due: dueKept.length, fresh: fresh.length }

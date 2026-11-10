@@ -1,3 +1,4 @@
 // Серверный публичный API: модули с базой данных и файловой системой. Только для серверного кода.
 export * from './api/session'
+export * from './api/stats'
 export * from './api/today'
