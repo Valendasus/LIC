@@ -205,7 +205,16 @@
             - Предсказать порядок вывода с setTimeout, промисами, await и queueMicrotask
             - Объяснить, почему тяжёлый синхронный код замораживает страницу и как это исправить
             - Понять, где в цикле находится отрисовка и requestAnimationFrame
-        - { slug: promises, title: 'Промисы', grade: J }
+        - slug: promises
+          title: Промисы
+          grade: J
+          content: true
+          goals:
+            - Объяснить состояния промиса и почему исполнитель синхронный, а обработчики — нет
+            - Предсказать, что вернёт каждый then в цепочке и куда пойдёт ошибка
+            - Писать цепочки без потерянных return и проглоченных ошибок
+            - Знать, когда нужен new Promise, и использовать withResolvers и Promise.try
+            - Реализовать promisify, повтор с паузой, общий запрос и собственный промис
         - { slug: async-await, title: 'async/await и обработка ошибок', grade: J }
         - { slug: combinators, title: 'Promise.all, allSettled, race, any', grade: J }
         - { slug: cancellation, title: 'Отмена и гонки запросов', grade: M }

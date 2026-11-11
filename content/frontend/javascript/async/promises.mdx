@@ -1,0 +1,377 @@
+export const meta = {
+  verified: '11.11.2026',
+  versions: 'ECMAScript 2026, Chrome, Firefox, Safari, Node.js 25',
+}
+
+## Learn
+
+### Суть за минуту
+
+Промис — объект, который **представляет результат, который появится позже**: ответ сервера, прочитанный файл, конец анимации. Вместо колбэка «позови меня, когда будет готово» функция сразу возвращает промис, а вы подписываетесь на него через `then` или `await`.
+
+```js
+const promise = fetch('/api/user') // запрос ушёл, результат будет позже
+promise
+  .then((response) => response.json())
+  .then((user) => console.log(user.name))
+  .catch((error) => console.error('Не загрузилось', error))
+```
+
+Три правила, на которых держится вся тема:
+
+1. Промис меняет состояние **один раз**.
+2. `then` всегда возвращает **новый** промис — так строятся цепочки.
+3. Обработчики всегда вызываются **асинхронно**, микрозадачей. Как устроены микрозадачи — в теме «Event loop в браузере».
+
+### Состояния
+
+| Состояние | Что значит | Как попасть |
+|---|---|---|
+| `pending` | ожидает | сразу после создания |
+| `fulfilled` | выполнен со значением | `resolve(value)` |
+| `rejected` | отклонён с причиной | `reject(error)` или исключение |
+
+Выполненный или отклонённый промис называют **завершённым** (`settled`). Переход происходит один раз: повторные `resolve` и `reject` молча игнорируются.
+
+```js
+new Promise((resolve, reject) => {
+  resolve('первый')
+  reject(new Error('второй')) // ничего не сделает
+  resolve('третий') // и это
+}).then((v) => console.log(v)) // первый
+```
+
+### Исполнитель синхронный
+
+Функция, которую передают в `new Promise`, — **исполнитель** — вызывается сразу, внутри конструктора. `resolve` не прерывает её: код после него тоже выполнится.
+
+```js
+new Promise((resolve) => {
+  console.log(1)
+  resolve()
+  console.log(2)
+}).then(() => console.log(3))
+console.log(4)
+// 1, 2, 4, 3
+```
+
+Если исполнитель бросит исключение, промис станет отклонённым — ошибка не вылетит наружу.
+
+<Callout type="mistake" title="«Обернуть в промис, чтобы не блокировать поток»">
+`new Promise` не делает код асинхронным. Тяжёлый цикл внутри исполнителя заморозит страницу так же, как без промиса. Промис только описывает результат, который придёт позже. Работу, которая ждёт чего-то внешнего, делает браузер, а тяжёлые вычисления нужно дробить или уносить в воркер.
+</Callout>
+
+### then возвращает новый промис
+
+Это главное, что нужно понять про цепочки. Судьба нового промиса зависит от того, что сделал обработчик:
+
+| Обработчик | Новый промис |
+|---|---|
+| вернул значение `x` | выполнен со значением `x` |
+| ничего не вернул | выполнен со значением `undefined` |
+| бросил ошибку | отклонён этой ошибкой |
+| вернул промис или thenable | повторит его результат, когда тот завершится |
+
+```js
+const p = Promise.resolve(1)
+const q = p.then((x) => x + 1)
+console.log(p === q) // false — это разные промисы
+```
+
+Отсюда самая частая ошибка — **потерянный `return`**:
+
+```js
+getUser()
+  .then((user) => {
+    getPosts(user.id) // промис создан, но не возвращён
+  })
+  .then((posts) => render(posts)) // posts === undefined, и никто не ждёт загрузку
+```
+
+Исправление — вернуть промис: `.then((user) => getPosts(user.id))`. Стрелка без фигурных скобок возвращает значение сама.
+
+### Ошибки в цепочке
+
+Ошибка пропускает все `then` без обработчика ошибок и попадает в ближайший `catch`. После `catch` цепочка **снова успешна**, а его возвращаемое значение идёт дальше.
+
+```js
+loadSettings()
+  .then(parse)
+  .then(apply) // пропустится, если loadSettings или parse упали
+  .catch((error) => {
+    report(error)
+    return DEFAULT_SETTINGS // запасное значение
+  })
+  .then((settings) => startApp(settings)) // запустится в любом случае
+```
+
+Чтобы ошибка пошла дальше, в `catch` её нужно бросить снова: `throw error`.
+
+**`then(onOk, onFail)` и `then(onOk).catch(onFail)` — не одно и то же.** Второй аргумент `then` ловит только отклонение *предыдущего* промиса. Если упадёт сам `onOk`, в первом варианте ошибку никто не поймает на этом шаге.
+
+```js
+const fail = () => { throw new Error('в then') }
+Promise.resolve().then(fail, () => console.log('A')).catch(() => console.log('B'))
+// B — второй аргумент then не поймал ошибку из fail
+```
+
+### finally
+
+`finally(fn)` вызывается при любом исходе и аргументов не получает. Подходит для уборки: снять индикатор загрузки, закрыть соединение. Результат проходит сквозь `finally` без изменений.
+
+```js
+setLoading(true)
+fetchReport()
+  .then(showReport, showError)
+  .finally(() => setLoading(false))
+```
+
+Заменить результат `finally` может только одним способом: бросить ошибку или вернуть отклонённый промис. Обычный `return` внутри него игнорируется.
+
+### Промис внутри промиса и thenable
+
+Если обработчик или `resolve` получают промис, внешний промис **принимает** его: ждёт и повторяет результат. Это работает не только со встроенными промисами, но и с любым **thenable** — объектом с методом `then`. Так промисы из разных библиотек работают вместе.
+
+```js
+const thenable = { then(resolve) { resolve(42) } }
+await Promise.resolve(thenable) // 42
+```
+
+<Callout type="deep">
+- **Принятие стоит микрозадач.** Когда обработчик возвращает промис, спецификация разворачивает его через отдельное задание `NewPromiseResolveThenableJob`. Это даёт две лишние микрозадачи, поэтому в задачах «что выведет» такая цепочка отстаёт от соседней на два шага.
+- **`Promise.resolve(p) === p`**, если `p` — встроенный промис. Для остального создаётся новый.
+- **`Object.prototype.then`** сломал бы все промисы: любой объект стал бы thenable. Предложение TC39 на стадии 3 (Curtailing the power of thenables) ограничивает этот эффект для встроенных объектов.
+</Callout>
+
+### Когда нужен new Promise
+
+Конструктор нужен **только на границе** с API, которое не умеет промисы: таймеры, события, колбэки в стиле Node.
+
+```js
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const loadImage = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error(`Не загрузилась картинка ${src}`))
+    img.src = src
+  })
+```
+
+Обёртка над тем, что уже возвращает промис, — антипаттерн:
+
+```js
+// Плохо: лишняя обёртка, и опечатка в .then вызовет зависший промис, а не ошибку
+const getUser = (id) => new Promise((resolve, reject) => {
+  fetch(`/api/users/${id}`).then((r) => r.json()).then(resolve, reject)
+})
+
+// Хорошо
+const getUser = (id) => fetch(`/api/users/${id}`).then((r) => r.json())
+```
+
+### Новое: withResolvers и Promise.try
+
+**`Promise.withResolvers()`** (ES2024, во всех браузерах) возвращает промис вместе с `resolve` и `reject`. Он нужен, когда промис выполняется из другого места: по событию, из очереди, по ответу воркера.
+
+```js
+function waitForMessage(worker, type) {
+  const { promise, resolve } = Promise.withResolvers()
+  const onMessage = (event) => {
+    if (event.data.type !== type) return
+    worker.removeEventListener('message', onMessage)
+    resolve(event.data)
+  }
+  worker.addEventListener('message', onMessage)
+  return promise
+}
+```
+
+**`Promise.try(fn, ...args)`** (ES2025, во всех браузерах с 2025 года) вызывает функцию сразу и всегда возвращает промис. Синхронная ошибка тоже становится отклонением.
+
+```js
+// JSON.parse бросает синхронно — без Promise.try ошибка вылетит мимо catch
+Promise.try(JSON.parse, rawText)
+  .then(applyConfig)
+  .catch(showConfigError)
+```
+
+Методы, которые ждут несколько промисов сразу (`all`, `allSettled`, `race`, `any`), — в теме «Promise.all, allSettled, race, any».
+
+### Необработанные отклонения
+
+Если отклонённый промис никто не обработал, в браузере на `window` приходит событие **`unhandledrejection`**, а в консоли — ошибка. В Node с версии 15 по умолчанию **падает процесс**.
+
+```js
+window.addEventListener('unhandledrejection', (event) => {
+  sendToMonitoring(event.reason)
+})
+```
+
+Типичные источники — промис, запущенный «в фоне» без `catch` или `await`, и цепочка, которую забыли вернуть из функции.
+
+<Example file="src/shared/api/refresh-token.ts" verdict="good">
+
+Пять запросов одновременно получили 401. Обновлять токен нужно один раз, а все пять должны дождаться нового. Обновление хранится как один промис: первый запрос его создаёт, остальные получают тот же. В `finally` промис сбрасывается, чтобы следующее истечение токена снова запустило обновление. Промис — обычное значение, его можно хранить и отдавать многим подписчикам.
+
+</Example>
+
+<Example file="src/features/upload/upload.ts" verdict="review">
+
+```js
+files.forEach((file) => {
+  uploadFile(file).then(() => markDone(file.id))
+})
+showToast('Всё загружено')
+```
+
+Сообщение появляется сразу, до загрузки. Ошибки загрузки не обрабатываются и попадут в `unhandledrejection`. Нужно собрать промисы и дождаться их: `await Promise.allSettled(files.map(upload))`, затем показать, что загрузилось, а что нет.
+
+</Example>
+
+### Частые ошибки
+
+| Ошибка | Признак | Исправление |
+|---|---|---|
+| Потерян `return` в `then` | следующий шаг получает `undefined` | вернуть промис из обработчика |
+| Цепочка не возвращена из функции | вызывающий не может дождаться и поймать ошибку | `return` всю цепочку |
+| Вложенные `then` («пирамида») | обработка ошибок разбросана | плоская цепочка или `async/await` |
+| `catch`, который глотает ошибку | интерфейс «молча» ничего не делает | показать ошибку или бросить дальше |
+| Лишний `new Promise` | ошибки теряются, промис зависает | вернуть существующий промис |
+| Попытка «отменить промис» | запрос всё равно выполняется | `AbortController` для самой операции |
+
+<Callout type="interview">
+Объясняйте промис через три правила: состояние меняется один раз; `then` возвращает новый промис; обработчики асинхронны. На вопрос «плюсы промисов перед колбэками» сильный ответ — не «нет пирамиды», а: единая обработка ошибок по цепочке, промис — значение, которое можно хранить и передавать, гарантия «ровно один раз» и асинхронности, основа для `async/await`. Часто просят написать `promisify` или свой промис — оба есть в практике.
+</Callout>
+
+## Implement
+
+<Task level="warmup" title="Исполнитель и then">
+
+```js
+new Promise((resolve) => {
+  console.log('a')
+  resolve('b')
+  console.log('c')
+}).then((x) => console.log(x))
+console.log('d')
+```
+
+<Hints hints={['Исполнитель синхронный, resolve его не прерывает. А then?']}>
+
+**a, c, d, b.** Исполнитель выполняется целиком сразу, `then` — микрозадачей после синхронного кода.
+
+</Hints>
+</Task>
+
+<Task level="easy" title="Куда пойдёт ошибка">
+
+```js
+Promise.resolve(1)
+  .then((x) => { throw new Error(`плохо ${x}`) })
+  .then(() => console.log('A'))
+  .catch((e) => { console.log(e.message); return 2 })
+  .then((x) => console.log('B', x))
+  .finally(() => console.log('C'))
+```
+
+<Hints hints={['Ошибка пропускает then без обработчика ошибок.', 'Что после catch: успех или отклонение? И что вернул catch?']}>
+
+**плохо 1, B 2, C.** Ошибка пропускает `then` с `A` и попадает в `catch`. После `catch` цепочка успешна со значением `2`. `finally` выполняется в конце любого исхода.
+
+</Hints>
+</Task>
+
+<Task level="medium" title="Два способа поймать ошибку">
+
+```js
+const fail = () => { throw new Error('x') }
+Promise.resolve().then(fail, () => console.log('A')).then(null, () => console.log('B'))
+Promise.reject(new Error('y')).then(() => console.log('C'), () => console.log('D'))
+```
+
+<Hints hints={['Второй аргумент then ловит только отклонение предыдущего промиса.', 'В первой строке промис выполнен успешно, а ошибка возникает в первом аргументе.']}>
+
+**D, B.** Во второй строке отклонён сам промис — срабатывает второй аргумент (`D`). В первой промис успешен, `fail` бросает, и второй аргумент того же `then` это не ловит. Ловит следующий `then(null, …)` — `B`. По очереди: `D` выводится на первом шаге микрозадач, `B` — на втором.
+
+</Hints>
+</Task>
+
+<Task level="hard" title="Спроектировать загрузку с повтором">
+
+Форма отправляет заказ. Сеть иногда сбоит, сервер иногда отвечает 503. Опишите словами и кодом, как повторять запрос, — функция `submitOrder(order)`:
+- повторять только то, что имеет смысл повторять;
+- не создать два заказа;
+- не повторять бесконечно;
+- показать пользователю понятную ошибку, если не вышло.
+
+<Hints hints={['Какие ошибки временные? Сетевой сбой, 503, 429 — да. 400, 401, 422 — нет.', 'Повторять POST безопасно, только если сервер узнаёт повтор: ключ идемпотентности в заголовке.', 'Пауза между попытками растёт, плюс небольшой случайный разброс.', 'Повтор — обёртка retry над одной попыткой. Сама попытка бросает ошибку с признаком, можно ли её повторять.']}>
+
+```js
+async function submitOrder(order) {
+  const idempotencyKey = crypto.randomUUID() // один ключ на все попытки
+  return retry(
+    async () => {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify(order),
+      })
+      if (response.ok) return response.json()
+      const error = new Error(`Сервер ответил ${response.status}`)
+      error.retryable = [429, 502, 503, 504].includes(response.status)
+      throw error
+    },
+    { attempts: 3, delayMs: 500, factor: 2, shouldRetry: (e) => e.retryable !== false },
+  )
+}
+```
+
+**Разбор.** Ключ идемпотентности создаётся один раз до попыток, поэтому сервер распознает повтор и не создаст второй заказ. Сетевая ошибка `fetch` (`TypeError`) не имеет `retryable: false` и повторяется. 4xx не повторяются: повтор их не исправит. Сам `retry` с растущей паузой — задача в практике.
+
+**А если** пользователь закрыл форму во время повторов? Передайте `AbortSignal` и в `retry`, и в `fetch` — подробно в теме «Отмена и гонки запросов».
+
+</Hints>
+</Task>
+
+## Confirm
+
+<Question q="Какие состояния есть у промиса и как они меняются?">
+`pending` → `fulfilled` (со значением) или `rejected` (с причиной). Переход один раз и навсегда; повторные `resolve` и `reject` игнорируются. Выполненный или отклонённый промис называют завершённым (`settled`).
+</Question>
+
+<Question q="Что вернёт then, если обработчик вернул значение, бросил ошибку, вернул промис?">
+Всегда новый промис. Значение — он выполнен этим значением. Ошибка — отклонён ею. Промис или thenable — повторит его результат, когда тот завершится.
+</Question>
+
+<Question q="Чем then(onOk, onFail) отличается от then(onOk).catch(onFail)?">
+Во втором случае `onFail` поймает и ошибку, которую бросит сам `onOk`. Во первом — только отклонение исходного промиса; ошибка из `onOk` уйдёт дальше по цепочке.
+</Question>
+
+<Question q="Когда нужен new Promise, а когда это антипаттерн?">
+Нужен, чтобы обернуть API на колбэках или событиях: `setTimeout`, `onload`, колбэки в стиле Node. Обёртка над тем, что уже возвращает промис, — антипаттерн: она лишняя и легко теряет ошибки.
+</Question>
+
+<Question q="Что делают Promise.withResolvers и Promise.try?">
+`withResolvers` (ES2024) возвращает `{ promise, resolve, reject }` — для промисов, которые выполняются из другого места. `try` (ES2025) вызывает функцию сразу и всегда возвращает промис, превращая синхронную ошибку в отклонение.
+</Question>
+
+<Question q="Что будет с отклонённым промисом без обработчика и как это заметить?">
+В браузере — событие `unhandledrejection` на `window` и ошибка в консоли; его подключают к мониторингу. В Node с 15-й версии процесс по умолчанию падает. Причины — промис без `catch` и `await` или цепочка, не возвращённая из функции.
+</Question>
+
+## Источники
+
+<Sources>
+
+- [ECMAScript: Promise Objects](https://tc39.es/ecma262/#sec-promise-objects) — первоисточник, в том числе NewPromiseResolveThenableJob
+- [MDN: Using promises](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises)
+- [MDN: Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)
+- [MDN: Promise.withResolvers()](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/withResolvers)
+- [MDN: Promise.try()](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/try)
+- [MDN: unhandledrejection](https://developer.mozilla.org/en-US/docs/Web/API/Window/unhandledrejection_event)
+- [Promises/A+](https://promisesaplus.com/) — правила, по которым пишут свой промис
+- [TC39: Curtailing the power of thenables](https://github.com/tc39/proposal-thenable-curtailment)
+
+</Sources>

@@ -112,7 +112,7 @@ test('ошибки решения видны: синтаксис, исключе
 
 test('все задачи всех тем решаются своим эталоном в настоящем браузере', async ({ page }) => {
   test.setTimeout(120_000)
-  for (const topic of ['javascript/scope/closures', 'javascript/async/event-loop', 'css/cascade/specificity']) {
+  for (const topic of ['javascript/scope/closures', 'javascript/async/event-loop', 'javascript/async/promises', 'css/cascade/specificity']) {
     const keys = practice(topic).filter((item) => item.kind === 'code')
     await page.goto(`/practice?scope=frontend/${topic}&kinds=code&mode=free`)
     for (let i = 0; i < keys.length; i++) {

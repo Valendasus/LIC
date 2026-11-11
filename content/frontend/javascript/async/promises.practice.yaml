@@ -1,0 +1,665 @@
+# Практика темы «Промисы». Ответы в output проверяются запуском кода.
+# Задачи на Promise.all, таймаут и delay — в теме «Event loop», здесь не повторяются.
+
+- key: order-new-promise
+  kind: order
+  prompt: 'Код: `new Promise((resolve) => { log(1); resolve(); log(2) }).then(() => log(3)); log(4)`. Расставьте события в порядке, в котором они произойдут.'
+  steps:
+    - Исполнитель вызывается сразу, синхронно — выводится 1
+    - resolve() переводит промис в состояние fulfilled, но не прерывает исполнитель — выводится 2
+    - Синхронный код после конструктора доходит до конца — выводится 4
+    - Обработчик then выполняется микрозадачей — выводится 3
+  explain: Исполнитель синхронный, `resolve` только меняет состояние. Обработчики `then` всегда асинхронны — даже если промис уже выполнен.
+
+- key: out-resolve-once
+  kind: output
+  code: |
+    new Promise((resolve, reject) => {
+      resolve('первый')
+      reject(new Error('второй'))
+      resolve('третий')
+    }).then(
+      (v) => console.log('ok', v),
+      (e) => console.log('fail', e.message),
+    )
+  answer:
+    - ok первый
+  explain: Промис меняет состояние один раз и навсегда. Последующие `resolve` и `reject` молча игнорируются — ошибки не будет.
+
+- key: out-then-new
+  kind: output
+  code: |
+    const p = Promise.resolve(1)
+    const q = p.then((x) => x + 1)
+    console.log(p === q)
+    q.then((x) => console.log(x))
+  answer:
+    - 'false'
+    - '2'
+  explain: '`then` всегда возвращает **новый** промис. Его значение — то, что вернул обработчик. На этом построены цепочки.'
+
+- key: out-forgot-return
+  kind: output
+  code: |
+    const load = (v) => new Promise((r) => setTimeout(() => r(v), 10))
+    Promise.resolve()
+      .then(() => { load('a') })
+      .then((x) => console.log('1:', x))
+    Promise.resolve()
+      .then(() => load('b'))
+      .then((x) => console.log('2:', x))
+  answer:
+    - '1: undefined'
+    - '2: b'
+  explain: В первой цепочке фигурные скобки и нет `return` — обработчик вернул `undefined`, и следующий `then` не ждёт загрузку. Во второй стрелка без скобок возвращает промис, и цепочка ждёт его результат.
+
+- key: out-then-ab
+  kind: output
+  code: |
+    const fail = () => { throw new Error('в then') }
+    Promise.resolve()
+      .then(fail, () => console.log('A'))
+      .catch(() => console.log('B'))
+    Promise.resolve()
+      .then(fail)
+      .then(null, () => console.log('C'))
+  answer:
+    - B
+    - C
+  explain: Второй аргумент `then(a, b)` ловит ошибки только **предыдущего** промиса, а не ошибку из `a` рядом с ним. Ошибку из `fail` ловит следующий обработчик — `catch` или `then(null, …)`.
+
+- key: out-catch-continues
+  kind: output
+  code: |
+    Promise.reject(new Error('нет сети'))
+      .catch((e) => { console.log('поймали:', e.message); return 'запасное' })
+      .then((x) => console.log('дальше:', x))
+  answer:
+    - 'поймали: нет сети'
+    - 'дальше: запасное'
+  explain: После `catch` цепочка снова успешна, а его возвращаемое значение идёт дальше. Так делают запасное значение. Чтобы ошибка шла дальше, в `catch` её нужно бросить снова.
+
+- key: out-finally-value
+  kind: output
+  code: |
+    Promise.resolve('данные')
+      .finally(() => 'другое')
+      .then((x) => console.log(x))
+  answer:
+    - данные
+  explain: '`finally` не получает значения и не меняет его: результат проходит сквозь. Заменить результат `finally` может, только если бросит ошибку или вернёт отклонённый промис.'
+
+- key: out-nested-reject
+  kind: output
+  code: |
+    Promise.resolve()
+      .then(() => Promise.reject(new Error('изнутри')))
+      .then(() => console.log('не выполнится'))
+      .catch((e) => console.log('catch:', e.message))
+      .finally(() => console.log('finally'))
+  answer:
+    - 'catch: изнутри'
+    - finally
+  explain: Обработчик вернул отклонённый промис — цепочка его «принимает» и становится отклонённой. Ошибка пропускает `then` и попадает в `catch`.
+
+- key: out-thenable
+  kind: output
+  code: |
+    const thenable = { then(resolve) { console.log('then вызван'); resolve(42) } }
+    Promise.resolve(thenable).then((x) => console.log(x))
+    console.log('синхронно')
+  answer:
+    - синхронно
+    - then вызван
+    - '42'
+  explain: Любой объект с методом `then` промисы «принимают» как промис. Метод `then` у такого объекта вызывается не сразу, а отдельной микрозадачей.
+
+- key: out-extra-ticks
+  kind: output
+  code: |
+    Promise.resolve()
+      .then(() => { console.log('a1'); return Promise.resolve() })
+      .then(() => console.log('a2'))
+    Promise.resolve()
+      .then(() => console.log('b1'))
+      .then(() => console.log('b2'))
+      .then(() => console.log('b3'))
+      .then(() => console.log('b4'))
+  answer:
+    - a1
+    - b1
+    - b2
+    - b3
+    - a2
+    - b4
+  explain: Если обработчик возвращает промис, цепочка разворачивает его через две дополнительные микрозадачи. Поэтому `a2` отстаёт на два шага. Помнить точное число не нужно, но нужно знать, что `return promise` не бесплатен по порядку.
+
+- key: out-try
+  kind: output
+  code: |
+    const parse = (s) => JSON.parse(s)
+    Promise.try(parse, '{')
+      .then(() => console.log('ок'))
+      .catch((e) => console.log('отклонён:', e.name))
+    console.log('после')
+  answer:
+    - после
+    - 'отклонён: SyntaxError'
+  explain: '`Promise.try` (ES2025) вызывает функцию сразу, но синхронную ошибку превращает в отклонённый промис. Без него `JSON.parse` бросил бы исключение мимо `catch` цепочки.'
+
+- key: out-with-resolvers
+  kind: output
+  code: |
+    const { promise, resolve } = Promise.withResolvers()
+    promise.then((x) => console.log('пришло', x))
+    console.log('ждём')
+    setTimeout(() => resolve('сообщение'), 0)
+  answer:
+    - ждём
+    - пришло сообщение
+  explain: '`Promise.withResolvers()` (ES2024) отдаёт промис вместе с его `resolve` и `reject`. Удобно, когда промис выполняется из другого места: события, очереди, сообщения воркера.'
+
+- key: quiz-then-returns
+  kind: quiz
+  question: Обработчик в `.then` бросил ошибку. Что вернёт этот `.then`?
+  options:
+    - text: Новый промис, отклонённый с этой ошибкой
+      correct: true
+    - text: Ошибка вылетит синхронно в месте вызова `.then`
+      why: Обработчик выполняется позже, микрозадачей. Исключение внутри него превращается в отклонение промиса.
+    - text: Тот же промис, на котором вызвали `.then`, но уже отклонённый
+      why: '`then` всегда возвращает новый промис, исходный не меняется.'
+    - text: '`undefined`'
+  explain: 'Вернул значение — новый промис выполнен. Бросил — отклонён. Вернул промис — новый промис повторит его судьбу.'
+
+- key: quiz-need-constructor
+  kind: quiz
+  question: Когда действительно нужен `new Promise((resolve, reject) => …)`?
+  options:
+    - text: Чтобы обернуть API на колбэках или событиях — `setTimeout`, `img.onload`, старые библиотеки
+      correct: true
+    - text: Чтобы вернуть результат `fetch` из функции
+      why: '`fetch` уже возвращает промис. Обёртка лишняя и легко теряет ошибки — это известный антипаттерн.'
+    - text: В каждой `async`-функции, чтобы она вернула промис
+      why: '`async`-функция всегда возвращает промис сама.'
+    - text: Чтобы сделать синхронный код асинхронным и не блокировать поток
+      why: Исполнитель выполняется синхронно. Тяжёлый код внутри `new Promise` блокирует поток так же.
+  explain: Конструктор нужен только на границе с API, которое не умеет промисы. Внутри цепочек и `async`-функций его не используют.
+
+- key: quiz-unhandled
+  kind: quiz
+  question: Промис отклонился, а обработчика ошибки ни у кого нет. Что произойдёт в браузере?
+  options:
+    - text: На `window` придёт событие `unhandledrejection`, в консоли — ошибка
+      correct: true
+    - text: Страница перезагрузится
+    - text: Ничего, ошибка исчезнет бесследно
+      why: Браузер сообщает о таких ошибках. Их стоит собирать в мониторинг через `unhandledrejection`.
+    - text: Промис будет повторяться, пока не выполнится
+      why: Промисы ничего не повторяют сами. Повтор пишется вручную.
+  explain: 'В браузере — событие `unhandledrejection` и ошибка в консоли. В Node с версии 15 по умолчанию процесс падает. Если обработчик добавили позже, придёт `rejectionhandled`.'
+
+- key: quiz-cancel
+  kind: quiz
+  question: Пользователь ушёл со страницы, а промис запроса ещё ждёт. Как его «отменить»?
+  options:
+    - text: Промис отменить нельзя — нужно отменить саму операцию через `AbortController` и `signal`
+      correct: true
+    - text: Вызвать `promise.cancel()`
+      why: У промисов нет метода отмены. Он был в некоторых библиотеках, но в стандарт не вошёл.
+    - text: Вызвать `Promise.reject()` с этим промисом
+      why: '`Promise.reject` создаёт новый отклонённый промис и на существующий не влияет.'
+    - text: Присвоить переменной с промисом `null`
+  explain: Промис — только представитель результата. Отменяется операция, которая его выполнит. Подробно — в теме «Отмена и гонки запросов».
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+# Тесты видят функции решения напрямую. Доступны test, expect, spy, sleep.
+
+- key: code-fix-chain
+  kind: code
+  level: easy
+  title: Почините цепочку
+  prompt: |
+    `loadProfile(id)` должна вернуть промис с объектом `{ user, posts }`: сначала загрузить пользователя, потом его посты. Сейчас она возвращает `{ user: undefined, posts: undefined }`, а ошибки загрузки теряются.
+
+    Найдите и исправьте ошибки. `fetchUser(id)` и `fetchPosts(userId)` возвращают промисы, их менять не нужно.
+  starter: |
+    function loadProfile(id) {
+      let user
+      fetchUser(id).then((u) => {
+        user = u
+        fetchPosts(u.id)
+      }).then((posts) => {
+        return { user, posts }
+      })
+      return Promise.resolve({ user, posts: undefined })
+    }
+  hints:
+    - 'В цепочке каждый `then` должен **вернуть** то, чего ждёт следующий. Что возвращает первый обработчик?'
+    - 'И сама функция должна вернуть цепочку, а не новый промис рядом с ней.'
+  tests: |
+    const users = { 1: { id: 1, name: 'Аня' } }
+    const fetchUser = (id) => sleep(5).then(() => {
+      if (!users[id]) throw new Error('нет пользователя')
+      return users[id]
+    })
+    const fetchPosts = (userId) => sleep(5).then(() => [`пост ${userId}`])
+
+    test('возвращает пользователя и его посты', async () => {
+      await expect(loadProfile(1)).resolves.toEqual({ user: { id: 1, name: 'Аня' }, posts: ['пост 1'] })
+    })
+    test('ошибка загрузки отклоняет результат', async () => {
+      await expect(loadProfile(2)).rejects.toThrow('нет пользователя')
+    })
+  solution: |
+    function loadProfile(id) {
+      let user
+      return fetchUser(id)
+        .then((u) => {
+          user = u
+          return fetchPosts(u.id)
+        })
+        .then((posts) => ({ user, posts }))
+    }
+  explain: |
+    **Две ошибки, обе про `return`:**
+    - первый обработчик не возвращал `fetchPosts(...)`, поэтому следующий `then` получил `undefined` и не ждал посты;
+    - функция возвращала отдельный `Promise.resolve(...)`, созданный сразу, ещё до загрузки. Цепочка оставалась «висеть» сама по себе, и её ошибки никто не ловил.
+
+    **Правило:** в цепочке всегда возвращайте промис из обработчика и саму цепочку из функции. Тогда ошибка из любого шага дойдёт до вызывающего.
+
+    **На `async/await`** то же читается проще: `const user = await fetchUser(id); const posts = await fetchPosts(user.id); return { user, posts }`.
+
+- key: code-promisify
+  kind: code
+  level: easy
+  title: promisify
+  prompt: |
+    Напишите `promisify(fn)`. `fn` — функция в стиле Node: последний аргумент — колбэк `(error, value)`. `promisify` возвращает функцию, которая принимает те же аргументы без колбэка и возвращает промис.
+    - Ошибка в колбэке — отклонение.
+    - `this` при вызове сохраняется: метод объекта после `promisify` работает как метод.
+  starter: |
+    function promisify(fn) {
+      // ваш код
+    }
+  hints:
+    - 'Верните обычную функцию `function (...args) {}` — у стрелки не будет своего `this`.'
+    - 'Внутри — `new Promise`, а `fn` вызывается через `fn.call(this, ...args, callback)`.'
+  tests: |
+    const readValue = (key, cb) => setTimeout(() => (key === 'bad' ? cb(new Error('нет ключа')) : cb(null, `значение ${key}`)), 1)
+
+    test('возвращает функцию, которая возвращает промис', () => {
+      expect(promisify(readValue)('a')).toBeInstanceOf(Promise)
+    })
+    test('значение из колбэка', async () => {
+      await expect(promisify(readValue)('a')).resolves.toBe('значение a')
+    })
+    test('ошибка из колбэка — отклонение', async () => {
+      await expect(promisify(readValue)('bad')).rejects.toThrow('нет ключа')
+    })
+    test('сохраняет this', async () => {
+      const store = {
+        prefix: '>',
+        get(key, cb) { cb(null, `${this.prefix} ${key}`) },
+      }
+      store.getAsync = promisify(store.get)
+      await expect(store.getAsync('x')).resolves.toBe('> x')
+    })
+  solution: |
+    function promisify(fn) {
+      return function (...args) {
+        return new Promise((resolve, reject) => {
+          fn.call(this, ...args, (error, value) => (error ? reject(error) : resolve(value)))
+        })
+      }
+    }
+  explain: |
+    Это главный законный случай для `new Promise`: граница с API на колбэках.
+
+    **`this`.** Возвращаем обычную функцию и вызываем `fn.call(this, …)`. Стрелка взяла бы `this` снаружи, и метод объекта сломался бы.
+
+    **Синхронный бросок.** Если `fn` бросит исключение сразу, исполнитель `new Promise` превратит его в отклонение — ещё одна причина, почему обёртка безопасна.
+
+    **В Node** есть готовый `util.promisify`, а большинство модулей уже имеют промис-версии (`fs/promises`).
+
+- key: code-retry
+  kind: code
+  level: medium
+  title: Повтор с нарастающей паузой
+  prompt: |
+    Напишите `retry(fn, { attempts = 3, delayMs = 100, factor = 2, shouldRetry = () => true } = {})`.
+    - Вызывает асинхронную `fn(attempt)`, где `attempt` — номер попытки с 1.
+    - Если `fn` отклонилась и попытки остались — ждёт и повторяет. Пауза растёт: `delayMs`, `delayMs * factor`, `delayMs * factor²`…
+    - Если `shouldRetry(error)` вернула `false`, ошибка отклоняет результат сразу, без повторов: например, 400 повтор не исправит.
+    - Первый успех — результат. Если все попытки неудачны — отклонение **последней** ошибкой.
+  starter: |
+    async function retry(fn, { attempts = 3, delayMs = 100, factor = 2, shouldRetry = () => true } = {}) {
+      return fn(1)
+    }
+  hints:
+    - 'Цикл по номеру попытки и `try/catch` вокруг `await fn(attempt)`.'
+    - 'Пауза — `await new Promise((r) => setTimeout(r, wait))`, после каждой паузы `wait *= factor`.'
+    - 'После последней попытки ждать не нужно — сразу бросайте последнюю ошибку. То же, если `shouldRetry(error)` вернула `false`.'
+  tests: |
+    const flaky = (failTimes) => {
+      let calls = 0
+      return async (attempt) => {
+        calls++
+        if (calls <= failTimes) throw new Error(`сбой ${attempt}`)
+        return `успех с попытки ${attempt}`
+      }
+    }
+
+    test('успех после двух сбоев', async () => {
+      await expect(retry(flaky(2), { attempts: 3, delayMs: 1 })).resolves.toBe('успех с попытки 3')
+    })
+    test('все попытки неудачны — последняя ошибка', async () => {
+      await expect(retry(flaky(5), { attempts: 3, delayMs: 1 })).rejects.toThrow('сбой 3')
+    })
+    test('ровно attempts вызовов', async () => {
+      const fn = spy(async () => { throw new Error('нет') })
+      await retry(fn, { attempts: 4, delayMs: 1 }).catch(() => {})
+      expect(fn.calls.length).toBe(4)
+    })
+    test('пауза растёт', async () => {
+      const times = []
+      const start = Date.now()
+      await retry(async () => { times.push(Date.now() - start); throw new Error('x') }, { attempts: 3, delayMs: 20, factor: 3 }).catch(() => {})
+      expect(times[1] - times[0]).toBeGreaterThan(15)
+      expect(times[2] - times[1]).toBeGreaterThan(50)
+    })
+    test('shouldRetry: false — сразу ошибка, без повторов', async () => {
+      const fn = spy(async () => { const e = new Error('400'); e.retryable = false; throw e })
+      await expect(retry(fn, { attempts: 5, delayMs: 1, shouldRetry: (e) => e.retryable !== false })).rejects.toThrow('400')
+      expect(fn.calls.length).toBe(1)
+    })
+    test('успех с первого раза — без паузы', async () => {
+      const start = Date.now()
+      await retry(async () => 'сразу', { delayMs: 200 })
+      expect(Date.now() - start).toBeLessThan(100)
+    })
+  solution: |
+    async function retry(fn, { attempts = 3, delayMs = 100, factor = 2, shouldRetry = () => true } = {}) {
+      let wait = delayMs
+      for (let attempt = 1; ; attempt++) {
+        try {
+          return await fn(attempt)
+        } catch (error) {
+          if (attempt >= attempts || !shouldRetry(error)) throw error
+          await new Promise((resolve) => setTimeout(resolve, wait))
+          wait *= factor
+        }
+      }
+    }
+  explain: |
+    **`return await` внутри `try`** — здесь `await` обязателен. Без него отклонённый промис вернулся бы мимо `catch`, и повтора бы не было.
+
+    **Экспоненциальная пауза** снижает нагрузку на сервер, который и так не справляется. В проде добавляют **случайный разброс (jitter)**, чтобы тысячи клиентов не повторяли запрос в одну и ту же миллисекунду, и повторяют только то, что имеет смысл повторять: сетевые сбои и 5xx, но не 400 и не 401.
+
+    **Осторожно с мутациями.** Повтор POST без ключа идемпотентности может, например, дважды списать деньги.
+
+- key: code-share-in-flight
+  kind: code
+  level: medium
+  title: Один запрос на всех
+  prompt: |
+    Напишите `shareInFlight(fn)`. Она возвращает функцию `(key) => Promise`, которая вызывает асинхронную `fn(key)`, но **одновременные вызовы с одним ключом делят один промис**.
+    - Пока запрос по ключу выполняется, повторные вызовы получают тот же промис, а `fn` не вызывается снова.
+    - После завершения (успех или ошибка) следующий вызов с этим ключом снова вызывает `fn`. Это не кэш.
+    - Разные ключи не мешают друг другу.
+
+    Так делают, например, обновление токена: пять запросов одновременно получили 401, а обновлять токен нужно один раз.
+  starter: |
+    function shareInFlight(fn) {
+      return (key) => fn(key)
+    }
+  hints:
+    - 'Храните выполняющиеся промисы в `Map` по ключу.'
+    - 'Удалять запись нужно при любом исходе — помогает `.finally`.'
+    - 'Возвращайте именно тот промис, что лежит в `Map`, чтобы все вызывающие получили одинаковый результат.'
+  tests: |
+    test('одновременные вызовы — один вызов fn и один результат', async () => {
+      const fn = spy(async (key) => { await sleep(10); return `токен ${key}` })
+      const get = shareInFlight(fn)
+      const results = await Promise.all([get('a'), get('a'), get('a')])
+      expect(results).toEqual(['токен a', 'токен a', 'токен a'])
+      expect(fn.calls.length).toBe(1)
+    })
+    test('после завершения — новый вызов', async () => {
+      const fn = spy(async () => { await sleep(1); return 1 })
+      const get = shareInFlight(fn)
+      await get('a')
+      await get('a')
+      expect(fn.calls.length).toBe(2)
+    })
+    test('ошибка общая и не застревает', async () => {
+      let n = 0
+      const get = shareInFlight(async () => { n++; await sleep(1); if (n === 1) throw new Error('сбой'); return 'ок' })
+      await expect(Promise.all([get('a'), get('a')])).rejects.toThrow('сбой')
+      expect(n).toBe(1)
+      await expect(get('a')).resolves.toBe('ок')
+    })
+    test('разные ключи независимы', async () => {
+      const fn = spy(async (key) => key)
+      const get = shareInFlight(fn)
+      await Promise.all([get('a'), get('b')])
+      expect(fn.calls.length).toBe(2)
+    })
+  solution: |
+    function shareInFlight(fn) {
+      const inFlight = new Map()
+      return (key) => {
+        if (inFlight.has(key)) return inFlight.get(key)
+        const promise = Promise.resolve()
+          .then(() => fn(key))
+          .finally(() => inFlight.delete(key))
+        inFlight.set(key, promise)
+        return promise
+      }
+    }
+  explain: |
+    **Промис — это значение.** Его можно хранить и отдавать многим: все `then` и `await` получат один и тот же результат. На этом построена дедупликация.
+
+    **`.finally` для очистки** срабатывает и при успехе, и при ошибке. Без него упавший запрос навсегда остался бы в `Map`, и все следующие вызовы получали бы старую ошибку.
+
+    **`Promise.resolve().then(() => fn(key))`** защищает от синхронного броска внутри `fn`: он станет отклонением, и `finally` всё равно уберёт запись. Можно и `Promise.try(fn, key)` (ES2025).
+
+    **В библиотеках** так работают TanStack Query и SWR — одинаковые запросы в полёте не дублируются.
+
+- key: code-my-promise
+  kind: code
+  level: boss
+  title: Свой промис
+  prompt: |
+    Напишите класс `MyPromise` — упрощённый промис по правилам спецификации. Встроенный `Promise` внутри не используйте, кроме `queueMicrotask`.
+    - `new MyPromise((resolve, reject) => …)` — исполнитель вызывается сразу; исключение в нём — отклонение.
+    - Состояние меняется один раз.
+    - `then(onFulfilled, onRejected)` возвращает новый `MyPromise`. Обработчики вызываются **асинхронно** (микрозадачей), даже если промис уже выполнен. Если обработчика нет — значение или ошибка проходит дальше.
+    - Если обработчик вернул промис или **thenable** — новый промис повторяет его результат.
+    - `catch(onRejected)`, `finally(onFinally)` (значение проходит сквозь).
+    - Статические `MyPromise.resolve(value)` и `MyPromise.reject(reason)`.
+  starter: |
+    class MyPromise {
+      constructor(executor) {
+        // ваш код
+      }
+      then(onFulfilled, onRejected) {}
+      catch(onRejected) {}
+      finally(onFinally) {}
+      static resolve(value) {}
+      static reject(reason) {}
+    }
+  hints:
+    - 'Храните `state` (`pending`, `fulfilled`, `rejected`), `value` и список ожидающих обработчиков. `resolve` и `reject` срабатывают, только пока `state === "pending"`.'
+    - '`then` создаёт новый `MyPromise` и кладёт в список функцию, которая вызовет нужный обработчик и передаст его результат в `resolve` или ошибку в `reject` нового промиса. Если промис уже завершён — сразу ставит её в `queueMicrotask`.'
+    - '«Принятие» значения: если в `resolve` пришёл объект или функция с методом `then` — вызовите этот `then` с вашими `resolve` и `reject` (только один раз), иначе выполните промис значением.'
+    - 'Каркас `resolve`: `if (value && (typeof value === "object" || typeof value === "function") && typeof value.then === "function") return value.then(resolve, reject)`. Не забудьте защиту `called`, чтобы принятие сработало один раз.'
+  tests: |
+    test('исполнитель синхронный, then асинхронный', async () => {
+      const log = []
+      const p = new MyPromise((resolve) => { log.push('executor'); resolve(1) })
+      p.then(() => log.push('then'))
+      log.push('sync')
+      await sleep(1)
+      expect(log).toEqual(['executor', 'sync', 'then'])
+    })
+    test('цепочка передаёт значения', async () => {
+      const result = await new Promise((done) => {
+        MyPromise.resolve(1).then((x) => x + 1).then((x) => x * 10).then(done)
+      })
+      expect(result).toBe(20)
+    })
+    test('состояние меняется один раз', async () => {
+      const seen = []
+      new MyPromise((resolve, reject) => { resolve('a'); reject(new Error('b')); resolve('c') })
+        .then((v) => seen.push(v), () => seen.push('ошибка'))
+      await sleep(1)
+      expect(seen).toEqual(['a'])
+    })
+    test('исключение в исполнителе — отклонение', async () => {
+      const reason = await new Promise((done) => {
+        new MyPromise(() => { throw new Error('бах') }).catch((e) => done(e.message))
+      })
+      expect(reason).toBe('бах')
+    })
+    test('ошибка проходит через then без обработчика до catch, после catch цепочка успешна', async () => {
+      const result = await new Promise((done) => {
+        MyPromise.reject(new Error('x'))
+          .then(() => 'не сюда')
+          .catch((e) => `поймали ${e.message}`)
+          .then(done)
+      })
+      expect(result).toBe('поймали x')
+    })
+    test('обработчик вернул промис — цепочка ждёт его', async () => {
+      const result = await new Promise((done) => {
+        MyPromise.resolve(1)
+          .then(() => new MyPromise((r) => setTimeout(() => r('позже'), 10)))
+          .then(done)
+      })
+      expect(result).toBe('позже')
+    })
+    test('принимает чужой thenable и встроенный Promise', async () => {
+      const thenable = { then(resolve) { resolve('thenable') } }
+      const a = await new Promise((done) => MyPromise.resolve(thenable).then(done))
+      const b = await new Promise((done) => MyPromise.resolve(1).then(() => Promise.resolve('native')).then(done))
+      expect([a, b]).toEqual(['thenable', 'native'])
+    })
+    test('finally пропускает значение и ошибку', async () => {
+      const log = []
+      const value = await new Promise((done) => MyPromise.resolve('v').finally(() => log.push('f1')).then(done))
+      const error = await new Promise((done) => MyPromise.reject(new Error('e')).finally(() => log.push('f2')).catch((e) => done(e.message)))
+      expect([value, error, log]).toEqual(['v', 'e', ['f1', 'f2']])
+    })
+    test('работает с await', async () => {
+      expect(await MyPromise.resolve(5).then((x) => x * 2)).toBe(10)
+    })
+    test('несколько then на одном промисе — все в порядке подписки', async () => {
+      const log = []
+      const p = new MyPromise((r) => setTimeout(() => r('x'), 5))
+      p.then(() => log.push(1))
+      p.then(() => log.push(2))
+      await sleep(15)
+      expect(log).toEqual([1, 2])
+    })
+  solution: |
+    class MyPromise {
+      #state = 'pending'
+      #value
+      #handlers = []
+
+      constructor(executor) {
+        let called = false
+        const resolve = (value) => { if (!called) { called = true; this.#resolve(value) } }
+        const reject = (reason) => { if (!called) { called = true; this.#settle('rejected', reason) } }
+        try {
+          executor(resolve, reject)
+        } catch (error) {
+          reject(error)
+        }
+      }
+
+      #resolve(value) {
+        if (value === this) return this.#settle('rejected', new TypeError('Промис не может разрешиться сам собой'))
+        if (value !== null && (typeof value === 'object' || typeof value === 'function')) {
+          let then
+          try {
+            then = value.then
+          } catch (error) {
+            return this.#settle('rejected', error)
+          }
+          if (typeof then === 'function') {
+            let called = false
+            try {
+              then.call(
+                value,
+                (v) => { if (!called) { called = true; this.#resolve(v) } },
+                (r) => { if (!called) { called = true; this.#settle('rejected', r) } },
+              )
+            } catch (error) {
+              if (!called) { called = true; this.#settle('rejected', error) }
+            }
+            return
+          }
+        }
+        this.#settle('fulfilled', value)
+      }
+
+      #settle(state, value) {
+        if (this.#state !== 'pending') return
+        this.#state = state
+        this.#value = value
+        for (const handler of this.#handlers) queueMicrotask(handler)
+        this.#handlers = []
+      }
+
+      then(onFulfilled, onRejected) {
+        return new MyPromise((resolve, reject) => {
+          const run = () => {
+            const handler = this.#state === 'fulfilled' ? onFulfilled : onRejected
+            if (typeof handler !== 'function') {
+              return this.#state === 'fulfilled' ? resolve(this.#value) : reject(this.#value)
+            }
+            try {
+              resolve(handler(this.#value))
+            } catch (error) {
+              reject(error)
+            }
+          }
+          if (this.#state === 'pending') this.#handlers.push(run)
+          else queueMicrotask(run)
+        })
+      }
+
+      catch(onRejected) {
+        return this.then(undefined, onRejected)
+      }
+
+      finally(onFinally) {
+        return this.then(
+          (value) => MyPromise.resolve(onFinally()).then(() => value),
+          (reason) => MyPromise.resolve(onFinally()).then(() => { throw reason }),
+        )
+      }
+
+      static resolve(value) {
+        return value instanceof MyPromise ? value : new MyPromise((resolve) => resolve(value))
+      }
+
+      static reject(reason) {
+        return new MyPromise((_, reject) => reject(reason))
+      }
+    }
+  explain: |
+    **Три части промиса:**
+    - **состояние**, которое меняется один раз;
+    - **список ожидающих**, которые запускаются при смене состояния;
+    - **процедура разрешения**, которая «принимает» thenable.
+
+    **Почему обработчики асинхронные.** Если бы `then` на уже выполненном промисе вызывал обработчик сразу, порядок кода зависел бы от того, успел ли промис выполниться, — так называемый «Zalgo». Спецификация требует всегда ставить обработчик в очередь микрозадач, и `queueMicrotask` даёт именно это.
+
+    **Почему thenable.** До стандарта у каждой библиотеки был свой промис. Правило «любой объект с методом `then` — промис» позволяет им работать вместе. Защита `called` нужна, потому что чужой `then` может вызвать оба колбэка или вызвать их несколько раз.
+
+    **Чего здесь нет, а в настоящем есть:** `Symbol.species`, проверки конструктора, `unhandledrejection`, статические комбинаторы. Полный набор требований — спецификация Promises/A+ и раздел Promise в ECMA-262; для них есть официальный набор тестов.
+
+    **На собеседовании** задачу «напишите свой промис» дают на senior. Главное — объяснить три части выше и почему обработчики асинхронны.
