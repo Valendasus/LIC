@@ -1,0 +1,324 @@
+export const meta = {
+  verified: '11.11.2026',
+  versions: 'ECMAScript 2026, Chrome, Firefox, Safari 27, React 19.3',
+}
+
+## Learn
+
+### Суть за минуту
+
+`async/await` — способ писать код на промисах так, будто он синхронный. `async` перед функцией означает «она возвращает промис», а `await` внутри — «подожди этот промис и дай его значение».
+
+```js
+// На промисах
+function loadName(id) {
+  return fetch(`/api/users/${id}`)
+    .then((response) => response.json())
+    .then((user) => user.name)
+}
+
+// То же на async/await
+async function loadName(id) {
+  const response = await fetch(`/api/users/${id}`)
+  const user = await response.json()
+  return user.name
+}
+```
+
+Под капотом это **те же промисы**: правила из темы «Промисы» и порядок из темы «Event loop» работают без изменений. Меняется только запись — и обработка ошибок, которая становится обычным `try/catch`.
+
+### async-функция всегда возвращает промис
+
+| В теле функции | Возвращённый промис |
+|---|---|
+| `return x` | выполнен значением `x` |
+| `return promise` | повторит результат `promise` |
+| `throw error` — в любом месте, даже до первого `await` | отклонён этой ошибкой |
+| ничего не вернула | выполнен значением `undefined` |
+
+Поэтому результат `async`-функции всегда достают через `await` или `then`:
+
+```js
+async function getTotal() {
+  return 42
+}
+const total = getTotal() // это промис, а не 42
+console.log(await getTotal()) // 42 — в модуле или другой async-функции
+```
+
+**Ошибка не вылетает наружу.** Даже `throw` в первой строке отклоняет промис, а не бросает исключение в месте вызова. Внешний `try` вокруг вызова без `await` её не поймает.
+
+### await приостанавливает функцию, а не поток
+
+Тело `async`-функции выполняется **синхронно до первого `await`**. На `await` функция приостанавливается и возвращает вызывающему промис, а вызывающий код идёт дальше. Когда ожидаемый промис выполнится, продолжение встанет в очередь микрозадач.
+
+```js
+async function load() {
+  console.log(2)
+  await null
+  console.log(4)
+}
+console.log(1)
+load()
+console.log(3)
+// 1, 2, 3, 4
+```
+
+- `await` можно применить к **любому значению**: не-промис оборачивается в выполненный промис. Пауза всё равно будет — хотя бы на одну микрозадачу.
+- `await` принимает и **thenable** — объект с методом `then`, но ему нужен лишний тик.
+- Пока функция ждёт, страница живёт: обрабатывает клики, рисует кадры. Блокирует поток только синхронный код между `await`.
+
+### Ошибки: try, catch, finally
+
+Отклонённый промис под `await` бросает исключение **в месте `await`**. Ловится обычным `try/catch`, а `finally` подходит для уборки.
+
+```js
+async function saveForm(data) {
+  setSaving(true)
+  try {
+    await api.save(data)
+    showToast('Сохранено')
+  } catch (error) {
+    showError(toUserMessage(error))
+  } finally {
+    setSaving(false)
+  }
+}
+```
+
+**Оборачивайте только то, что действительно обрабатываете.** `try` на всё тело функции глотает и баги, и ошибки, которые должны уйти выше.
+
+**`return await` внутри `try`.** Если вернуть промис без `await`, функция выйдет из `try` раньше, чем промис отклонится, и `catch` не сработает.
+
+```js
+async function load() {
+  try {
+    return await fetchData() // ошибка fetchData попадёт в catch
+  } catch {
+    return FALLBACK
+  }
+}
+```
+
+Вне `try/catch` `return await` не нужен: результат одинаковый.
+
+### Последовательно или параллельно
+
+Два `await` подряд — это **последовательная** загрузка: второй запрос стартует после первого, время складывается.
+
+```js
+// Плохо: 300 мс + 200 мс, хотя запросы независимы
+const user = await getUser(id)
+const posts = await getPosts(id)
+
+// Хорошо: оба стартуют сразу, ждём самый долгий — 300 мс
+const [user, posts] = await Promise.all([getUser(id), getPosts(id)])
+```
+
+Параллельность решает **момент запуска**: промисы должны быть созданы до ожидания. Последовательность нужна, только когда следующий шаг зависит от предыдущего: настройки по `user.settingsId`, страница по курсору из прошлого ответа.
+
+<Callout type="mistake" title="Запустить заранее и ждать по очереди">
+`const u = getUser(); const p = getPosts(); await u; await p` — тоже параллельно. Но если `p` отклонится, пока мы ждём `u`, браузер успеет сообщить о необработанном отклонении. `Promise.all` подписывается на все промисы сразу — используйте его. Как выбрать между `all`, `allSettled`, `race` и `any` — в теме «Promise.all, allSettled, race, any».
+</Callout>
+
+### await в циклах
+
+| Нужно | Как |
+|---|---|
+| по очереди | `for (const item of items) await save(item)` |
+| все сразу | `await Promise.all(items.map(save))` |
+| не больше N одновременно | пул задач — задача `mapLimit` в теме «Event loop» |
+
+**`forEach`, `map`, `filter` не ждут промисы колбэка.** `items.forEach(async (item) => await save(item))` запускает всё сразу, завершается мгновенно и теряет ошибки. Это одна из самых частых ошибок в реальном коде; в typescript-eslint её ловит правило `no-misused-promises`.
+
+### Асинхронные последовательности
+
+`for await…of` перебирает **асинхронно итерируемое**: асинхронный генератор, поток `ReadableStream`, постраничную выдачу API. Каждая итерация ждёт следующий элемент.
+
+```js
+const response = await fetch('/export.ndjson')
+const lines = response.body.pipeThrough(new TextDecoderStream())
+for await (const chunk of lines) {
+  appendToTable(chunk)
+}
+```
+
+Асинхронная итерация `ReadableStream` есть во всех основных браузерах с осени 2026 года (в Safari — с версии 27). Подробно об асинхронных итераторах — в теме «Итераторы, генераторы, асинхронные итераторы».
+
+### Новое в последних версиях
+
+- **Top-level await** (ES2022): `await` на верхнем уровне ES-модуля. Модули, импортирующие такой модуль, ждут его выполнения. В классических скриптах — синтаксическая ошибка.
+- **`Array.fromAsync(iterable)`** (ES2026, во всех браузерах) — собрать асинхронную последовательность в массив: `const rows = await Array.fromAsync(readRows())`.
+- **`await using`** (ES2027, Chrome и Firefox, в Safari пока нет) — ресурс, который освобождается в конце блока через `[Symbol.asyncDispose]()` даже при ошибке. Замена ручному `try/finally` для соединений, блокировок и подписок. TypeScript поддерживает синтаксис с версии 5.2.
+
+### async/await в React
+
+Эффект должен вернуть функцию очистки или ничего, а `async`-функция возвращает промис. Поэтому `useEffect(async () => …)` нельзя: объявляем функцию внутри и вызываем её.
+
+```jsx
+useEffect(() => {
+  const controller = new AbortController()
+  async function load() {
+    try {
+      const response = await fetch(`/api/users/${id}`, { signal: controller.signal })
+      setUser(await response.json())
+    } catch (error) {
+      if (error.name !== 'AbortError') setError(error)
+    }
+  }
+  load()
+  return () => controller.abort()
+}, [id])
+```
+
+Очистка отменяет запрос, когда `id` сменился или компонент ушёл со страницы. Так устаревший ответ не перезапишет свежий. Подробнее — в теме «Отмена и гонки запросов». Для данных с сервера в реальном проекте обычно берут TanStack Query или серверные компоненты, и этот код пишет библиотека.
+
+<Example file="src/features/report/export.ts" verdict="good">
+
+Выгрузка большого отчёта: сервер готовит файл, клиент опрашивает статус. Опрос — цикл `while` с `await check()` и паузой после ответа, а не `setInterval`. Запросы не перекрываются, медленный сервер не получает лавину проверок. Цикл прерывается сигналом `AbortController`, когда пользователь закрывает окно экспорта, и таймаутом — через 2 минуты показывается «Не удалось подготовить файл». Похожая задача есть в практике.
+
+</Example>
+
+<Example file="src/entities/cart/sync.ts" verdict="review">
+
+```js
+async function syncCart(items) {
+  try {
+    for (const item of items) {
+      await api.updateQuantity(item.id, item.quantity)
+    }
+  } catch (e) {
+    console.log(e)
+  }
+}
+```
+
+Две проблемы. Запросы идут по одному, хотя независимы — 20 товаров ждут 20 ответов подряд. А `catch` с `console.log` проглатывает ошибку: интерфейс думает, что всё сохранилось. Нужно запустить запросы параллельно, собрать результаты через `Promise.allSettled` и показать, какие товары не обновились.
+
+</Example>
+
+<Callout type="deep">
+- **Сколько стоит `await`.** С ES2019 `await` встроенного промиса занимает одну микрозадачу, а не три, как раньше. Thenable по-прежнему разворачивается через отдельное задание, поэтому ждёт дольше.
+- **Как это было устроено раньше.** До ES2017 `async/await` писали на генераторах: `yield promise` и исполнитель, который вызывает `next()` при выполнении промиса (библиотека `co`). Так устроен и транспилированный Babel код. Подробно — в теме про генераторы.
+- **Стек ошибки.** Движки восстанавливают «асинхронный стек» через `await`, поэтому в DevTools видно, откуда пришёл вызов. С `then`-цепочками такой стек беднее — ещё один довод за `await`.
+</Callout>
+
+### Частые ошибки
+
+| Ошибка | Признак | Исправление |
+|---|---|---|
+| `await` подряд для независимых запросов | экран грузится дольше, чем самый медленный запрос | `Promise.all` |
+| `forEach(async …)` | функция завершается сразу, ошибки теряются | `for…of` или `Promise.all(map)` |
+| `return promise` внутри `try` | `catch` не ловит ошибку | `return await` |
+| вызов без `await` и `.catch` | `unhandledrejection` в мониторинге | обработать явно |
+| `try` на всё тело | баги «молча» не видны | оборачивать только нужный `await` |
+| `useEffect(async …)` | предупреждение React, нет очистки | `async`-функция внутри эффекта |
+
+<Callout type="interview">
+Сильный ответ на «что такое async/await» — не «удобный синтаксис», а: это промисы; функция синхронна до первого `await`; `await` уступает поток микрозадачей; ошибки — через `try/catch`, и почему важен `return await`. Обязательно спросят, как выполнить запросы параллельно, и дадут код с `forEach(async)`. Хорошо упомянуть `for await…of`, top-level await и что `await` не блокирует страницу.
+</Callout>
+
+## Implement
+
+Сначала предсказания — проговорите порядок вслух и откройте ответ.
+
+<Practice id="out-sync-until-await" />
+
+<Practice id="out-return-await" />
+
+<Practice id="out-seq-vs-par" />
+
+<Practice id="quiz-parallel" />
+
+Теперь код: от переписывания до опроса с отменой.
+
+<Practice id="code-rewrite-async" />
+
+<Practice id="code-fix-foreach" />
+
+<Practice id="code-async-queue" />
+
+<Practice id="code-load-pages" />
+
+<Practice id="code-poll-until" />
+
+И задача на проектирование — словами и кодом, без автопроверки.
+
+<Task level="hard" title="Страница профиля: что параллельно, что по очереди">
+
+Страница профиля показывает:
+- пользователя — `getUser(id)`;
+- его команду — `getTeam(user.teamId)`;
+- уведомления — `getNotifications()`;
+- рекомендации — `getRecommendations(id)`, необязательный блок.
+
+Напишите `loadProfile(id)` так, чтобы страница открывалась как можно быстрее, а сбой рекомендаций не ломал страницу.
+
+<Hints hints={['Нарисуйте зависимости: что нужно знать, чтобы начать каждый запрос?', 'Команда зависит от пользователя, остальное — нет. Значит, три запроса стартуют сразу.', 'Необязательный блок: его ошибка превращается в null, обязательные ошибки идут дальше.', 'Каркас: стартовать user, notifications и recommendations сразу; дождаться user и сразу стартовать team; затем собрать всё через Promise.all.']}>
+
+```js
+async function loadProfile(id) {
+  const userPromise = getUser(id)
+  const notificationsPromise = getNotifications()
+  const recommendationsPromise = getRecommendations(id).catch(() => null)
+  const teamPromise = userPromise.then((user) => getTeam(user.teamId))
+
+  const [user, team, notifications, recommendations] = await Promise.all([
+    userPromise,
+    teamPromise,
+    notificationsPromise,
+    recommendationsPromise,
+  ])
+  return { user, team, notifications, recommendations }
+}
+```
+
+**Разбор.** Время — максимум из «пользователь → команда», уведомлений и рекомендаций, а не их сумма. `Promise.all` подписан на все промисы сразу, поэтому необработанных отклонений нет. Необязательный блок гасит свою ошибку заранее через `.catch(() => null)`, обязательные — отклоняют весь результат.
+
+**А если** страница должна показать то, что уже пришло, не дожидаясь всего? Тогда это не одна функция, а отдельные запросы на каждый блок со своими состояниями загрузки — в React это Suspense для каждого блока или запросы TanStack Query.
+
+</Hints>
+</Task>
+
+## Confirm
+
+<Question q="Что возвращает async-функция и что происходит при throw внутри неё?">
+Всегда промис. `return x` выполняет его значением, `throw` — даже до первого `await` — отклоняет. Ошибка не вылетает в место вызова: поймать её можно через `await` в `try` или `.catch`.
+</Question>
+
+<Question q="Какая часть async-функции выполняется синхронно и что делает await?">
+Всё до первого `await`. `await` приостанавливает функцию, возвращает вызывающему промис и отдаёт управление; продолжение встаёт в очередь микрозадач, когда ожидаемый промис выполнится. Поток не блокируется.
+</Question>
+
+<Question q="Зачем нужен return await внутри try?">
+Без `await` функция выходит из `try`, возвращая промис, и его отклонение `catch` уже не поймает. С `await` ожидание происходит внутри `try`, и ошибка попадает в `catch`. Вне `try/catch` разницы нет.
+</Question>
+
+<Question q="Как загрузить независимые данные параллельно и почему два await подряд — медленно?">
+Запустить все промисы до ожидания и дождаться их вместе: `await Promise.all([a(), b()])`. Два `await` подряд запускают второй запрос только после первого, время складывается.
+</Question>
+
+<Question q="Почему forEach(async …) — ошибка и как правильно?">
+`forEach` не ждёт промисы колбэка: функция завершается сразу, а ошибки становятся необработанными. По очереди — `for…of` с `await`, все сразу — `await Promise.all(items.map(fn))`, с ограничением — пул задач.
+</Question>
+
+<Question q="Как правильно использовать async-код в useEffect?">
+Эффект не может быть `async`, потому что должен вернуть очистку. Объявить `async`-функцию внутри и вызвать её, а в очистке отменить запрос через `AbortController` или выставить флаг `ignore`, чтобы устаревший ответ не записался в состояние.
+</Question>
+
+## Источники
+
+<Sources>
+
+- [ECMA-262, §15.8 Async Function Definitions](https://tc39.es/ecma262/#sec-async-function-definitions)
+- [ECMA-262, §27.7 AsyncFunction Objects, Await](https://tc39.es/ecma262/#await)
+- [MDN, `async function`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function)
+- [MDN, `await`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/await)
+- [MDN, `for await…of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of)
+- [MDN, `Array.fromAsync`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/fromAsync)
+- [MDN, `await using`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/await_using)
+- [V8: Faster async functions and promises](https://v8.dev/blog/fast-async) — почему `await` стал занимать одну микрозадачу
+- [react.dev, Fetching data with Effects](https://react.dev/learn/synchronizing-with-effects#fetching-data)
+- [typescript-eslint, no-misused-promises](https://typescript-eslint.io/rules/no-misused-promises/)
+
+</Sources>

@@ -215,7 +215,16 @@
             - Писать цепочки без потерянных return и проглоченных ошибок
             - Знать, когда нужен new Promise, и использовать withResolvers и Promise.try
             - Реализовать promisify, повтор с паузой, общий запрос и собственный промис
-        - { slug: async-await, title: 'async/await и обработка ошибок', grade: J }
+        - slug: async-await
+          title: 'async/await и обработка ошибок'
+          grade: J
+          content: true
+          goals:
+            - Объяснить, что возвращает async-функция и какая её часть выполняется синхронно
+            - Предсказать порядок вывода с await, return await и await в циклах
+            - Обрабатывать ошибки через try/catch/finally, не теряя и не глотая их
+            - Выбирать между последовательной и параллельной загрузкой и находить ошибку forEach(async)
+            - Писать очередь задач, постраничную загрузку и опрос с таймаутом и отменой
         - { slug: combinators, title: 'Promise.all, allSettled, race, any', grade: J }
         - { slug: cancellation, title: 'Отмена и гонки запросов', grade: M }
     - { slug: modules, title: 'Модули: ESM и CommonJS', grade: J }

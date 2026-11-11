@@ -1,0 +1,547 @@
+# Практика темы «async/await и обработка ошибок». Ответы в output проверяются запуском кода (npm run content:run).
+# Задачи на Promise.all, таймаут, delay, mapLimit (event-loop), retry, promisify, общий запрос (promises) — не повторяются.
+
+- key: out-async-returns
+  kind: output
+  code: |
+    async function f() { return 1 }
+    const r = f()
+    console.log(Object.prototype.toString.call(r))
+    r.then((x) => console.log(x))
+  answer:
+    - '[object Promise]'
+    - '1'
+  explain: '`async`-функция всегда возвращает промис. `return 1` выполняет его значением `1`, поэтому значение достаётся через `then` или `await`, а не напрямую.'
+
+- key: out-sync-until-await
+  kind: output
+  code: |
+    async function load() { console.log('2'); await null; console.log('4') }
+    console.log('1')
+    load().then(() => console.log('5'))
+    console.log('3')
+  answer:
+    - '1'
+    - '2'
+    - '3'
+    - '4'
+    - '5'
+  explain: До первого `await` тело выполняется синхронно — `2` выводится сразу. `await` приостанавливает функцию, вызывающий код идёт дальше (`3`). Продолжение — микрозадача (`4`), затем выполняется промис функции (`5`).
+
+- key: out-throw-before-await
+  kind: output
+  code: |
+    async function f() { throw new Error('сразу') }
+    let p
+    try { p = f() } catch { console.log('поймали синхронно') }
+    p.catch((e) => console.log('catch:', e.message))
+    console.log('конец')
+  answer:
+    - конец
+    - 'catch: сразу'
+  explain: Ошибка в `async`-функции — даже до первого `await` — не вылетает наружу, а отклоняет возвращённый промис. Внешний `try` её не видит; поймать можно через `.catch` или `await` внутри другого `try`.
+
+- key: out-return-await
+  kind: output
+  code: |
+    async function fails() { throw new Error('сбой') }
+    async function a() { try { return fails() } catch { return 'a поймал' } }
+    async function b() { try { return await fails() } catch { return 'b поймал' } }
+    async function main() {
+      console.log(await a().catch(() => 'a не поймал'))
+      console.log(await b())
+    }
+    main()
+  answer:
+    - a не поймал
+    - b поймал
+  explain: '`return fails()` возвращает промис мимо `try`: функция уже вышла из блока, когда он отклонился. `return await fails()` ждёт внутри `try`, и `catch` срабатывает. Вне `try` разницы нет.'
+
+- key: out-seq-vs-par
+  kind: output
+  code: |
+    const wait = (ms, v) => new Promise((r) => setTimeout(() => { console.log('готово', v); r(v) }, ms))
+    async function seq() { await wait(20, 'A'); await wait(10, 'B') }
+    async function par() { await Promise.all([wait(20, 'C'), wait(10, 'D')]) }
+    seq()
+    par()
+  answer:
+    - готово D
+    - готово A
+    - готово C
+    - готово B
+  explain: В `seq` таймер `B` ставится только после `A` — всего 30 мс. В `par` оба таймера стартуют сразу — всего 20 мс. Последовательные `await` для независимых запросов — частая потеря скорости.
+
+- key: out-foreach-async
+  kind: output
+  code: |
+    const items = [1, 2, 3]
+    async function run() {
+      items.forEach(async (x) => { await null; console.log('элемент', x) })
+      console.log('forEach закончился')
+    }
+    run()
+  answer:
+    - forEach закончился
+    - элемент 1
+    - элемент 2
+    - элемент 3
+  explain: '`forEach` не ждёт промисы, которые возвращает колбэк. Он запускает три `async`-функции и сразу заканчивается. Ошибки в них тоже никто не ловит.'
+
+- key: out-for-of-await
+  kind: output
+  code: |
+    async function run() {
+      for (const x of [1, 2]) { await null; console.log(x) }
+      console.log('после цикла')
+    }
+    run()
+    console.log('синхронно')
+  answer:
+    - синхронно
+    - '1'
+    - '2'
+    - после цикла
+  explain: '`await` внутри `for…of` действительно ждёт: итерации идут по очереди, а код после цикла — в самом конце. Вызывающий код при этом не блокируется.'
+
+- key: out-await-thenable
+  kind: output
+  code: |
+    const thenable = { then(resolve) { resolve('из thenable') } }
+    async function f() { const v = await thenable; console.log(v) }
+    f()
+    Promise.resolve().then(() => console.log('микрозадача'))
+  answer:
+    - микрозадача
+    - из thenable
+  explain: '`await` принимает любой thenable, но обычному объекту с `then` нужен лишний тик: его `then` вызывается отдельной микрозадачей. Встроенный промис `await` ждёт быстрее.'
+
+- key: order-await-step
+  kind: order
+  prompt: 'Код: `async function f() { const x = await p; log(x) }`. Расставьте, что происходит после вызова `f()`.'
+  steps:
+    - Тело f выполняется синхронно до await
+    - f приостанавливается и возвращает вызывающему ожидающий промис
+    - Вызывающий код продолжает работу
+    - Промис p выполняется
+    - Продолжение f ставится в очередь микрозадач
+    - f продолжается с x, равным значению p
+  explain: '`await` не блокирует поток: функция «запоминает место», возвращает промис и отдаёт управление. Когда `p` выполнится, продолжение встанет в очередь микрозадач.'
+
+- key: quiz-await-value
+  kind: quiz
+  question: Что делает `const x = await 42` внутри `async`-функции?
+  options:
+    - text: Уступает до следующей микрозадачи и присваивает `x` значение `42`
+      correct: true
+    - text: Бросает TypeError — ждать можно только промис
+      why: '`await` оборачивает любое значение в `Promise.resolve`. Ошибки нет.'
+    - text: Присваивает `42` сразу, без паузы
+      why: '`await` всегда приостанавливает функцию хотя бы на одну микрозадачу.'
+    - text: Ждёт 42 миллисекунды
+  explain: Не-промис превращается в выполненный промис, но продолжение всё равно идёт микрозадачей. Поэтому код после такого `await` выполнится позже синхронного кода вызывающего.
+
+- key: quiz-parallel
+  kind: quiz
+  question: '`getUser()` и `getPosts()` не зависят друг от друга. Какой код загружает их параллельно? Отметьте все.'
+  options:
+    - text: '`const [user, posts] = await Promise.all([getUser(), getPosts()])`'
+      correct: true
+    - text: '`const u = getUser(); const p = getPosts(); const user = await u; const posts = await p`'
+      correct: true
+      why: Оба запроса стартуют сразу, ждём потом. Но если `p` отклонится раньше, чем выполнится `u`, это будет необработанное отклонение, — поэтому `Promise.all` надёжнее.
+    - text: '`const user = await getUser(); const posts = await getPosts()`'
+      why: Второй запрос стартует только после первого.
+    - text: '`for (const load of [getUser, getPosts]) results.push(await load())`'
+      why: '`await` в цикле — последовательная загрузка.'
+  explain: 'Параллельность решает момент **запуска**: промисы должны быть созданы до ожидания. `Promise.all` запускает и ждёт вместе и сразу отклоняется при первой ошибке.'
+
+- key: quiz-effect-async
+  kind: quiz
+  question: Почему нельзя писать `useEffect(async () => { … })`?
+  options:
+    - text: Эффект должен вернуть функцию очистки или ничего, а `async`-функция возвращает промис
+      correct: true
+    - text: React запрещает `await` в компонентах
+      why: '`await` внутри эффекта можно — в обычной функции, объявленной и вызванной внутри него.'
+    - text: '`async`-функции выполняются вне главного потока'
+      why: Они выполняются в главном потоке, просто с паузами на `await`.
+    - text: Так эффект выполнится дважды
+      why: Двойной запуск — это StrictMode в разработке, к `async` он не относится.
+  explain: 'Правильно: внутри эффекта объявить `async function load() {…}`, вызвать `load()` и вернуть очистку — `controller.abort()` или флаг `ignore`, чтобы устаревший ответ не перезаписал свежий.'
+
+- key: quiz-top-level-await
+  kind: quiz
+  question: Где можно писать `await` вне `async`-функции?
+  options:
+    - text: На верхнем уровне ES-модуля
+      correct: true
+    - text: В любом скрипте, начиная с ES2017
+      why: В классическом скрипте (`<script>` без `type="module"`) это синтаксическая ошибка.
+    - text: Внутри обычной функции, если её вызывают из модуля
+      why: Внутри обычной функции `await` недопустим — нужна `async`.
+    - text: Только в Node.js
+      why: Top-level await работает в модулях и браузера, и Node.
+  explain: 'Top-level await (ES2022) — только в модулях. Модули, которые импортируют такой модуль, ждут его выполнения. Во всех основных браузерах — с осени 2026 года, когда исправления вышли в Safari 27.'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+# Тесты видят функции решения напрямую. Доступны test, expect, spy, sleep и помощники из docs/TRAINERS.md.
+
+- key: code-rewrite-async
+  kind: code
+  level: easy
+  title: Переписать цепочку на async/await
+  prompt: |
+    Перепишите `loadDashboard(id)` на `async/await`, не меняя поведения:
+    - загрузить пользователя `fetchUser(id)`, затем его настройки `fetchSettings(user.settingsId)`;
+    - если настройки не загрузились — использовать `DEFAULTS`, а ошибку загрузки пользователя пробросить дальше;
+    - вернуть `{ name, theme }`.
+
+    В решении не должно остаться `.then` и `.catch`.
+  starter: |
+    const DEFAULTS = { theme: 'dark' }
+
+    function loadDashboard(id) {
+      return fetchUser(id).then((user) =>
+        fetchSettings(user.settingsId)
+          .catch(() => DEFAULTS)
+          .then((settings) => ({ name: user.name, theme: settings.theme })),
+      )
+    }
+  hints:
+    - 'Каждый `.then(x => …)` становится `const x = await …`, а `.catch` — блоком `try/catch` вокруг нужного `await`.'
+  tests: |
+    const fetchUser = async (id) => {
+      await sleep(1)
+      if (id === 0) throw new Error('нет пользователя')
+      return { name: 'Аня', settingsId: id }
+    }
+    const fetchSettings = async (sid) => {
+      await sleep(1)
+      if (sid === 2) throw new Error('нет настроек')
+      return { theme: 'light' }
+    }
+    test('пользователь и настройки', async () => {
+      await expect(loadDashboard(1)).resolves.toEqual({ name: 'Аня', theme: 'light' })
+    })
+    test('нет настроек — значения по умолчанию', async () => {
+      await expect(loadDashboard(2)).resolves.toEqual({ name: 'Аня', theme: 'dark' })
+    })
+    test('ошибка пользователя пробрасывается', async () => {
+      await expect(loadDashboard(0)).rejects.toThrow('нет пользователя')
+    })
+    test('без .then и .catch', () => {
+      expect(/\.then\(|\.catch\(/.test(String(loadDashboard))).toBe(false)
+    })
+  solution: |
+    const DEFAULTS = { theme: 'dark' }
+
+    async function loadDashboard(id) {
+      const user = await fetchUser(id)
+      let settings
+      try {
+        settings = await fetchSettings(user.settingsId)
+      } catch {
+        settings = DEFAULTS
+      }
+      return { name: user.name, theme: settings.theme }
+    }
+  explain: |
+    **Код читается сверху вниз**, как синхронный: что за чем ждём — видно сразу. Вложенность `then` внутри `then` пропала.
+
+    **`try/catch` — только вокруг того, что ловим.** Обернуть всё тело — значит проглотить и ошибку пользователя, а её по условию нужно пробросить.
+
+    **`let settings` с присваиванием в `try`** иногда заменяют на `const settings = await fetchSettings(...).catch(() => DEFAULTS)` — тоже нормально, если в команде не запрещено смешивать стили.
+
+- key: code-fix-foreach
+  kind: code
+  level: easy
+  title: Почините сохранение
+  prompt: |
+    `saveAll(items, save)` должна сохранить элементы **по очереди** (сервер не любит параллельные записи) и выполниться, когда сохранено всё. Если сохранение упало — вернуть отклонённый промис с этой ошибкой и дальше не сохранять.
+
+    Сейчас функция выполняется сразу, а ошибки теряются. Почините.
+  starter: |
+    async function saveAll(items, save) {
+      items.forEach(async (item) => {
+        await save(item)
+      })
+    }
+  hints:
+    - '`forEach` не ждёт промисов колбэка. Какой цикл умеет ждать `await` внутри?'
+    - '`for (const item of items) await save(item)` — ошибка сама прервёт цикл и отклонит промис функции.'
+  tests: |
+    test('сохраняет всё и только потом выполняется', async () => {
+      const saved = []
+      await saveAll([1, 2, 3], async (x) => { await sleep(3); saved.push(x) })
+      expect(saved).toEqual([1, 2, 3])
+    })
+    test('по очереди, не параллельно', async () => {
+      const stats = concurrency()
+      await saveAll([1, 2, 3], stats.track(async () => sleep(3)))
+      expect(stats.peak).toBe(1)
+    })
+    test('ошибка отклоняет результат и останавливает сохранение', async () => {
+      const saved = []
+      const save = async (x) => {
+        await sleep(1)
+        if (x === 2) throw new Error('сбой на 2')
+        saved.push(x)
+      }
+      await expect(saveAll([1, 2, 3], save)).rejects.toThrow('сбой на 2')
+      await sleep(10)
+      expect(saved).toEqual([1])
+    })
+  solution: |
+    async function saveAll(items, save) {
+      for (const item of items) {
+        await save(item)
+      }
+    }
+  explain: |
+    **`forEach`, `map`, `filter` не знают про промисы.** Колбэк вернул промис — его просто выбросили. Поэтому функция завершилась сразу, а отклонения стали необработанными.
+
+    **Варианты:**
+    - по очереди — `for…of` с `await`;
+    - все сразу — `await Promise.all(items.map(save))`;
+    - с ограничением — пул как `mapLimit` из темы «Event loop».
+
+    **Линтер ловит это сам:** правило `no-misused-promises` в typescript-eslint.
+
+- key: code-async-queue
+  kind: code
+  level: medium
+  title: Очередь асинхронных задач
+  prompt: |
+    Напишите `createQueue()`. Метод `enqueue(job)` принимает асинхронную функцию и возвращает промис её результата.
+    - Задачи выполняются **по одной, в порядке добавления**: следующая стартует, когда завершилась предыдущая.
+    - Ошибка задачи отклоняет только её промис — очередь продолжает работать.
+    - `size()` — сколько задач ждёт или выполняется.
+
+    Так сохраняют черновик: каждое изменение отправляется после предыдущего, ответы не перепутаются.
+  starter: |
+    function createQueue() {
+      return {
+        enqueue: (job) => job(),
+        size: () => 0,
+      }
+    }
+  hints:
+    - 'Храните промис «хвоста» очереди: новая задача начинается, когда хвост завершился.'
+    - 'Хвост не должен отклоняться, иначе ошибка одной задачи сломает все следующие: `tail = run.catch(() => {})`.'
+    - 'Счётчик `size`: увеличить при добавлении, уменьшить в `finally` задачи.'
+  tests: |
+    test('по одной и по порядку', async () => {
+      const q = createQueue()
+      const log = []
+      const stats = concurrency()
+      const job = (name, ms) => stats.track(async () => { log.push(`старт ${name}`); await sleep(ms); log.push(`конец ${name}`); return name })
+      const results = await Promise.all([q.enqueue(job('a', 15)), q.enqueue(job('b', 1)), q.enqueue(job('c', 5))])
+      expect(results).toEqual(['a', 'b', 'c'])
+      expect(stats.peak).toBe(1)
+      expect(log).toEqual(['старт a', 'конец a', 'старт b', 'конец b', 'старт c', 'конец c'])
+    })
+    test('ошибка задачи не ломает очередь', async () => {
+      const q = createQueue()
+      const failed = q.enqueue(async () => { throw new Error('сбой') })
+      const next = q.enqueue(async () => 'после сбоя')
+      await expect(failed).rejects.toThrow('сбой')
+      await expect(next).resolves.toBe('после сбоя')
+    })
+    test('size — ждущие и выполняющиеся', async () => {
+      const q = createQueue()
+      const gate = deferred()
+      const first = q.enqueue(() => gate.promise)
+      q.enqueue(async () => 2)
+      expect(q.size()).toBe(2)
+      gate.resolve(1)
+      await first
+      await sleep(1)
+      expect(q.size()).toBe(0)
+    })
+  solution: |
+    function createQueue() {
+      let tail = Promise.resolve()
+      let pending = 0
+      return {
+        enqueue(job) {
+          pending++
+          const run = tail.then(async () => {
+            try {
+              return await job()
+            } finally {
+              pending--
+            }
+          })
+          tail = run.catch(() => {})
+          return run
+        },
+        size: () => pending,
+      }
+    }
+  explain: |
+    **Очередь — это цепочка промисов.** Каждая новая задача пристёгивается к хвосту: `tail.then(job)`. Порядок и «по одной» получаются сами собой.
+
+    **Хвост гасит ошибки** (`run.catch(() => {})`), а вызывающему возвращается исходный `run` — с ошибкой. Без этого одна упавшая задача отклонила бы все последующие.
+
+    **`return await` в `try`** нужен, чтобы `finally` уменьшил счётчик после завершения задачи, а не сразу.
+
+    **В жизни** так сериализуют сохранения, запись в IndexedDB, команды к устройству. Для параллельности с ограничением — пул из темы «Event loop».
+
+- key: code-load-pages
+  kind: code
+  level: medium
+  title: Загрузить все страницы
+  prompt: |
+    API отдаёт список по страницам: `fetchPage(cursor)` возвращает `{ items, next }`, где `next` — курсор следующей страницы или `null`. Первая страница — `fetchPage(null)`.
+
+    Напишите `loadAll(fetchPage, { maxPages = 100 } = {})`: загрузить страницы по очереди и вернуть все `items` одним массивом.
+    - Ошибка страницы — отклонение с этой ошибкой.
+    - Если страниц больше `maxPages` — отклонить с `new Error('Слишком много страниц')`: защита от бесконечного цикла, если API вернёт тот же курсор.
+  starter: |
+    async function loadAll(fetchPage, { maxPages = 100 } = {}) {
+      const first = await fetchPage(null)
+      return first.items
+    }
+  hints:
+    - 'Цикл, пока курсор не `null`: курсор следующего запроса — `next` из предыдущего ответа.'
+    - 'Считайте страницы и проверяйте лимит перед каждым запросом.'
+    - 'Каркас: `let cursor = null; do { … const page = await fetchPage(cursor); all.push(...page.items); cursor = page.next } while (cursor !== null)`'
+  tests: |
+    const api = (pages) => spy(async (cursor) => {
+      await sleep(1)
+      const index = cursor ?? 0
+      if (pages[index] === 'error') throw new Error(`страница ${index} упала`)
+      return { items: pages[index], next: index + 1 < pages.length ? index + 1 : null }
+    })
+    test('все элементы по порядку', async () => {
+      const fetchPage = api([[1, 2], [3], [4, 5]])
+      await expect(loadAll(fetchPage)).resolves.toEqual([1, 2, 3, 4, 5])
+      expect(fetchPage.calls.map(([cursor]) => cursor)).toEqual([null, 1, 2])
+    })
+    test('одна страница', async () => {
+      await expect(loadAll(api([['a']]))).resolves.toEqual(['a'])
+    })
+    test('ошибка страницы', async () => {
+      await expect(loadAll(api([[1], 'error', [3]]))).rejects.toThrow('страница 1 упала')
+    })
+    test('защита от бесконечного курсора', async () => {
+      const loop = spy(async () => ({ items: [1], next: 'тот же' }))
+      await expect(loadAll(loop, { maxPages: 5 })).rejects.toThrow('Слишком много страниц')
+      expect(loop.calls.length).toBe(5)
+    })
+  solution: |
+    async function loadAll(fetchPage, { maxPages = 100 } = {}) {
+      const all = []
+      let cursor = null
+      let pages = 0
+      do {
+        if (pages++ >= maxPages) throw new Error('Слишком много страниц')
+        const page = await fetchPage(cursor)
+        all.push(...page.items)
+        cursor = page.next
+      } while (cursor !== null)
+      return all
+    }
+  explain: |
+    **Страницы здесь нельзя грузить параллельно:** курсор следующей известен только из ответа предыдущей. Это законный случай для `await` в цикле.
+
+    **Лимит страниц** — дешёвая страховка: ошибка на сервере, которая возвращает тот же курсор, иначе повесит вкладку бесконечными запросами.
+
+    **А если** список огромный и показывать нужно по мере загрузки? Сделайте асинхронный генератор `async function* pages()`, который отдаёт страницу за страницей, и перебирайте его через `for await…of` — тема «Итераторы, генераторы».
+
+- key: code-poll-until
+  kind: code
+  level: hard
+  title: Опрос до готовности
+  prompt: |
+    Сервер готовит отчёт, готовность проверяет `check()` — асинхронная функция, возвращающая отчёт или `null`. Напишите `pollUntil(check, { interval = 1000, timeout = 30000, signal } = {})`:
+    - вызывать `check()`, пока она не вернёт не-`null` значение, и вернуть его;
+    - между вызовами ждать `interval` мс; вызовы не перекрываются: следующий — только после завершения предыдущего;
+    - если `timeout` истёк — отклонить с `new Error('Timeout')` и больше не вызывать `check`;
+    - если `signal` отменён — отклонить с `signal.reason` (и сразу, если он отменён заранее);
+    - ошибка `check()` — отклонение с этой ошибкой.
+  starter: |
+    async function pollUntil(check, { interval = 1000, timeout = 30000, signal } = {}) {
+      return check()
+    }
+  hints:
+    - 'Основа — цикл `while (true)`: вызвать `check`, вернуть результат, если он не `null`, иначе подождать.'
+    - 'Дедлайн считайте один раз: `const deadline = Date.now() + timeout`. Перед каждым вызовом проверяйте, не истёк ли он.'
+    - 'Отмену проверяйте в начале каждой итерации через `signal?.throwIfAborted()` — он бросит `signal.reason`.'
+    - 'Пауза должна прерываться отменой: промис с `setTimeout` и обработчиком `abort` на сигнале, который отклоняет промис с `signal.reason` и очищает таймер.'
+  tests: |
+    test('возвращает первый готовый результат', async () => {
+      let n = 0
+      const check = spy(async () => (++n < 3 ? null : 'отчёт'))
+      await expect(pollUntil(check, { interval: 5 })).resolves.toBe('отчёт')
+      expect(check.calls.length).toBe(3)
+    })
+    test('ждёт interval между вызовами и не перекрывает их', async () => {
+      const stats = concurrency()
+      const times = []
+      const start = Date.now()
+      let n = 0
+      const check = stats.track(async () => { times.push(Date.now() - start); await sleep(5); return ++n < 3 ? null : 'ок' })
+      await pollUntil(check, { interval: 20 })
+      expect(stats.peak).toBe(1)
+      expect(times[1] - times[0]).toBeGreaterThan(20)
+    })
+    test('таймаут', async () => {
+      const check = spy(async () => null)
+      await expect(pollUntil(check, { interval: 10, timeout: 35 })).rejects.toThrow('Timeout')
+      const calls = check.calls.length
+      await sleep(40)
+      expect(check.calls.length).toBe(calls)
+    })
+    test('отмена во время паузы — сразу, с причиной', async () => {
+      const controller = new AbortController()
+      const check = spy(async () => null)
+      const started = Date.now()
+      const polling = pollUntil(check, { interval: 1000, signal: controller.signal })
+      setTimeout(() => controller.abort(new Error('ушли со страницы')), 20)
+      await expect(polling).rejects.toThrow('ушли со страницы')
+      expect(Date.now() - started).toBeLessThan(500)
+      expect(check.calls.length).toBe(1)
+    })
+    test('заранее отменённый сигнал — без вызовов', async () => {
+      const check = spy(async () => 'ок')
+      await expect(pollUntil(check, { signal: AbortSignal.abort(new Error('отменено')) })).rejects.toThrow('отменено')
+      expect(check.calls.length).toBe(0)
+    })
+    test('ошибка check пробрасывается', async () => {
+      await expect(pollUntil(flaky(1), { interval: 1 })).rejects.toThrow('сбой 1')
+    })
+  solution: |
+    function pause(ms, signal) {
+      return new Promise((resolve, reject) => {
+        const onAbort = () => {
+          clearTimeout(timer)
+          reject(signal.reason)
+        }
+        const timer = setTimeout(() => {
+          signal?.removeEventListener('abort', onAbort)
+          resolve()
+        }, ms)
+        signal?.addEventListener('abort', onAbort, { once: true })
+      })
+    }
+
+    async function pollUntil(check, { interval = 1000, timeout = 30000, signal } = {}) {
+      const deadline = Date.now() + timeout
+      while (true) {
+        signal?.throwIfAborted()
+        if (Date.now() >= deadline) throw new Error('Timeout')
+        const result = await check()
+        if (result !== null) return result
+        await pause(Math.min(interval, Math.max(0, deadline - Date.now())), signal)
+      }
+    }
+  explain: |
+    **Цикл с `await` вместо `setInterval`.** `setInterval` вызвал бы `check` по часам, даже если предыдущий вызов ещё идёт: запросы бы перекрывались. Цикл с паузой после ответа гарантирует «по одному».
+
+    **Пауза, которую можно прервать.** Обычный `sleep` не знает про отмену: пользователь ушёл, а функция ещё секунду ждёт. Обработчик `abort` отклоняет паузу сразу и убирает таймер. А `removeEventListener` после паузы не даёт копиться обработчикам на долгоживущем сигнале — это утечка.
+
+    **Пауза не дольше остатка до дедлайна** — иначе таймаут сработал бы позже обещанного.
+
+    **В жизни** вместо опроса лучше SSE или WebSocket, если сервер их умеет. Опрос — когда не умеет; тогда добавляют растущий интервал.

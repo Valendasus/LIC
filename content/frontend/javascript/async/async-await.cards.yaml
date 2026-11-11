@@ -1,0 +1,84 @@
+# Карточки темы «async/await и обработка ошибок». Ключи не переименовывать.
+
+- key: async-function
+  type: term
+  front: '`async`-функция'
+  back: Функция, которая всегда возвращает промис. `return x` выполняет его значением `x`, брошенная ошибка — отклоняет. Внутри можно писать `await`.
+  reverse: true
+
+- key: await-def
+  type: term
+  front: '`await`'
+  back: Приостанавливает `async`-функцию до завершения промиса и возвращает его значение или бросает его ошибку. Поток не блокирует — продолжение идёт микрозадачей.
+  reverse: true
+
+- key: sync-until-await
+  type: qa
+  front: Какая часть `async`-функции выполняется синхронно?
+  back: Всё до первого `await`. Код после `await` — микрозадача, даже если ожидаемый промис уже выполнен.
+
+- key: await-non-promise
+  type: qa
+  front: Что будет при `await` не-промиса, например `await 42`?
+  back: Значение оборачивается в выполненный промис. Результат — `42`, но функция всё равно уступит до следующей микрозадачи.
+
+- key: throw-in-async
+  type: qa
+  front: '`async`-функция бросила ошибку до первого `await`. Поймает ли её внешний `try`?'
+  back: Нет. Любая ошибка в `async`-функции отклоняет её промис. Поймать — через `await` внутри `try` или через `.catch`.
+
+- key: return-await
+  type: code
+  front: |
+    Чем отличаются?
+    ```js
+    try { return load() } catch { … }
+    try { return await load() } catch { … }
+    ```
+  back: Первый возвращает промис мимо `try` — его отклонение `catch` не поймает. Второй ждёт внутри `try`, и `catch` сработает. Вне `try/catch` разницы нет.
+
+- key: seq-vs-par
+  type: qa
+  front: Как загрузить два независимых ресурса параллельно?
+  back: 'Запустить оба до ожидания: `const [a, b] = await Promise.all([loadA(), loadB()])`. Два `await` подряд — последовательная загрузка, время складывается.'
+
+- key: foreach-async
+  type: code
+  front: |
+    Что не так?
+    ```js
+    async function saveAll(items) {
+      items.forEach(async (item) => await save(item))
+    }
+    ```
+  back: '`forEach` не ждёт промисы колбэка: функция завершится сразу, ошибки станут необработанными. Нужно `for…of` с `await` (по очереди) или `await Promise.all(items.map(save))`.'
+
+- key: fire-and-forget
+  type: qa
+  front: Чем опасен вызов `async`-функции без `await` и `.catch`?
+  back: Её ошибка станет необработанным отклонением — `unhandledrejection` в браузере, падение процесса в Node. Если результат не нужен, ошибку всё равно обрабатывают явно.
+
+- key: effect-async
+  type: qa
+  front: Как правильно загрузить данные в `useEffect`?
+  back: Объявить `async`-функцию внутри эффекта и вызвать её. Вернуть очистку — `controller.abort()` или флаг `ignore`, чтобы ответ после размонтирования или устаревший ответ не записался в состояние.
+
+- key: for-await-of
+  type: term
+  front: '`for await…of`'
+  back: Цикл по асинхронно итерируемому объекту — асинхронному генератору, потоку `ReadableStream`, страницам API. Каждую итерацию ждёт.
+
+- key: top-level-await
+  type: term
+  front: Top-level await
+  back: '`await` на верхнем уровне ES-модуля (ES2022). Модули, импортирующие его, ждут выполнения. В классических скриптах — синтаксическая ошибка.'
+
+- key: array-from-async
+  type: term
+  front: '`Array.fromAsync`'
+  back: ES2026. Собирает массив из асинхронно итерируемого объекта, ожидая каждый элемент. Аналог `Array.from` для `for await`.
+
+- key: await-using
+  type: term
+  front: '`await using`'
+  back: ES2027. Объявление ресурса, который в конце блока асинхронно освобождается через `[Symbol.asyncDispose]()` — даже при ошибке. В Chrome и Firefox есть, в Safari пока нет.
