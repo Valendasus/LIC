@@ -225,7 +225,15 @@
             - Обрабатывать ошибки через try/catch/finally, не теряя и не глотая их
             - Выбирать между последовательной и параллельной загрузкой и находить ошибку forEach(async)
             - Писать очередь задач, постраничную загрузку и опрос с таймаутом и отменой
-        - { slug: combinators, title: 'Promise.all, allSettled, race, any', grade: J }
+        - slug: combinators
+          title: 'Promise.all, allSettled, race, any'
+          grade: J
+          content: true
+          goals:
+            - Объяснить разницу all, allSettled, race и any, включая пустой вход и порядок результатов
+            - Выбрать комбинатор под задачу и увидеть, когда не подходит ни один
+            - Помнить, что комбинаторы ничего не отменяют, и отменять лишние операции через AbortController
+            - Написать свои allSettled, any, all по ключам и подстраховочный запрос
         - { slug: cancellation, title: 'Отмена и гонки запросов', grade: M }
     - { slug: modules, title: 'Модули: ESM и CommonJS', grade: J }
     - { slug: errors, title: 'Ошибки и их обработка', grade: J }

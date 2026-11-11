@@ -1,0 +1,78 @@
+# Карточки темы «Promise.all, allSettled, race, any». Ключи не переименовывать.
+
+- key: promise-all
+  type: term
+  front: '`Promise.all`'
+  back: Ждёт все промисы и выполняется массивом значений в порядке входа. Отклоняется при первой ошибке, не дожидаясь остальных.
+  reverse: true
+
+- key: promise-all-settled
+  type: term
+  front: '`Promise.allSettled`'
+  back: 'ES2020. Ждёт завершения всех и никогда не отклоняется. Результат — `{ status: "fulfilled", value }` или `{ status: "rejected", reason }` для каждого, в порядке входа.'
+  reverse: true
+
+- key: promise-race
+  type: term
+  front: '`Promise.race`'
+  back: Завершается вместе с первым завершившимся промисом — успехом или ошибкой.
+  reverse: true
+
+- key: promise-any
+  type: term
+  front: '`Promise.any`'
+  back: 'ES2021. Выполняется первым успехом, ошибки до него пропускает. Если отклонены все — `AggregateError` с полем `errors`.'
+  reverse: true
+
+- key: aggregate-error
+  type: term
+  front: '`AggregateError`'
+  back: Встроенная ошибка с несколькими причинами в поле `errors`. Её бросает `Promise.any`, когда отклонены все промисы.
+
+- key: empty-inputs
+  type: qa
+  front: Что делают комбинаторы с пустым массивом?
+  back: '`all` и `allSettled` сразу выполняются с `[]`, `any` сразу отклоняется с `AggregateError`, а `race` не завершается никогда.'
+
+- key: result-order
+  type: qa
+  front: В каком порядке `Promise.all` отдаёт результаты?
+  back: В порядке входного массива, а не в порядке завершения. Поэтому деструктуризация `const [a, b] = await Promise.all([…])` надёжна.
+
+- key: non-promises
+  type: qa
+  front: Что, если во входе комбинатора есть не-промисы?
+  back: Каждый элемент оборачивается через `Promise.resolve`, то есть считается уже выполненным. На вход подходит любое итерируемое, не только массив.
+
+- key: no-cancellation
+  type: qa
+  front: Отменяют ли комбинаторы остальные операции?
+  back: Нет. После отклонения `all` или победы в `race` и `any` остальные промисы продолжают выполняться. Отмена — через `AbortController`, передав `signal` каждой операции.
+
+- key: race-vs-any
+  type: qa
+  front: Чем `race` отличается от `any`?
+  back: '`race` берёт первый **завершившийся**, даже если это ошибка. `any` пропускает ошибки и берёт первый **успех**.'
+
+- key: choose-combinator
+  type: qa
+  front: Какой комбинатор для какой задачи?
+  back: |
+    - всё обязательно — `all`
+    - частичный успех, нужны все исходы — `allSettled`
+    - первый успешный из равноценных источников — `any`
+    - первый завершившийся, например гонка с таймаутом — `race`
+
+- key: race-timeout
+  type: code
+  front: |
+    Чем плох такой таймаут?
+    ```js
+    Promise.race([load(), sleep(5000).then(() => { throw new Error('Timeout') })])
+    ```
+  back: Таймер висит, даже если `load()` давно ответил, а при таймауте сам запрос продолжает работать. Для `fetch` лучше `AbortSignal.timeout(ms)`, в своём коде — очищать таймер в `finally`.
+
+- key: all-keyed
+  type: term
+  front: '`Promise.allKeyed`'
+  back: 'Предложение TC39 на стадии 3: как `Promise.all`, но для объекта — результаты по тем же ключам. Есть и `allSettledKeyed`. В браузерах пока нет.'

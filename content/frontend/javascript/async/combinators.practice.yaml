@@ -1,0 +1,475 @@
+# Практика темы «Promise.all, allSettled, race, any». Ответы в output проверяются запуском кода (npm run content:run).
+# Свой Promise.all, таймаут через race и mapLimit — в теме «Event loop», здесь не повторяются.
+
+- key: out-all-order
+  kind: output
+  code: |
+    const wait = (ms, v) => new Promise((r) => setTimeout(() => { console.log('готов', v); r(v) }, ms))
+    Promise.all([wait(20, 'A'), wait(5, 'B'), 'C']).then((all) => console.log(all.join(' ')))
+  answer:
+    - готов B
+    - готов A
+    - A B C
+  explain: Завершаются промисы в своём порядке, но результат `Promise.all` — в порядке **входа**. Не-промис `'C'` считается уже выполненным.
+
+- key: out-all-fail-fast
+  kind: output
+  code: |
+    const wait = (ms, v, fail) => new Promise((res, rej) => setTimeout(() => { console.log('завершился', v); fail ? rej(new Error(v)) : res(v) }, ms))
+    Promise.all([wait(30, 'медленный'), wait(5, 'упал', true)])
+      .then(() => console.log('все готовы'))
+      .catch((e) => console.log('all отклонён:', e.message))
+  answer:
+    - завершился упал
+    - 'all отклонён: упал'
+    - завершился медленный
+  explain: '`Promise.all` отклоняется при первой ошибке и не ждёт остальных. Но «медленный» продолжает работать: комбинатор ничего не отменяет.'
+
+- key: out-all-settled
+  kind: output
+  code: |
+    Promise.allSettled([Promise.resolve(1), Promise.reject(new Error('нет')), 3])
+      .then((results) => results.forEach((r) => console.log(r.status, r.status === 'fulfilled' ? r.value : r.reason.message)))
+  answer:
+    - fulfilled 1
+    - rejected нет
+    - fulfilled 3
+  explain: '`allSettled` никогда не отклоняется. Каждый результат — `{ status: "fulfilled", value }` или `{ status: "rejected", reason }`, порядок — как на входе.'
+
+- key: out-race-sync
+  kind: output
+  code: |
+    const slow = new Promise((r) => setTimeout(() => r('медленный'), 10))
+    Promise.race([slow, 'сразу']).then((x) => console.log(x))
+  answer:
+    - сразу
+  explain: Не-промис превращается в уже выполненный промис и выигрывает гонку. `race` берёт первый **завершившийся** — неважно, успехом или ошибкой.
+
+- key: out-any-aggregate
+  kind: output
+  code: |
+    Promise.any([Promise.reject(new Error('a')), Promise.reject(new Error('b'))])
+      .catch((e) => console.log(e.name, e.errors.map((x) => x.message).join(',')))
+  answer:
+    - AggregateError a,b
+  explain: '`any` отклоняется, только когда отклонены все. Ошибка — `AggregateError`, все причины — в поле `errors`, в порядке входа.'
+
+- key: out-any-vs-race
+  kind: output
+  code: |
+    const p = Promise.reject(new Error('первая'))
+    const q = new Promise((r) => setTimeout(() => r('вторая'), 5))
+    Promise.any([p, q]).then((x) => console.log('any:', x))
+    Promise.race([p, q]).catch((e) => console.log('race:', e.message))
+  answer:
+    - 'race: первая'
+    - 'any: вторая'
+  explain: '`race` завершается с первым **завершившимся** — здесь это ошибка. `any` пропускает ошибки и ждёт первый **успех**.'
+
+- key: out-empty-inputs
+  kind: output
+  code: |
+    Promise.race([]).then(() => console.log('race выполнился'))
+    Promise.any([]).catch((e) => console.log('any:', e.name))
+    Promise.all([]).then((x) => console.log('all:', x.length))
+    setTimeout(() => console.log('таймер'), 10)
+  answer:
+    - 'any: AggregateError'
+    - 'all: 0'
+    - таймер
+  explain: 'Пустой вход: `all` и `allSettled` сразу выполняются с `[]`, `any` сразу отклоняется, а `race` **не завершается никогда**. Если список может быть пустым — проверяйте заранее.'
+
+- key: quiz-choose-mirrors
+  kind: quiz
+  question: Один и тот же файл лежит на трёх CDN. Нужно получить его с любого, кто ответит успешно первым; ошибки отдельных CDN не важны, пока работает хоть один. Какой комбинатор?
+  options:
+    - text: '`Promise.any`'
+      correct: true
+    - text: '`Promise.race`'
+      why: Если первым быстро упадёт один CDN, `race` отклонится, хотя другие ещё могли ответить.
+    - text: '`Promise.all`'
+      why: Нужны не все три ответа, а один, и одна ошибка не должна ломать результат.
+    - text: '`Promise.allSettled`'
+      why: Он ждёт все три, даже если первый уже ответил.
+  explain: '`any` — «первый успех». Если упадут все — `AggregateError` со всеми причинами. Остальные запросы после победы стоит отменить через `AbortController`.'
+
+- key: quiz-choose-dashboard
+  kind: quiz
+  question: Дашборд из пяти виджетов. Каждый загружается своим запросом, и сбой одного не должен скрывать остальные. Какой комбинатор?
+  options:
+    - text: '`Promise.allSettled` — показать пришедшее и ошибку для остального'
+      correct: true
+    - text: '`Promise.all` с `catch` в конце'
+      why: Первая же ошибка отклонит всё, и пришедшие данные потеряются.
+    - text: '`Promise.race`'
+      why: Нужны все виджеты, а не первый.
+    - text: '`Promise.any`'
+      why: '`any` даст только один результат — первый успешный.'
+  explain: 'Частичный успех — работа для `allSettled`. Ещё лучше — каждому виджету свой запрос и своё состояние загрузки: тогда быстрые виджеты не ждут медленные.'
+
+- key: quiz-no-cancel
+  kind: quiz
+  question: '`Promise.race([fetch(a), fetch(b)])` — запрос `a` ответил первым. Что с запросом `b`?'
+  options:
+    - text: Продолжает выполняться, пока не завершится сам — ответ просто никто не ждёт
+      correct: true
+    - text: Отменяется автоматически
+      why: Комбинаторы ничего не отменяют. Отменить запрос можно только через `AbortController` и `signal`.
+    - text: Его ответ заменит результат `race`, когда придёт
+      why: Промис меняет состояние один раз — результат `race` уже определён.
+    - text: Браузер бросит ошибку «unhandled rejection»
+      why: '`race` подписан на оба промиса, поэтому их отклонения обработаны.'
+  explain: Проигравшие продолжают тратить сеть и сервер. Если они не нужны — передайте каждому `signal` и отмените после победы.
+
+- key: quiz-race-timeout-leak
+  kind: quiz
+  question: 'Таймаут сделан так: `Promise.race([load(), new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout")), 5000))])`. `load()` ответил за 100 мс. Что не так?'
+  options:
+    - text: Таймер остаётся висеть ещё почти 5 секунд, а запрос по таймауту не отменится
+      correct: true
+    - text: Через 5 секунд результат станет ошибкой Timeout
+      why: Результат `race` уже определён, позднее отклонение его не изменит.
+    - text: Всё правильно, так и нужно
+      why: Работает, но таймер не очищается, а сам запрос при таймауте продолжает работать.
+    - text: '`race` не умеет работать с таймерами'
+  explain: 'Надёжнее для `fetch` — `AbortSignal.timeout(ms)`: запрос действительно отменится. Если нужен свой таймаут — очищайте таймер в `finally` (задача «Промис с таймаутом» в теме «Event loop»).'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+# Тесты видят функции решения напрямую. Доступны test, expect, spy, sleep и помощники из docs/TRAINERS.md.
+
+- key: code-all-settled
+  kind: code
+  level: easy
+  title: Свой Promise.allSettled
+  prompt: |
+    Напишите `promiseAllSettled(values)` — аналог `Promise.allSettled` для массива.
+    - Результат никогда не отклоняется.
+    - Каждый элемент — `{ status: 'fulfilled', value }` или `{ status: 'rejected', reason }`, в порядке входа.
+    - Не-промисы считаются выполненными. Пустой массив — `[]`.
+
+    Встроенные `Promise.all`, `allSettled`, `any` и `race` не используйте.
+  starter: |
+    function promiseAllSettled(values) {
+      // ваш код
+    }
+  hints:
+    - 'Если каждый элемент превратить в промис, который **всегда выполняется** с объектом статуса, задача сведётся к «дождаться всех».'
+  tests: |
+    test('статусы в порядке входа', async () => {
+      const result = await promiseAllSettled([sleep(10).then(() => 'a'), Promise.reject(new Error('b')), 'c'])
+      expect(result.map((r) => r.status)).toEqual(['fulfilled', 'rejected', 'fulfilled'])
+      expect(result[0].value).toBe('a')
+      expect(result[1].reason.message).toBe('b')
+      expect(result[2].value).toBe('c')
+    })
+    test('никогда не отклоняется', async () => {
+      await expect(promiseAllSettled([Promise.reject(new Error('x'))])).resolves.toHaveLength(1)
+    })
+    test('пустой массив', async () => {
+      await expect(promiseAllSettled([])).resolves.toEqual([])
+    })
+    test('без встроенных комбинаторов', async () => {
+      const saved = { all: Promise.all, allSettled: Promise.allSettled }
+      Promise.all = Promise.allSettled = () => { throw new Error('встроенный комбинатор запрещён') }
+      try {
+        await expect(promiseAllSettled([1])).resolves.toEqual([{ status: 'fulfilled', value: 1 }])
+      } finally {
+        Object.assign(Promise, saved)
+      }
+    })
+  solution: |
+    function promiseAllSettled(values) {
+      return new Promise((resolve) => {
+        const results = new Array(values.length)
+        let left = values.length
+        if (left === 0) return resolve(results)
+        values.forEach((value, i) => {
+          Promise.resolve(value)
+            .then((v) => ({ status: 'fulfilled', value: v }), (reason) => ({ status: 'rejected', reason }))
+            .then((result) => {
+              results[i] = result
+              if (--left === 0) resolve(results)
+            })
+        })
+      })
+    }
+  explain: |
+    **Приём — превратить ошибку в значение.** `then(onOk, onFail)` с обоими обработчиками всегда даёт выполненный промис с описанием исхода. Дальше — та же схема, что у `Promise.all`: счётчик и запись по индексу.
+
+    **Можно и через `Promise.all`:** `Promise.all(values.map((v) => Promise.resolve(v).then(ok, fail)))` — короче, но в задаче встроенные комбинаторы запрещены, чтобы был виден механизм.
+
+- key: code-all-keyed
+  kind: code
+  level: easy
+  title: Promise.all для объекта
+  prompt: |
+    `const [user, posts, settings] = await Promise.all([…])` легко перепутать местами. Напишите `allKeyed(obj)`: принимает объект промисов и возвращает промис объекта с теми же ключами и результатами.
+    - Первая ошибка отклоняет результат.
+    - Не-промисы считаются выполненными, пустой объект — `{}`.
+
+    Так работает предложение TC39 `Promise.allKeyed` — оно на стадии 3, в браузерах его пока нет.
+  starter: |
+    async function allKeyed(obj) {
+      return obj
+    }
+  hints:
+    - '`Object.entries` даёт пары ключ–значение, `Object.fromEntries` собирает объект обратно. Между ними — `Promise.all` по значениям.'
+  tests: |
+    test('результаты по ключам', async () => {
+      const result = await allKeyed({ user: sleep(10).then(() => 'Аня'), posts: Promise.resolve([1, 2]), total: 3 })
+      expect(result).toEqual({ user: 'Аня', posts: [1, 2], total: 3 })
+    })
+    test('первая ошибка отклоняет', async () => {
+      await expect(allKeyed({ a: Promise.resolve(1), b: Promise.reject(new Error('нет b')) })).rejects.toThrow('нет b')
+    })
+    test('пустой объект', async () => {
+      await expect(allKeyed({})).resolves.toEqual({})
+    })
+  solution: |
+    async function allKeyed(obj) {
+      const entries = Object.entries(obj)
+      const values = await Promise.all(entries.map(([, value]) => value))
+      return Object.fromEntries(entries.map(([key], i) => [key, values[i]]))
+    }
+  explain: |
+    **Порядок `Object.entries` стабилен**, поэтому `values[i]` соответствует `entries[i]`. Сами промисы при этом ждутся параллельно.
+
+    **Зачем это в языке.** Деструктуризация массива зависит от позиций: добавили запрос в середину — и все переменные сдвинулись. По ключам перепутать нельзя. В предложении Await Dictionary есть и `Promise.allSettledKeyed`.
+
+- key: code-promise-any
+  kind: code
+  level: medium
+  title: Свой Promise.any
+  prompt: |
+    Напишите `promiseAny(values)` — аналог `Promise.any` для массива.
+    - Выполняется значением **первого успешного** элемента.
+    - Если отклонены все — отклоняется с `new AggregateError(errors, 'All promises were rejected')`, где `errors` — причины в порядке входа.
+    - Пустой массив — сразу `AggregateError` с пустым `errors`.
+    - Не-промисы — уже выполненные.
+
+    Встроенные `Promise.all`, `allSettled`, `any` и `race` не используйте.
+  starter: |
+    function promiseAny(values) {
+      return Promise.resolve(values[0])
+    }
+  hints:
+    - 'Зеркально к `Promise.all`: там счётчик успехов и первая ошибка, здесь — счётчик ошибок и первый успех.'
+    - 'Ошибки пишите по индексу, а не `push`: порядок `errors` — по входу, а не по времени.'
+  tests: |
+    test('первый успех, ошибки до него не мешают', async () => {
+      const result = await promiseAny([Promise.reject(new Error('a')), sleep(20).then(() => 'медленный'), sleep(5).then(() => 'быстрый')])
+      expect(result).toBe('быстрый')
+    })
+    test('все отклонены — AggregateError с причинами по порядку входа', async () => {
+      const error = await promiseAny([sleep(10).then(() => { throw new Error('первая') }), Promise.reject(new Error('вторая'))]).catch((e) => e)
+      expect(error).toBeInstanceOf(AggregateError)
+      expect(error.errors.map((e) => e.message)).toEqual(['первая', 'вторая'])
+    })
+    test('пустой массив — сразу AggregateError', async () => {
+      const error = await promiseAny([]).catch((e) => e)
+      expect(error).toBeInstanceOf(AggregateError)
+      expect(error.errors).toEqual([])
+    })
+    test('не-промис — сразу успех', async () => {
+      await expect(promiseAny([sleep(10), 'сразу'])).resolves.toBe('сразу')
+    })
+    test('без встроенных комбинаторов', async () => {
+      const saved = { any: Promise.any, all: Promise.all }
+      Promise.any = Promise.all = () => { throw new Error('встроенный комбинатор запрещён') }
+      try {
+        await expect(promiseAny([Promise.reject(new Error('x')), 1])).resolves.toBe(1)
+      } finally {
+        Object.assign(Promise, saved)
+      }
+    })
+  solution: |
+    function promiseAny(values) {
+      return new Promise((resolve, reject) => {
+        const errors = new Array(values.length)
+        let left = values.length
+        if (left === 0) return reject(new AggregateError([], 'All promises were rejected'))
+        values.forEach((value, i) => {
+          Promise.resolve(value).then(resolve, (error) => {
+            errors[i] = error
+            if (--left === 0) reject(new AggregateError(errors, 'All promises were rejected'))
+          })
+        })
+      })
+    }
+  explain: |
+    **Зеркало `Promise.all`.** Успех сразу вызывает `resolve` — повторные вызовы промис игнорирует, поэтому «первый успех» получается сам собой. Ошибки копятся по индексу, и только когда их столько же, сколько элементов, — `AggregateError`.
+
+    **Пустой вход** — отдельная ветка: иначе ни один колбэк не вызовется, и промис повиснет навсегда.
+
+    **`AggregateError`** — встроенный тип ошибки (ES2021) с полем `errors`. Его удобно использовать и в своём коде, когда нужно сообщить о нескольких причинах сразу.
+
+- key: code-load-widgets
+  kind: code
+  level: medium
+  title: Дашборд с частичным успехом
+  prompt: |
+    Напишите `loadWidgets(loaders)`. `loaders` — объект `{ имя: () => Promise }`. Загрузите все виджеты **параллельно** и верните `{ data, errors }`:
+    - `data[имя]` — результат успешных загрузчиков;
+    - `errors[имя]` — сообщение ошибки (`error.message`) упавших;
+    - упавший загрузчик не мешает остальным; если загрузчик бросил ошибку синхронно — это тоже ошибка виджета.
+  starter: |
+    async function loadWidgets(loaders) {
+      const data = {}
+      for (const [name, load] of Object.entries(loaders)) data[name] = await load()
+      return { data, errors: {} }
+    }
+  hints:
+    - 'Параллельно и без отказа всего из-за одной ошибки — какой комбинатор?'
+    - 'Синхронный бросок внутри `load()` до создания промиса — `Promise.try(load)` или `Promise.resolve().then(load)` превратят его в отклонение.'
+    - 'Результаты `allSettled` идут в порядке входа — сопоставьте их с ключами из `Object.keys`.'
+  tests: |
+    test('пришедшее — в data, упавшее — в errors', async () => {
+      const result = await loadWidgets({
+        sales: async () => { await sleep(5); return 100 },
+        users: async () => { throw new Error('сервис недоступен') },
+        tasks: async () => [1, 2],
+      })
+      expect(result).toEqual({ data: { sales: 100, tasks: [1, 2] }, errors: { users: 'сервис недоступен' } })
+    })
+    test('параллельно', async () => {
+      const stats = concurrency()
+      await loadWidgets({ a: stats.track(() => sleep(10)), b: stats.track(() => sleep(10)), c: stats.track(() => sleep(10)) })
+      expect(stats.peak).toBe(3)
+    })
+    test('синхронная ошибка загрузчика — ошибка виджета', async () => {
+      const result = await loadWidgets({ broken: () => { throw new Error('сразу') }, ok: async () => 'да' })
+      expect(result).toEqual({ data: { ok: 'да' }, errors: { broken: 'сразу' } })
+    })
+  solution: |
+    async function loadWidgets(loaders) {
+      const names = Object.keys(loaders)
+      const results = await Promise.allSettled(names.map((name) => Promise.resolve().then(loaders[name])))
+      const data = {}
+      const errors = {}
+      results.forEach((result, i) => {
+        if (result.status === 'fulfilled') data[names[i]] = result.value
+        else errors[names[i]] = result.reason.message
+      })
+      return { data, errors }
+    }
+  explain: |
+    **`allSettled` — частичный успех.** Ни одна ошибка не отменяет остальные результаты, а каждая сопоставлена со своим виджетом.
+
+    **Синхронный бросок.** `loaders[name]()` вызвался бы прямо в `map` и бросил бы исключение до `allSettled` — вся функция упала бы. `Promise.resolve().then(loader)` (или `Promise.try`) переносит вызов внутрь промиса.
+
+    **В интерфейсе** ещё лучше не ждать все виджеты: пусть каждый грузится сам и показывает своё состояние. `allSettled` уместен, когда результат нужен целиком — для экспорта, отчёта, серверного рендера.
+
+- key: code-hedged
+  kind: code
+  level: hard
+  title: Подстраховочный запрос
+  prompt: |
+    Медленный ответ сервера иногда «застревает». Приём hedged request: если ответ не пришёл за `delay` мс, отправить второй такой же запрос и взять тот, что ответит первым.
+
+    Напишите `hedged(request, { delay = 100 } = {})`. `request(signal)` — асинхронная функция, принимающая `AbortSignal`.
+    - Первый запрос — сразу. Второй — через `delay` мс, если к этому времени нет успеха. Больше двух запросов не бывает.
+    - Если первый **упал** раньше `delay` — второй отправляется сразу.
+    - Первый успех — результат; второй запрос при этом отменяется через его `signal`.
+    - Если упали оба — отклонение `AggregateError` с обеими ошибками.
+  starter: |
+    function hedged(request, { delay = 100 } = {}) {
+      return request(new AbortController().signal)
+    }
+  hints:
+    - 'Свой `new Promise` с флагом `done`: первый успех вызывает `resolve`, остальные исходы после этого игнорируются.'
+    - 'Функция `start()` создаёт `AbortController`, запоминает его и вызывает `request`. Её вызывают сразу и по таймеру — но не больше двух раз.'
+    - 'На успехе: `done = true`, очистить таймер, отменить все остальные контроллеры, `resolve`. На ошибке: если второй ещё не стартовал — стартовать сразу; если упали все стартовавшие — `AggregateError`.'
+    - 'Проверка «упали все»: `errors.length === controllers.length` и стартовало уже два.'
+  tests: |
+    // Запрос по плану: каждый вызов — { ms, fail }. Отмена через signal отклоняет запрос.
+    const fakeRequest = (plan) => {
+      const signals = []
+      const fn = spy((signal) => {
+        const { ms, fail } = plan[signals.length]
+        signals.push(signal)
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => (fail ? reject(new Error(`сбой ${signals.length}`)) : resolve(`ответ за ${ms}`)), ms)
+          signal.addEventListener('abort', () => { clearTimeout(timer); reject(new Error('отменён')) })
+        })
+      })
+      return Object.assign(fn, { signals })
+    }
+
+    test('быстрый ответ — один запрос', async () => {
+      const request = fakeRequest([{ ms: 5 }])
+      await expect(hedged(request, { delay: 50 })).resolves.toBe('ответ за 5')
+      await sleep(60)
+      expect(request.calls.length).toBe(1)
+    })
+    test('медленный первый: через delay второй, победитель отменяет проигравшего', async () => {
+      const request = fakeRequest([{ ms: 200 }, { ms: 10 }])
+      const start = Date.now()
+      await expect(hedged(request, { delay: 30 })).resolves.toBe('ответ за 10')
+      expect(Date.now() - start).toBeLessThan(150)
+      expect(request.signals[0].aborted).toBe(true)
+      expect(request.signals[1].aborted).toBe(false)
+    })
+    test('первый упал раньше delay — второй сразу', async () => {
+      const request = fakeRequest([{ ms: 5, fail: true }, { ms: 5 }])
+      const start = Date.now()
+      await expect(hedged(request, { delay: 500 })).resolves.toBe('ответ за 5')
+      expect(Date.now() - start).toBeLessThan(200)
+      expect(request.calls.length).toBe(2)
+    })
+    test('упали оба — AggregateError', async () => {
+      const request = fakeRequest([{ ms: 20, fail: true }, { ms: 5, fail: true }])
+      const error = await hedged(request, { delay: 10 }).catch((e) => e)
+      expect(error).toBeInstanceOf(AggregateError)
+      expect(error.errors).toHaveLength(2)
+    })
+    test('не больше двух запросов', async () => {
+      const request = fakeRequest([{ ms: 60 }, { ms: 60 }, { ms: 1 }])
+      await hedged(request, { delay: 10 })
+      expect(request.calls.length).toBe(2)
+    })
+  solution: |
+    function hedged(request, { delay = 100 } = {}) {
+      return new Promise((resolve, reject) => {
+        const controllers = []
+        const errors = []
+        let done = false
+        let timer
+
+        function start() {
+          if (done || controllers.length === 2) return
+          const controller = new AbortController()
+          controllers.push(controller)
+          request(controller.signal).then(
+            (value) => {
+              if (done) return
+              done = true
+              clearTimeout(timer)
+              for (const other of controllers) if (other !== controller) other.abort()
+              resolve(value)
+            },
+            (error) => {
+              if (done) return
+              errors.push(error)
+              if (controllers.length < 2) {
+                clearTimeout(timer)
+                start()
+              } else if (errors.length === controllers.length) {
+                done = true
+                reject(new AggregateError(errors, 'Все попытки неудачны'))
+              }
+            },
+          )
+        }
+
+        start()
+        timer = setTimeout(start, delay)
+      })
+    }
+  explain: |
+    **Почему не `Promise.any` напрямую.** Второй запрос стартует не сразу, а по таймеру или по ошибке первого. Список промисов заранее неизвестен, поэтому нужен свой `new Promise` и явное состояние.
+
+    **Отмена проигравшего.** Комбинаторы не отменяют операции. Без `abort()` второй запрос продолжил бы нагружать сервер — а приём как раз для перегруженного сервера.
+
+    **Флаг `done`** защищает от поздних исходов: ответ проигравшего, его ошибка «отменён» и срабатывание таймера после победы ничего не меняют.
+
+    **Где применяют:** чтение, а не запись — повторная запись без идемпотентности опасна. Задержку `delay` выбирают по 95-му перцентилю времени ответа, чтобы подстраховка срабатывала только для «хвоста» медленных запросов.
