@@ -1,0 +1,329 @@
+# Практика темы «iframe: изоляция, sandbox и общение с окном». Окна и наблюдатели — fakeWindows() и fakeObserver().
+
+- key: quiz-empty-sandbox
+  kind: quiz
+  question: Что запрещает пустой атрибут `sandbox` у iframe? Отметьте все.
+  options:
+    - text: Выполнение скриптов
+      correct: true
+    - text: Отправку форм и открытие попапов
+      correct: true
+    - text: Доступ к своим cookie и хранилищам — origin документа становится «непрозрачным»
+      correct: true
+    - text: Показ картинок и стилей
+      why: Разметка и стили работают — sandbox ограничивает возможности, а не отображение.
+  explain: 'Пустой `sandbox` — максимальные ограничения. Разрешения возвращают токенами: `allow-scripts`, `allow-forms`, `allow-popups`, `allow-same-origin` и другими.'
+
+- key: quiz-sandbox-danger
+  kind: quiz
+  question: 'Почему `sandbox="allow-scripts allow-same-origin"` для документа **вашего же** origin почти не даёт защиты?'
+  options:
+    - text: Скрипт внутри получает доступ к родителю того же origin и может сам снять атрибут `sandbox` у своего iframe
+      correct: true
+    - text: Эти токены несовместимы, браузер их проигнорирует
+      why: Браузер их применит — просто вместе они снимают изоляцию.
+    - text: '`allow-same-origin` разрешает доступ к любым сайтам'
+      why: Он сохраняет настоящий origin документа, а не открывает чужие.
+    - text: Скрипты в iframe всегда опасны
+  explain: 'Для недоверенного кода — `allow-scripts` без `allow-same-origin` или отдельный домен для песочницы. Так делают онлайн-редакторы: код пользователя живёт на отдельном origin.'
+
+- key: quiz-cross-origin-access
+  kind: quiz
+  question: 'Родитель `shop.example` встроил iframe `pay.example` и делает `frame.contentWindow.document`. Что будет?'
+  options:
+    - text: SecurityError — к DOM окна другого origin доступа нет, общаться можно только через `postMessage`
+      correct: true
+    - text: Вернётся документ платёжной формы
+      why: Так работает только для iframe того же origin.
+    - text: Вернётся `null`
+    - text: Браузер спросит разрешение у пользователя
+  explain: 'Между окнами разных origin доступны только `postMessage`, запись `location`, `close()`, `frames` и пара свойств. Всё остальное — SecurityError. Поэтому платёжные поля в iframe и защищены от скриптов магазина.'
+
+- key: quiz-frame-ancestors
+  kind: quiz
+  question: Как запретить чужим сайтам встраивать вашу страницу в iframe?
+  options:
+    - text: "Заголовок `Content-Security-Policy: frame-ancestors 'self'` на вашей странице (и `X-Frame-Options: SAMEORIGIN` для старых браузеров)"
+      correct: true
+    - text: Атрибут `sandbox` на вашей странице
+      why: '`sandbox` ставят на iframe, который встраивает чужое, а не защищают им себя.'
+    - text: 'Проверка в JS: `if (window !== top) document.body.innerHTML = ""`'
+      why: Встраивающий сайт может запретить скрипты в iframe через `sandbox`, и проверка не выполнится.
+    - text: '`rel="noopener"`'
+  explain: 'Защиту от clickjacking задаёт сама встраиваемая страница заголовком. `frame-ancestors` — современный способ со списком разрешённых сайтов; если есть оба заголовка, браузеры следуют `frame-ancestors`.'
+
+- key: quiz-allow
+  kind: quiz
+  question: 'Встроенный видеозвонок не получает доступ к камере. Что добавить к iframe?'
+  options:
+    - text: "`allow=\"camera; microphone\"` — Permissions Policy для этого iframe"
+      correct: true
+    - text: '`sandbox="allow-camera"`'
+      why: Такого токена нет. Возможности вроде камеры разрешает атрибут `allow`.
+    - text: '`allow-same-origin`'
+    - text: Ничего, камера доступна всем iframe
+      why: По умолчанию у iframe другого origin мощных возможностей нет.
+  explain: 'Атрибут `allow` перечисляет возможности для iframe: `camera`, `microphone`, `geolocation`, `fullscreen`, `clipboard-write`, `payment`. Пользователь всё равно увидит запрос разрешения.'
+
+- key: quiz-third-party-storage
+  kind: quiz
+  question: Виджет комментариев в iframe на вашем сайте «забывает» вход пользователя, хотя на своём домене вход работает. Почему?
+  options:
+    - text: Сторонние cookie и хранилища во встроенном iframe заблокированы или разделены по сайту верхнего уровня
+      correct: true
+    - text: iframe не умеет работать с cookie
+    - text: Нужно добавить `allow-same-origin`
+      why: Он не открывает доступ к хранилищу верхнего уровня — разделение работает и так.
+    - text: Это ошибка виджета, у других сайтов работает
+  explain: 'Браузеры борются со слежкой между сайтами. Виджету нужен Storage Access API (`document.requestStorageAccess()` по действию пользователя) или вход через попап с серверной сессией.'
+
+- key: quiz-iframe-load
+  kind: quiz
+  question: Можно ли по событию `load` у iframe понять, что страница внутри загрузилась успешно?
+  options:
+    - text: Нет — `load` срабатывает и для страницы ошибки; успех сообщает сам документ через `postMessage`
+      correct: true
+    - text: Да, при ошибке сработает `error`
+      why: У iframe событие `error` при ошибке загрузки документа не срабатывает.
+    - text: Да, по `iframe.contentDocument.title`
+      why: Для другого origin `contentDocument` — `null`.
+    - text: Да, если проверить `iframe.src`
+  explain: 'Надёжный признак готовности — сообщение от самого документа (`{ type: "ready" }`) плюс таймаут, после которого показывается ошибка.'
+
+- key: quiz-iframe-title
+  kind: quiz
+  question: Что обязательно добавить iframe ради доступности?
+  options:
+    - text: Атрибут `title`, который описывает содержимое
+      correct: true
+    - text: '`role="frame"`'
+    - text: '`tabindex="-1"`'
+      why: Это уберёт iframe из порядка табуляции, и в виджет нельзя будет попасть с клавиатуры.
+    - text: '`aria-hidden="true"`'
+      why: Скроет содержимое от скринридеров совсем.
+  explain: 'Скринридер объявляет iframe по `title`: «Платёжная форма», «Карта проезда». Без него пользователь слышит «фрейм» и не понимает, что внутри.'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+
+- key: code-sandbox-tokens
+  kind: code
+  level: easy
+  title: Собрать sandbox
+  prompt: |
+    Напишите `sandboxFor({ scripts, forms, popups, sameOrigin, trusted = false })` — строку для атрибута `sandbox`.
+    - Каждый флаг добавляет свой токен: `allow-scripts`, `allow-forms`, `allow-popups`, `allow-same-origin`. Порядок — как в этом списке.
+    - Все флаги выключены — пустая строка (максимальные ограничения).
+    - `scripts` и `sameOrigin` вместе разрешены только при `trusted: true`, иначе — `Error('allow-scripts и allow-same-origin вместе снимают изоляцию')`.
+  starter: |
+    function sandboxFor(options) {
+      return 'allow-scripts allow-same-origin'
+    }
+  hints:
+    - 'Массив пар «флаг → токен», `filter` по включённым и `join(" ")`. Проверку опасной пары — до сборки.'
+  tests: |
+    test('токены по флагам и порядку', () => {
+      expect(sandboxFor({ scripts: true, forms: true })).toBe('allow-scripts allow-forms')
+      expect(sandboxFor({ popups: true, forms: true })).toBe('allow-forms allow-popups')
+    })
+    test('пустой — максимальные ограничения', () => {
+      expect(sandboxFor({})).toBe('')
+    })
+    test('опасная пара без доверия — ошибка', () => {
+      expect(() => sandboxFor({ scripts: true, sameOrigin: true })).toThrow('снимают изоляцию')
+      expect(sandboxFor({ scripts: true, sameOrigin: true, trusted: true })).toBe('allow-scripts allow-same-origin')
+    })
+  solution: |
+    const TOKENS = [
+      ['scripts', 'allow-scripts'],
+      ['forms', 'allow-forms'],
+      ['popups', 'allow-popups'],
+      ['sameOrigin', 'allow-same-origin'],
+    ]
+
+    function sandboxFor(options) {
+      if (options.scripts && options.sameOrigin && !options.trusted) {
+        throw new Error('allow-scripts и allow-same-origin вместе снимают изоляцию')
+      }
+      return TOKENS.filter(([flag]) => options[flag]).map(([, token]) => token).join(' ')
+    }
+  explain: |
+    **Принцип наименьших прав:** начинать с пустого `sandbox` и добавлять только нужное. Превью письма — без скриптов вовсе. Редактор кода — `allow-scripts`, но на отдельном origin.
+
+    **Опасная пара.** Скрипт документа того же origin при `allow-same-origin` дотянется до родителя и снимет `sandbox` у своего iframe. Поэтому для недоверенного кода — либо без `allow-same-origin`, либо отдельный домен.
+
+- key: code-frame-ancestors
+  kind: code
+  level: medium
+  title: Кому можно встраивать
+  prompt: |
+    Напишите `canEmbed(cspHeader, ownOrigin, parentOrigin)`: разрешает ли заголовок `Content-Security-Policy` встроить страницу `ownOrigin` в iframe на сайте `parentOrigin`.
+    - Директивы в заголовке разделены `;`, ищем `frame-ancestors`. Нет директивы — встраивать можно.
+    - Значения через пробел: `'none'` — никому; `'self'` — только `ownOrigin`; `*` — всем; иначе — точный origin из списка.
+    - Регистр имени директивы не важен, лишние пробелы — тоже.
+  starter: |
+    function canEmbed(cspHeader, ownOrigin, parentOrigin) {
+      return cspHeader.includes(parentOrigin)
+    }
+  hints:
+    - '`split(";")`, `trim()`, найти часть, которая в нижнем регистре начинается с `frame-ancestors`. Значения — `split(/\s+/).slice(1)`.'
+    - 'Проверьте `none` до остальных, потом `*`, потом `self` и точное совпадение.'
+  tests: |
+    const own = 'https://app.example'
+    test('нет директивы — можно', () => {
+      expect(canEmbed("default-src 'self'", own, 'https://evil.example')).toBe(true)
+    })
+    test("'none' и 'self'", () => {
+      expect(canEmbed("frame-ancestors 'none'", own, own)).toBe(false)
+      expect(canEmbed("frame-ancestors 'self'", own, own)).toBe(true)
+      expect(canEmbed("frame-ancestors 'self'", own, 'https://evil.example')).toBe(false)
+    })
+    test('список и *', () => {
+      const header = "default-src 'self';  Frame-Ancestors 'self' https://partner.example ; script-src 'self'"
+      expect(canEmbed(header, own, 'https://partner.example')).toBe(true)
+      expect(canEmbed(header, own, 'https://partner.example.evil.com')).toBe(false)
+      expect(canEmbed('frame-ancestors *', own, 'https://anyone.example')).toBe(true)
+    })
+  solution: |
+    function canEmbed(cspHeader, ownOrigin, parentOrigin) {
+      const directive = cspHeader
+        .split(';')
+        .map((part) => part.trim())
+        .find((part) => part.toLowerCase().startsWith('frame-ancestors'))
+      if (!directive) return true
+      const sources = directive.split(/\s+/).slice(1)
+      if (sources.includes("'none'")) return false
+      if (sources.includes('*')) return true
+      return sources.some((source) => (source === "'self'" ? parentOrigin === ownOrigin : source === parentOrigin))
+    }
+  explain: |
+    **`frame-ancestors` защищает от clickjacking** — когда чужой сайт кладёт вашу страницу под прозрачный слой и заставляет кликнуть «Удалить аккаунт» или «Оплатить». Задаётся на **вашей** странице, а проверяет браузер встраивающего сайта.
+
+    **Точное сравнение origin** — главное. Проверка по подстроке пропустила бы `partner.example.evil.com`.
+
+    **Упрощение:** настоящая спецификация понимает ещё схемы (`https:`) и маски поддоменов (`https://*.example.com`). Для своего кода такой разбор не пишут — его делает браузер, а в задаче он показывает, как читать заголовок.
+
+- key: code-auto-height
+  kind: code
+  level: medium
+  title: iframe по высоте содержимого
+  prompt: |
+    iframe не подстраивается под высоту содержимого. Напишите две функции:
+    - `reportHeight({ observe, getHeight, parent, parentOrigin })` — **внутри виджета**. `observe(callback)` подписывает на изменения размера (в браузере — ResizeObserver на `document.body`). На каждое изменение отправлять `parent.postMessage({ type: 'height', value: getHeight() }, parentOrigin)`. Первую высоту — сразу при запуске.
+    - `applyHeight({ win, frame, childOrigin })` — **на странице**. На сообщения `{ type: 'height', value }` с `childOrigin` ставить `frame.style.height = value + 'px'`. Вернуть отписку.
+  starter: |
+    function reportHeight({ observe, getHeight, parent, parentOrigin }) {}
+    function applyHeight({ win, frame, childOrigin }) {
+      return () => {}
+    }
+  hints:
+    - '`reportHeight`: функция `send()` с `postMessage`, вызвать её сразу и передать в `observe`.'
+    - '`applyHeight`: обработчик `message` с проверкой `event.origin === childOrigin` и `event.data?.type === "height"` и числа в `value`.'
+  tests: |
+    test('виджет сообщает высоту сразу и при изменениях, страница применяет', async () => {
+      const { a: page, b: widget } = fakeWindows('https://app.example', 'https://widget.example')
+      const frame = { style: {} }
+      applyHeight({ win: page, frame, childOrigin: widget.origin })
+      let height = 100
+      let onResize
+      reportHeight({ observe: (cb) => (onResize = cb), getHeight: () => height, parent: page, parentOrigin: page.origin })
+      await sleep(5)
+      expect(frame.style.height).toBe('100px')
+      height = 240
+      onResize()
+      await sleep(5)
+      expect(frame.style.height).toBe('240px')
+    })
+    test('чужие сообщения не трогают iframe, отписка работает', async () => {
+      const page = fakeWindows('https://app.example', 'https://evil.example')
+      const frame = { style: {} }
+      const stop = applyHeight({ win: page.a, frame, childOrigin: 'https://widget.example' })
+      page.a.postMessage({ type: 'height', value: 9999 }, '*')
+      await sleep(5)
+      expect(frame.style.height).toBeUndefined()
+      const ok = fakeWindows('https://app.example', 'https://widget.example')
+      const stop2 = applyHeight({ win: ok.a, frame, childOrigin: ok.b.origin })
+      stop2()
+      ok.a.postMessage({ type: 'height', value: 50 }, '*')
+      await sleep(5)
+      expect(frame.style.height).toBeUndefined()
+      stop()
+    })
+  solution: |
+    function reportHeight({ observe, getHeight, parent, parentOrigin }) {
+      const send = () => parent.postMessage({ type: 'height', value: getHeight() }, parentOrigin)
+      send()
+      observe(send)
+    }
+
+    function applyHeight({ win, frame, childOrigin }) {
+      const listener = (event) => {
+        if (event.origin !== childOrigin) return
+        if (event.data?.type !== 'height' || typeof event.data.value !== 'number') return
+        frame.style.height = `${event.data.value}px`
+      }
+      win.addEventListener('message', listener)
+      return () => win.removeEventListener('message', listener)
+    }
+  explain: |
+    **Почему так.** Родитель не может прочитать высоту документа другого origin — доступа к DOM нет. Значит, сообщить её может только сам виджет.
+
+    **В браузере:** `observe = (cb) => new ResizeObserver(cb).observe(document.body)`, `getHeight = () => document.documentElement.scrollHeight`. ResizeObserver срабатывает до отрисовки кадра, поэтому высота меняется без лишних прыжков.
+
+    **Проверка `value`** — число, а не строка вида `'100px; display: none'`: данные из чужого окна — недоверенный ввод.
+
+- key: code-srcdoc-preview
+  kind: code
+  level: medium
+  title: Безопасное превью кода
+  prompt: |
+    Онлайн-редактор показывает результат в `<iframe sandbox="allow-scripts" srcdoc="…">`. Напишите `buildPreview({ html, css, js })` — строку документа для `srcdoc`:
+    - `<!doctype html>`, в `<head>` — `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">` и `<style>` с `css`;
+    - в `<body>` — `html`, затем `<script>` с `js`;
+    - `</script>` и `</style>` внутри кода пользователя не должны закрыть теги раньше времени: экранируйте `</` как `<\/`.
+  starter: |
+    function buildPreview({ html, css, js }) {
+      return `<style>${css}</style>${html}<script>${js}</script>`
+    }
+  hints:
+    - 'Шаблонная строка; для `css` и `js` — `.replace(/<\//g, "<\\/")` до вставки.'
+    - 'CSP в `meta` запрещает сети всё (`default-src ''none''`), разрешая только встроенные стили и скрипты — так код пользователя не сможет отправить данные наружу.'
+  tests: |
+    test('структура документа и CSP', () => {
+      const doc = buildPreview({ html: '<h1>Привет</h1>', css: 'h1 { color: red }', js: 'console.log(1)' })
+      expect(doc.startsWith('<!doctype html>')).toBe(true)
+      expect(doc).toContain(`default-src 'none'`)
+      expect(doc).toContain('<style>h1 { color: red }</style>')
+      expect(doc.indexOf('<h1>Привет</h1>') < doc.indexOf('<script>')).toBe(true)
+    })
+    test('закрывающие теги в коде не ломают документ', () => {
+      const doc = buildPreview({ html: '', css: 'a::after { content: "</style>" }', js: 'const s = "</script><img src=x onerror=alert(1)>"' })
+      expect(doc.match(/<\/script>/g)).toHaveLength(1)
+      expect(doc.match(/<\/style>/g)).toHaveLength(1)
+      expect(doc).toContain('<\\/script>')
+    })
+  solution: |
+    const escapeClosing = (code) => code.replace(/<\//g, '<\\/')
+
+    function buildPreview({ html, css, js }) {
+      return `<!doctype html>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+    <style>${escapeClosing(css)}</style>
+    </head>
+    <body>
+    ${html}
+    <script>${escapeClosing(js)}</script>
+    </body>
+    </html>`
+    }
+  explain: |
+    **Три слоя защиты:**
+    - `sandbox="allow-scripts"` без `allow-same-origin` — у документа непрозрачный origin, к странице редактора и её cookie доступа нет;
+    - CSP `default-src 'none'` — код не может грузить ресурсы и отправлять данные наружу;
+    - экранирование `</` — пользовательский код не вырвется из `<script>` и не допишет свою разметку.
+
+    **`<\/script>` в JS — та же строка:** `\/` в строке JavaScript — просто `/`, поэтому код работает как задумано. HTML-парсер при этом не видит закрывающего тега.
+
+    **В крупных песочницах** (CodeSandbox, StackBlitz) код пользователя живёт на отдельном домене — это сильнее любой песочницы на том же origin.

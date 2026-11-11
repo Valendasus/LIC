@@ -1,0 +1,69 @@
+# Карточки темы «Процессы и потоки браузера». Ключи не переименовывать.
+
+- key: browser-processes
+  type: qa
+  front: Какие основные процессы у браузера на примере Chromium?
+  back: |
+    - браузерный — интерфейс, вкладки, навигация, координация
+    - процессы отрисовки (renderer) — HTML, CSS, JavaScript, layout сайтов, в песочнице
+    - GPU — растеризация и вывод кадров
+    - сетевой сервис — запросы, cookie, HTTP-кэш
+    - утилиты — хранилища, аудио и другое
+
+- key: renderer-sandbox
+  type: qa
+  front: Зачем процесс отрисовки работает в песочнице?
+  back: У него нет прямого доступа к файлам, сети и системе — он просит браузерный процесс. Ошибка в движке JavaScript не даёт сразу доступ к компьютеру.
+
+- key: site-isolation
+  type: term
+  front: Site isolation
+  back: Документы разных сайтов — в разных процессах, включая чужие iframe внутри страницы. Защищает от атак на память вроде Spectre. Chrome — с 2018 года, Firefox (Fission) — с версии 95.
+  reverse: true
+
+- key: site-vs-origin
+  type: qa
+  front: Чем сайт отличается от origin?
+  back: 'Origin — схема, хост и порт. Сайт — схема и регистрируемый домен (eTLD+1): `app.example.com` и `api.example.com` — один сайт, но разные origin.'
+
+- key: main-thread
+  type: term
+  front: Главный поток
+  back: Поток процесса отрисовки, где выполняются JavaScript страницы, обработчики событий, стили, layout и запись команд отрисовки. Одна очередь работы — поэтому длинная задача блокирует всё.
+  reverse: true
+
+- key: compositor-thread
+  type: term
+  front: Поток компоновщика
+  back: Собирает слои в кадр, прокручивает страницу и выполняет анимации `transform` и `opacity` без главного потока. Поэтому они плавные, даже когда JS занят.
+  reverse: true
+
+- key: animate-transform
+  type: qa
+  front: Почему анимировать `transform` лучше, чем `left`?
+  back: '`left` требует layout на главном потоке каждый кадр. `transform` меняет только компоновку готового слоя — это делает компоновщик в своём потоке.'
+
+- key: passive-listener
+  type: qa
+  front: 'Что даёт `{ passive: true }` у обработчика прокрутки?'
+  back: Обещание не вызывать `preventDefault()`. Компоновщик прокручивает, не дожидаясь главного потока, — прокрутка не дёргается.
+
+- key: background-tab
+  type: qa
+  front: Что ограничивается в фоновой вкладке?
+  back: rAF не вызывается, таймеры замедляются до раза в секунду и реже, вкладку могут заморозить или выгрузить. Состояние сохраняют по `visibilitychange`.
+
+- key: bfcache
+  type: term
+  front: bfcache
+  back: 'Back/forward cache: страница целиком сохраняется в памяти при уходе и мгновенно восстанавливается по «Назад». Мешают `unload` и открытые соединения. Возврат ловят по `pageshow` с `persisted: true`.'
+
+- key: js-single-thread
+  type: qa
+  front: В каком смысле JavaScript однопоточный?
+  back: У каждого агента — окна или воркера — один поток выполнения JS и свой event loop. Внутри агента код идёт по очереди. Параллельность — несколько агентов, общая память — только `SharedArrayBuffer`.
+
+- key: noopener-process
+  type: qa
+  front: Как `rel="noopener"` и COOP связаны с процессами?
+  back: Окно, открытое через `window.open`, связано с открывшим через `window.opener` и может остаться в его процессе. `noopener` (по умолчанию для `target="_blank"`) и `Cross-Origin-Opener-Policy` разрывают связь и позволяют разнести окна по процессам.

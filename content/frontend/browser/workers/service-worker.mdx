@@ -1,0 +1,232 @@
+export const meta = {
+  verified: '11.11.2026',
+  versions: 'Service Workers (W3C), Chrome, Firefox, Safari, Workbox 7',
+}
+
+## Learn
+
+### Суть за минуту
+
+**Service Worker** — воркер, который встаёт **между вашим сайтом и сетью**. Он перехватывает запросы страниц и решает, что ответить: из сети, из своего кэша или собранный на лету ответ. На этом строятся офлайн-режим, мгновенная повторная загрузка, push-уведомления и установка сайта как приложения (PWA).
+
+```js
+// main.js
+navigator.serviceWorker.register('/sw.js', { type: 'module' })
+
+// sw.js
+self.addEventListener('fetch', (event) => {
+  event.respondWith(caches.match(event.request).then((cached) => cached ?? fetch(event.request)))
+})
+```
+
+В отличие от обычного воркера, им **управляет браузер**: запускает по событию, останавливает в простое, обновляет по своим правилам. Ошибка в нём живёт между визитами — поэтому тема требует аккуратности.
+
+### Регистрация и область
+
+```js
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js', { scope: '/', type: 'module' })
+}
+```
+
+- Работает только по **HTTPS** (и на `localhost`): воркер перехватывает все запросы сайта, и подменённый по дороге воркер стал бы постоянным «человеком посередине».
+- **Область** (scope) — какие адреса он контролирует. По умолчанию — папка файла: `/app/sw.js` управляет только `/app/…`. Шире — только с заголовком `Service-Worker-Allowed`.
+- **Модульные** воркеры (`type: 'module'`) — во всех основных браузерах с января 2026 года.
+- DOM недоступен. Хранилища — IndexedDB и Cache Storage (`caches`).
+
+### Жизненный цикл
+
+1. **install** — новая версия установилась. Здесь заранее кладут файлы в кэш:
+   ```js
+   self.addEventListener('install', (event) => {
+     event.waitUntil(caches.open('static-v2').then((cache) => cache.addAll(['/', '/app.css', '/app.js'])))
+   })
+   ```
+2. **waiting** — новая версия **ждёт, пока закроются все вкладки** со старой. Иначе одна страница работала бы с двумя версиями воркера и кэшей.
+3. **activate** — старая версия ушла, новая начинает управлять. Здесь удаляют старые кэши.
+4. **Работа** — события `fetch`, `message`, `push`, `sync`.
+5. **Простой** — браузер **останавливает** воркер, когда событий нет: через секунды или минуты. Глобальные переменные теряются. Состояние хранить в IndexedDB или Cache Storage.
+
+`event.waitUntil(promise)` говорит браузеру «не останавливай меня, пока это не закончилось» — для установки, уборки и фоновых обновлений.
+
+**Первый визит воркер не контролирует:** страница загрузилась до регистрации. Управление начнётся со следующей навигации или сразу, если при активации вызвать `clients.claim()`.
+
+### Обновление
+
+Браузер проверяет `sw.js` при навигации и не реже раза в сутки. Если файл изменился хоть на байт — устанавливает новую версию, и она ждёт.
+
+- `self.skipWaiting()` в новом воркере пропускает ожидание, `clients.claim()` сразу забирает управление. Но тогда **старая страница** может начать получать ответы **нового** воркера — например, HTML новой версии со ссылками на файлы, которых нет в старом кэше.
+- Безопаснее: новая версия ждёт, страница показывает «Доступно обновление», по нажатию отправляет воркеру `skipWaiting` и перезагружается.
+
+```js
+// страница
+registration.addEventListener('updatefound', () => showUpdateBanner())
+// по кнопке «Обновить»
+registration.waiting?.postMessage({ type: 'skip-waiting' })
+navigator.serviceWorker.addEventListener('controllerchange', () => location.reload())
+```
+
+**`sw.js` и HTML нельзя кэшировать надолго** заголовками на CDN: иначе браузер не увидит новую версию, и обновление застрянет.
+
+### Стратегии кэширования
+
+В обработчике `fetch` выбирают стратегию по типу запроса:
+
+| Стратегия | Как | Для чего |
+|---|---|---|
+| Cache first | кэш, при промахе — сеть с записью | статика с хешем в имени, шрифты, иконки |
+| Network first | сеть с таймаутом, при ошибке — кэш | HTML, данные, где важна свежесть |
+| Stale-while-revalidate | сразу копия, в фоне — обновление кэша | аватары, списки, лента |
+| Network only | только сеть | платежи, отправка форм, мутации |
+| Cache only | только кэш | офлайн-страница, заранее положенная в install |
+
+```js
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+  if (event.request.method !== 'GET') return // мутации — мимо воркера
+  if (url.pathname.startsWith('/assets/')) event.respondWith(cacheFirst(event.request))
+  else if (event.request.mode === 'navigate') event.respondWith(networkFirst(event.request, { timeout: 3000 }))
+})
+```
+
+- **Таймаут в network first** — главное для офлайна. Плохая сеть чаще не падает, а висит.
+- **Ошибочные ответы не кэшируют**, иначе 404 застрянет навсегда.
+- **Ответ читается один раз** — в кэш кладут копию: `cache.put(request, response.clone())`.
+
+Готовые стратегии и прекеш из манифеста сборки даёт **Workbox**; для Vite — `vite-plugin-pwa`, для Next.js — Serwist. Сами Next.js и Vite Service Worker не создают.
+
+### Слои кэша
+
+Запрос страницы может быть обслужен:
+1. **memory cache** — ресурсы, уже загруженные этой страницей;
+2. **Service Worker** и его **Cache Storage** — тем, что решит ваш код;
+3. **HTTP-кэш** на диске — по заголовкам `Cache-Control`;
+4. **сетью**.
+
+Запрос `fetch` из воркера тоже проходит через HTTP-кэш. Это частый вопрос: «memory cache, disk cache, service worker cache — в чём разница».
+
+### PWA
+
+Сайт устанавливается как приложение, когда есть:
+- **манифест** `manifest.webmanifest`: `name`, `icons`, `display: "standalone"`, `start_url`, цвета;
+- **Service Worker** с офлайн-поведением;
+- **HTTPS**.
+
+На iOS установка — «На экран Домой», а push-уведомления работают только у установленных приложений (с iOS 16.4).
+
+Фоновые возможности: **Push** — во всех основных браузерах; **Background Sync** и **Periodic Background Sync** — только Chromium.
+
+### Отладка и аварийное отключение
+
+- DevTools → Application → Service Workers: «Update on reload» при разработке, «Bypass for network» при замерах производительности, «Unregister».
+- Жёсткая перезагрузка (Shift+Ctrl+R) обходит воркер для этой навигации.
+- В тестах Playwright — `serviceWorkers: 'block'`, если воркер мешает.
+
+**Если пользователи застряли на сломанной версии:**
+- выпустить воркер, который удаляет все кэши и вызывает `self.registration.unregister()`;
+- или отдать с сервера заголовок `Clear-Site-Data: "storage"` — браузер удалит хранилища и воркеры сайта.
+
+### Безопасность
+
+Скомпрометированный воркер перехватывает и подменяет все запросы сайта и переживает закрытие вкладки. Защита:
+- отсутствие XSS и строгая CSP — через XSS злоумышленник может зарегистрировать свой воркер;
+- воркер только со своего origin;
+- контроль над тем, что воркер кэширует: персональные ответы API не должны попадать в общий кэш, который увидит следующий пользователь устройства.
+
+<Example file="src/app/sw.ts" verdict="good">
+
+Приложение для курьеров работает в подвалах и лифтах. HTML — network first с таймаутом 3 секунды, статика с хешем — cache first, список заказов — stale-while-revalidate, отметка «доставлено» — только сеть с очередью повторов в IndexedDB. Новая версия ждёт, курьер видит плашку «Обновить» и нажимает её между заказами — форма не теряется посреди ввода.
+
+</Example>
+
+<Example file="public/sw.js" verdict="review">
+
+```js
+self.addEventListener('install', () => self.skipWaiting())
+self.addEventListener('fetch', (event) => {
+  event.respondWith(caches.match(event.request).then((r) => r || fetch(event.request).then((res) => {
+    caches.open('v1').then((c) => c.put(event.request, res.clone()))
+    return res
+  })))
+})
+```
+
+Cache first для **всего**, включая HTML и API: после первого визита пользователи навсегда видят старую версию и старые данные. Кэшируются и ответы с ошибками, и POST-запросы (`put` для них бросит ошибку). Имя кэша `v1` никогда не меняется, а старые кэши не чистятся. Нужны стратегии по типу запроса, версия в имени кэша и уборка в `activate`.
+
+</Example>
+
+<Callout type="deep">
+- **Navigation Preload** (`registration.navigationPreload.enable()`) запускает запрос HTML параллельно с запуском воркера — чтобы запуск не задерживал загрузку страницы.
+- **Static Routing API** (`event.addRoutes` в `install`) — правила «этот адрес — сразу из сети или кэша» без запуска воркера. Chrome 123, Safari 27, в Firefox нет.
+- **Declarative Web Push** в Safari — уведомления без запуска воркера.
+- **Хранилище не вечно.** Браузер может удалить данные сайта при нехватке места. `navigator.storage.persist()` просит не удалять, `navigator.storage.estimate()` показывает квоту.
+</Callout>
+
+### Частые ошибки
+
+| Ошибка | Признак | Исправление |
+|---|---|---|
+| cache first для HTML | пользователи на старой версии | network first для навигации |
+| долгий HTTP-кэш у `sw.js` | обновление не приходит | короткий кэш для `sw.js` и HTML |
+| `skipWaiting` без согласия | ошибки после выкладки у открытых вкладок | баннер «Обновить» и перезагрузка |
+| кэширование ошибок и POST | 404 навсегда, исключения в `put` | кэшировать только успешные GET |
+| состояние в переменных воркера | «забывает» данные | IndexedDB, Cache Storage |
+| нет `waitUntil` | установка или фоновое обновление обрывается | `event.waitUntil` |
+
+<Callout type="interview">
+Спросят: что такое Service Worker и его жизненный цикл; как он связан с Cache Storage и какие бывают стратегии; как сделать офлайн; как безопасно обновлять и какие проблемы с кэшем он создаёт; чем опасен. Сильный ответ объясняет ожидание новой версии, выбор стратегии по типу запроса, таймаут в network first, слои кэша и аварийное отключение через `Clear-Site-Data`.
+</Callout>
+
+## Implement
+
+<Practice id="order-sw-lifecycle" />
+
+<Practice id="quiz-sw-waiting" />
+
+<Practice id="quiz-strategy-choice" />
+
+<Practice id="quiz-sw-security" />
+
+<Practice id="code-cache-first" />
+
+<Practice id="code-network-first" />
+
+<Practice id="code-swr" />
+
+<Practice id="code-clean-caches" />
+
+## Confirm
+
+<Question q="Какой жизненный цикл у Service Worker и почему новая версия ждёт?">
+install → waiting → activate → работа, в простое — остановка. Новая версия ждёт, пока закроются все вкладки со старой, чтобы страница не работала с двумя версиями воркера и кэшей; `skipWaiting` пропускает ожидание.
+</Question>
+
+<Question q="Какие стратегии кэширования бывают и что выбрать для HTML, статики и API?">
+Cache first, network first, stale-while-revalidate, network only, cache only. HTML — network first с таймаутом; статика с хешем — cache first; ленты и аватары — stale-while-revalidate; мутации — только сеть.
+</Question>
+
+<Question q="Почему пользователи могут застрять на старой версии и как это исправить?">
+Cache first для HTML, долгий HTTP-кэш у `sw.js` или ожидание активации. Исправить — network first для навигации, короткий кэш для `sw.js`, баннер обновления; в аварии — `Clear-Site-Data` или воркер, удаляющий кэши и себя.
+</Question>
+
+<Question q="Чем Service Worker связан с HTTP-кэшем?">
+Это разные слои: memory cache, Service Worker с Cache Storage, HTTP-кэш, сеть. Запрос из воркера тоже проходит через HTTP-кэш.
+</Question>
+
+<Question q="Чем опасен скомпрометированный Service Worker?">
+Перехватывает и подменяет все запросы сайта и переживает закрытие вкладки. Защита — отсутствие XSS, CSP, только свой origin; аварийный выключатель — `Clear-Site-Data: "storage"`.
+</Question>
+
+## Источники
+
+<Sources>
+
+- [W3C, Service Workers](https://w3c.github.io/ServiceWorker/)
+- [MDN, Service Worker API](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API)
+- [MDN, Using Service Workers](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers)
+- [web.dev, The service worker lifecycle](https://web.dev/articles/service-worker-lifecycle)
+- [web.dev, Progressive Web Apps](https://web.dev/explore/progressive-web-apps)
+- [Chrome for Developers, Workbox](https://developer.chrome.com/docs/workbox)
+- [MDN, `Clear-Site-Data`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Clear-Site-Data)
+
+</Sources>

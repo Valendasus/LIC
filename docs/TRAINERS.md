@@ -185,8 +185,8 @@
 | `flaky(n, value)` | асинхронная функция: первые `n` вызовов — `Error('сбой N')`, потом `value`; `.calls` | проверка `retry` |
 | `concurrency()` | `track(fn)` оборачивает функцию, `peak` — наибольшее число одновременных вызовов | проверка пула `mapLimit` |
 | `fakeWorker()` | `{ worker, scope, posted }`: страница и воркер без настоящего воркера; данные копируются, доставка — задачей, `terminate()` | RPC поверх `postMessage` |
-| `fakeWindows(a, b)` | два окна разных origin: `postMessage(data, targetOrigin)` с `origin` и `source` | проверка `event.origin` в виджете |
-| `fakeObserver()` | `{ Observer, trigger(target, entry), instances }` вместо Intersection-, Resize- или MutationObserver | хук `useInView` |
+| `fakeWindows(a, b)` | два окна разных origin; как в браузере, `b.postMessage(data, targetOrigin)` — сообщение от `a` окну `b`, с `origin` и `source` отправителя | проверка `event.origin` в виджете |
+| `fakeObserver()` | `{ Observer, trigger(target, entry), instances }` вместо Intersection-, Resize- или MutationObserver; в `instances[i]` — `options` (из конструктора или из `observe`), `targets`, `disconnected` | хук `useInView` |
 
 ### T6. Задачи на типы
 

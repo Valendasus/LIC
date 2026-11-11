@@ -206,6 +206,7 @@
      - вопросы с собеседований — [research/interview-questions.md](research/interview-questions.md);
      - JavaScript — [research/sources/javascript/](research/sources/javascript/README.md), 26 заметок;
      - браузер — [research/sources/browser/](research/sources/browser/README.md), 8 заметок.
+   - **Готово (11.11.2026):** асинхронный блок JavaScript (6 тем) и блок «браузер изнутри» (8 тем).
    - **Порядок уроков:**
      1. асинхронность JS: промисы, async/await, комбинаторы, отмена, генераторы; event loop доработать;
      2. браузер изнутри: процессы и потоки, кадр, воркеры, общая память, общение между окнами, iframe, Service Worker, наблюдатели;

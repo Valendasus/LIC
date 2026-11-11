@@ -1,0 +1,64 @@
+# Карточки темы «Intersection, Resize, Mutation Observer». Ключи не переименовывать.
+
+- key: intersection-observer
+  type: term
+  front: IntersectionObserver
+  back: Сообщает, пересекается ли элемент с корнем — окном или контейнером. Опции `root`, `rootMargin`, `threshold`. Срабатывает в конце кадра, асинхронно. Для ленивой загрузки, бесконечной ленты, аналитики показов.
+  reverse: true
+
+- key: resize-observer
+  type: term
+  front: ResizeObserver
+  back: Сообщает новый размер элемента (`contentRect`, `borderBoxSize`). Срабатывает после layout, до отрисовки кадра. Для графиков, canvas, виртуальных списков, адаптивных компонентов в JS.
+  reverse: true
+
+- key: mutation-observer
+  type: term
+  front: MutationObserver
+  back: Сообщает об изменениях DOM — детях, атрибутах, тексте; опции `childList`, `attributes`, `subtree`, `characterData`. Колбэк — микрозадача с пачкой записей.
+  reverse: true
+
+- key: performance-observer
+  type: term
+  front: PerformanceObserver
+  back: 'Записи производительности: `largest-contentful-paint`, `layout-shift`, `event`, `longtask`, `resource`. С `buffered: true` получает и прошлые записи — так собирают Web Vitals.'
+
+- key: observer-pattern
+  type: qa
+  front: Общий шаблон работы с наблюдателями?
+  back: '`new XObserver(callback, options)`, затем `observe(target)`, `unobserve(target)`, `disconnect()`. Колбэк получает пачку записей и вызывается асинхронно, а не на каждое изменение.'
+
+- key: io-first-entry
+  type: qa
+  front: Почему колбэк IntersectionObserver вызвался, хотя элемент не виден?
+  back: 'Первая запись приходит сразу после `observe` с текущим состоянием, а при уходе с экрана — запись с `isIntersecting: false`. Проверяйте `entry.isIntersecting`.'
+
+- key: root-margin
+  type: qa
+  front: Как начать загрузку раньше, чем элемент появится?
+  back: "`rootMargin: '300px'` расширяет зону пересечения. Для картинок проще `loading=\"lazy\"` без JS."
+
+- key: observers-vs-scroll
+  type: qa
+  front: Чем наблюдатели лучше обработчика `scroll` с `getBoundingClientRect`?
+  back: Измерения в `scroll` вызывают layout на каждом событии и нагружают главный поток. Наблюдатели считают пересечения и размеры в цикле отрисовки без принудительного layout.
+
+- key: observer-cleanup
+  type: qa
+  front: Что будет без `disconnect` при размонтировании компонента?
+  back: Наблюдатель и всё, что держит его колбэк, остаются в памяти, а колбэк вызывается для удалённого компонента. В React — очистка эффекта или callback ref с функцией очистки.
+
+- key: sentinel
+  type: term
+  front: Сторожевой элемент
+  back: Пустой элемент в конце списка, за которым следит IntersectionObserver. Стал видимым — пора грузить следующую страницу. Без обработчиков прокрутки.
+
+- key: observers-testing
+  type: qa
+  front: Как тестировать наблюдатели в jsdom?
+  back: В jsdom их нет — layout не считается. Подменяют класс управляемым моком и вызывают колбэк из теста; реальное поведение проверяют в Playwright.
+
+- key: container-queries-alt
+  type: qa
+  front: Когда вместо ResizeObserver хватит CSS?
+  back: 'Когда от размера контейнера зависят только стили — container queries `@container (width > 400px)`. ResizeObserver — когда размер нужен в JavaScript.'

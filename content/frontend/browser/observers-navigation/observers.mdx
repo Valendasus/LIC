@@ -1,0 +1,251 @@
+export const meta = {
+  verified: '11.11.2026',
+  versions: 'Intersection Observer, Resize Observer, DOM Living Standard, Chrome, Firefox, Safari, React 19.3',
+}
+
+## Learn
+
+### Суть за минуту
+
+Часто нужно узнать, что **что-то изменилось**: элемент появился на экране, контейнер сменил размер, сторонний скрипт добавил узел в DOM. Опрашивать браузер в цикле или по прокрутке дорого. **Наблюдатели** (observers) сами сообщают об изменениях — пачками, в удобный момент цикла отрисовки, без принудительного layout.
+
+```js
+const observer = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) loadImage(entry.target)
+  }
+}, { rootMargin: '300px' })
+
+document.querySelectorAll('img[data-src]').forEach((img) => observer.observe(img))
+```
+
+### Пять наблюдателей
+
+| Наблюдатель | Что сообщает | Когда вызывается | Поддержка |
+|---|---|---|---|
+| `IntersectionObserver` | пересечение элемента с окном или контейнером | в конце кадра, после layout | везде |
+| `ResizeObserver` | новый размер элемента | в кадре: после layout, до отрисовки | везде |
+| `MutationObserver` | изменения DOM: дети, атрибуты, текст | **микрозадачей** после изменений | везде |
+| `PerformanceObserver` | записи производительности: LCP, сдвиги, взаимодействия, длинные задачи | асинхронно | везде |
+| `ReportingObserver` | отчёты: устаревшие API, нарушения CSP | асинхронно | во всех основных браузерах с марта 2026 |
+
+Общий шаблон у всех:
+
+```js
+const observer = new XObserver(callback, options)
+observer.observe(target) // начать наблюдать
+observer.unobserve(target) // перестать за одним
+observer.disconnect() // перестать за всеми
+```
+
+Колбэк получает **пачку** записей и вызывается **асинхронно**, а не на каждое изменение.
+
+### IntersectionObserver
+
+Опции:
+- **`root`** — корень пересечения: по умолчанию окно, можно прокручиваемый контейнер;
+- **`rootMargin`** — расширить или сузить корень: `'300px'` — сработать за 300 px до появления;
+- **`threshold`** — доля видимости для срабатывания: `0` (хоть пиксель), `1` (целиком), `[0, 0.5, 1]`.
+
+Запись: `isIntersecting`, `intersectionRatio`, `boundingClientRect`, `target`, `time`.
+
+**Первая запись приходит сразу** после `observe` — с текущим состоянием, даже если элемент далеко внизу. И при уходе с экрана тоже приходит запись, с `isIntersecting: false`. Поэтому реагируют на `entry.isIntersecting`, а не на сам вызов.
+
+Применения:
+- **ленивая загрузка** картинок и тяжёлых компонентов (для простых картинок есть `loading="lazy"` без JS);
+- **бесконечная лента** — сторожевой элемент в конце списка;
+- **аналитика показов** — «блок увидели»;
+- **запуск анимации** при появлении;
+- **активный пункт оглавления** при прокрутке статьи.
+
+**Пересечение — не видимость.** Элемент под другим элементом или с `opacity: 0` «пересекается». Реальную видимость считает IntersectionObserver v2 (`trackVisibility`), но только в Chromium.
+
+### ResizeObserver
+
+Сообщает размер **элемента**, а не окна. Сайдбар раскрылся — окно не изменилось, а ширина графика изменилась.
+
+```js
+const observer = new ResizeObserver(([entry]) => {
+  const { width, height } = entry.contentRect
+  chart.resize(width, height)
+})
+observer.observe(container)
+```
+
+- `contentRect` — размер содержимого; `borderBoxSize` и `contentBoxSize` — точнее, с учётом направления письма.
+- Срабатывает **после layout, но до отрисовки** того же кадра. Изменения из колбэка попадут в этот кадр — без мигания.
+- Если колбэк постоянно меняет размеры, браузер сообщает «ResizeObserver loop completed with undelivered notifications». Это не падение, но засоряет мониторинг ошибок. Причина почти всегда — колбэк, который меняет размер того же элемента.
+
+**Для стилей** вместо ResizeObserver — **container queries**: `@container (width > 400px) { … }`. ResizeObserver нужен, когда размер нужен в JavaScript: графики, canvas, виртуальные списки.
+
+### MutationObserver
+
+```js
+const observer = new MutationObserver((records) => {
+  for (const record of records) console.log(record.type, record.target)
+})
+observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] })
+```
+
+Опции: `childList` (дети), `attributes` с `attributeFilter`, `characterData` (текст), `subtree` (вся глубина), `attributeOldValue`.
+
+- Колбэк — **микрозадача**: несколько изменений в одной задаче приходят **одной пачкой** после неё.
+- `takeRecords()` забирает накопленные записи синхронно — перед `disconnect`.
+- Применения: реагировать на DOM, который меняет **чужой** код (виджеты, CMS, расширения); ждать появления элемента; редакторы. В своём React-коде почти не нужен: состояние и так известно.
+
+Устаревшие Mutation Events (`DOMNodeInserted` и другие) вызывались синхронно на каждое изменение и тормозили страницу — их удалили из браузеров.
+
+### PerformanceObserver
+
+Так собирают метрики производительности у реальных пользователей:
+
+```js
+new PerformanceObserver((list) => {
+  const last = list.getEntries().at(-1)
+  sendMetric('LCP', last.startTime)
+}).observe({ type: 'largest-contentful-paint', buffered: true })
+```
+
+**`buffered: true`** получает и записи, которые случились **до подписки**: LCP часто происходит раньше, чем загрузился код аналитики. Типы: `largest-contentful-paint`, `layout-shift` (CLS), `event` (INP), `longtask`, `long-animation-frame` (Chromium), `resource`, `navigation`. Готовая обёртка — библиотека `web-vitals`. Подробно — в теме «Core Web Vitals».
+
+### Когда какой наблюдатель срабатывает
+
+Пример: в обработчике клика изменили атрибут и ширину элемента. Порядок:
+1. **MutationObserver** — микрозадачей, сразу после обработчика.
+2. **Колбэк rAF** — в начале кадра.
+3. **ResizeObserver** — после layout кадра.
+4. **IntersectionObserver** — в конце кадра, перед отрисовкой.
+
+Порядок шагов кадра — в теме «Кадр: requestAnimationFrame, порядок шагов, планирование задач».
+
+### Наблюдатели вместо обработчика scroll
+
+```js
+// Плохо: layout на каждом событии прокрутки
+window.addEventListener('scroll', () => {
+  for (const img of images) if (img.getBoundingClientRect().top < innerHeight) load(img)
+})
+```
+
+`getBoundingClientRect` в обработчике `scroll` вызывает принудительный layout десятки раз в секунду. IntersectionObserver считает пересечения в цикле отрисовки без этого — и главный поток свободен.
+
+### Наблюдатели в React
+
+Наблюдатель создают при монтировании и **обязательно отключают** при размонтировании, иначе он и всё, что держит его колбэк, останутся в памяти:
+
+```jsx
+function useInView(options) {
+  const [element, setElement] = useState(null)
+  const [inView, setInView] = useState(false)
+  useEffect(() => {
+    if (!element) return
+    const observer = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), options)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [element])
+  return [setElement, inView]
+}
+```
+
+- **Callback ref** (элемент в состоянии) вместо `useRef`: эффект перезапустится, если элемент сменился.
+- В **React 19** callback ref может вернуть функцию очистки — наблюдение можно поставить прямо в ref.
+- **Один наблюдатель на много элементов** дешевле, чем свой на каждый: для длинного списка заводят общий наблюдатель и раздают записи по `entry.target`.
+
+**Тесты.** В jsdom наблюдателей нет — там нет layout. Класс подменяют управляемым моком и вызывают колбэк из теста; реальное поведение проверяют в Playwright.
+
+<Example file="src/widgets/feed/use-infinite-feed.ts" verdict="good">
+
+Лента новостей: в конце списка — пустой сторожевой элемент, за ним следит IntersectionObserver с `rootMargin: '600px'`. Следующая страница начинает грузиться за экран до конца, флаг загрузки не даёт запустить два запроса подряд, а ответ «больше нет» отключает наблюдение. Обработчика `scroll` нет, прокрутка на слабых телефонах плавная.
+
+</Example>
+
+<Example file="src/shared/ui/Tooltip.tsx" verdict="review">
+
+```jsx
+useEffect(() => {
+  const observer = new ResizeObserver(() => {
+    tooltip.current.style.width = `${anchor.current.offsetWidth + 20}px`
+  })
+  observer.observe(tooltip.current)
+}, [])
+```
+
+Две проблемы. Наблюдение никогда не отключается — каждая подсказка оставляет наблюдатель в памяти. И колбэк меняет ширину **того же** элемента, за которым наблюдает, — получается цикл и ошибка «ResizeObserver loop…» в мониторинге. Нужно наблюдать за якорем, а не за подсказкой, и вернуть `() => observer.disconnect()`. А ширину подсказки по якорю может задать CSS anchor positioning.
+
+</Example>
+
+<Callout type="deep">
+- **`scrollMargin`** у IntersectionObserver — отступ для вложенных прокручиваемых контейнеров; появился в Chromium, поддержку проверяйте перед использованием.
+- **Наблюдатели и фоновые вкладки.** В скрытой вкладке кадры не рисуются, поэтому IntersectionObserver и ResizeObserver молчат, а MutationObserver (микрозадачи) продолжает работать.
+- **`scrollend`** — событие окончания прокрутки, во всех основных браузерах с декабря 2025 года. Иногда заменяет троттлинг `scroll`.
+</Callout>
+
+### Частые ошибки
+
+| Ошибка | Признак | Исправление |
+|---|---|---|
+| реакция на любой вызов IntersectionObserver | всё грузится сразу | проверять `isIntersecting` |
+| нет `disconnect` | утечки, колбэки для удалённых компонентов | очистка эффекта или ref |
+| ResizeObserver меняет свой же элемент | «ResizeObserver loop…» в логах | наблюдать за другим элементом |
+| `getBoundingClientRect` в `scroll` | рывки при прокрутке | IntersectionObserver |
+| MutationObserver на своё состояние | лишняя сложность | данные из состояния приложения |
+| наблюдатель на каждый элемент списка | память и время на тысячах элементов | один наблюдатель, разбор по `target` |
+
+<Callout type="interview">
+Спросят: как работает IntersectionObserver и где его применять; как работает MutationObserver; что такое PerformanceObserver; как тестировать компоненты с наблюдателями. Сильный ответ называет момент вызова каждого наблюдателя в цикле событий, первую запись IntersectionObserver, `rootMargin` для предзагрузки, `buffered` у PerformanceObserver и обязательный `disconnect`.
+</Callout>
+
+## Implement
+
+<Practice id="quiz-io-first-call" />
+
+<Practice id="quiz-mo-timing" />
+
+<Practice id="order-observer-timing" />
+
+<Practice id="quiz-observer-leak" />
+
+<Practice id="code-observe-in-view" />
+
+<Practice id="code-infinite-list" />
+
+<Practice id="code-wait-for-element" />
+
+<Practice id="react-use-element-size" />
+
+## Confirm
+
+<Question q="Чем отличаются IntersectionObserver, ResizeObserver и MutationObserver и когда каждый вызывается?">
+IntersectionObserver — пересечение с окном или контейнером, в конце кадра. ResizeObserver — размер элемента, после layout и до отрисовки. MutationObserver — изменения DOM, микрозадачей с пачкой записей.
+</Question>
+
+<Question q="Почему колбэк IntersectionObserver вызывается для невидимого элемента?">
+Первая запись приходит сразу после `observe` с текущим состоянием, а при уходе с экрана — запись с `isIntersecting: false`. Реагировать нужно на `entry.isIntersecting`.
+</Question>
+
+<Question q="Чем наблюдатели лучше обработчика scroll?">
+Измерения размеров в `scroll` вызывают принудительный layout на каждом событии. Наблюдатели считают пересечения и размеры в цикле отрисовки, пачками и без лишней работы главного потока.
+</Question>
+
+<Question q="Что такое PerformanceObserver и зачем buffered: true?">
+Наблюдатель записей производительности — LCP, сдвигов, взаимодействий, длинных задач. `buffered: true` выдаёт и записи, случившиеся до подписки: метрики часто случаются раньше загрузки аналитики.
+</Question>
+
+<Question q="Как использовать наблюдатели в React и как их тестировать?">
+Создавать в эффекте или callback ref и отключать в очистке; для смены элемента — элемент в состоянии. В jsdom наблюдателей нет — подменять управляемым моком, реальное поведение — в Playwright.
+</Question>
+
+## Источники
+
+<Sources>
+
+- [W3C, Intersection Observer](https://w3c.github.io/IntersectionObserver/)
+- [CSSWG, Resize Observer](https://drafts.csswg.org/resize-observer/)
+- [DOM Standard, Mutation observers](https://dom.spec.whatwg.org/#mutation-observers)
+- [W3C, Performance Timeline](https://w3c.github.io/performance-timeline/)
+- [MDN, Intersection Observer API](https://developer.mozilla.org/en-US/docs/Web/API/Intersection_Observer_API)
+- [MDN, Resize Observer API](https://developer.mozilla.org/en-US/docs/Web/API/Resize_Observer_API)
+- [MDN, MutationObserver](https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver)
+- [react.dev, ref callback cleanup](https://react.dev/reference/react-dom/components/common#ref-callback)
+
+</Sources>

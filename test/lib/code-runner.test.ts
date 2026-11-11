@@ -354,10 +354,11 @@ describe('помощники для тестов задач', () => {
     const toA: unknown[] = []
     b.addEventListener('message', (event) => toB.push([event.data, event.origin, event.source === a]))
     a.onmessage = (event) => toA.push([event.data, event.origin])
-    a.postMessage('чужому', 'https://evil.example')
-    a.postMessage('точно', 'https://widget.example')
-    a.postMessage('всем', '*')
-    b.postMessage('ответ', a.origin)
+    // Как в браузере: postMessage вызывают у окна-получателя.
+    b.postMessage('чужому', 'https://evil.example')
+    b.postMessage('точно', 'https://widget.example')
+    b.postMessage('всем', '*')
+    a.postMessage('ответ', a.origin)
     await sleep(5)
     vexpect(toB).toEqual([
       ['точно', 'https://app.example', true],
@@ -385,6 +386,8 @@ describe('помощники для тестов задач', () => {
     vexpect(io.instances[0].disconnected).toBe(false)
     vexpect(first.takeRecords()).toEqual([])
     vexpect(io.instances[0].options).toEqual({ threshold: 1 })
+    first.observe(el, { childList: true })
+    vexpect(io.instances[0].options).toEqual({ childList: true })
     vexpect(seen).toEqual([[{ target: el, isIntersecting: true }, true], 'второй', [{ target: el }, true]])
   })
 })

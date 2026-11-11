@@ -1,0 +1,69 @@
+# Карточки темы «Web Workers и transferable». Ключи не переименовывать.
+
+- key: worker-def
+  type: term
+  front: Web Worker
+  back: Отдельный поток со своим event loop, глобальным объектом `self` и памятью. Общается со страницей сообщениями `postMessage`. DOM недоступен.
+  reverse: true
+
+- key: worker-kinds
+  type: qa
+  front: Какие бывают воркеры?
+  back: |
+    - выделенный `Worker` — только для создателя
+    - `SharedWorker` — общий для всех окон одного origin
+    - Service Worker — посредник между сайтом и сетью, управляет браузер
+    - Worklet (Audio, Paint) — узкие задачи движка
+
+- key: worker-has
+  type: qa
+  front: Что есть и чего нет в воркере?
+  back: Есть `fetch`, WebSocket, IndexedDB, Cache API, `crypto`, таймеры, `OffscreenCanvas`, `requestAnimationFrame`. Нет DOM, `window`, `localStorage`, синхронного доступа к странице.
+
+- key: structured-clone
+  type: term
+  front: Структурное клонирование
+  back: Как `postMessage` копирует данные. Понимает Date, Map, Set, массивы, ошибки, циклы. Не копирует функции, DOM-узлы, символы и прототипы — экземпляр класса становится обычным объектом.
+  reverse: true
+
+- key: transferable
+  type: term
+  front: Transferable
+  back: Объекты, которые передаются без копирования — владение переходит получателю. `ArrayBuffer`, `MessagePort`, `ImageBitmap`, `OffscreenCanvas`, `ReadableStream`. У отправителя буфер отсоединяется (`byteLength === 0`).
+  reverse: true
+
+- key: data-clone-error
+  type: qa
+  front: Когда `postMessage` бросает `DataCloneError`?
+  back: Когда в сообщении есть то, что нельзя клонировать, — функция, DOM-узел, символ, — или один буфер дважды в списке передачи.
+
+- key: worker-module-create
+  type: code
+  front: |
+    Как создать модульный воркер в проекте с бандлером?
+  back: "`new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })` — бандлеры распознают именно эту форму и собирают воркер отдельным файлом."
+
+- key: worker-when
+  type: qa
+  front: Когда воркер помогает, а когда нет?
+  back: Помогает при вычислениях без DOM — разбор файлов, сжатие, криптография, поиск, компиляция, изоляция чужого кода. Не помогает с медленным layout и отрисовкой и при множестве мелких сообщений.
+
+- key: worker-cost
+  type: qa
+  front: Почему воркеры держат пулом, а не создают на каждую задачу?
+  back: Запуск воркера — десятки миллисекунд и мегабайты памяти. Пул создаёт их один раз, число обычно — `navigator.hardwareConcurrency - 1`.
+
+- key: worker-rpc
+  type: qa
+  front: Как вызывать функции воркера как промисы?
+  back: 'RPC поверх сообщений: у каждого вызова свой `id`, ответ `{ id, result }` или `{ id, error }` находит ожидающий промис в `Map`. Плюс таймаут. Готовое — библиотека Comlink.'
+
+- key: worker-terminate
+  type: qa
+  front: Как остановить зависший воркер?
+  back: '`worker.terminate()` снаружи — немедленно, без `finally` и уборки. Изнутри — `self.close()`. Так тренажёры останавливают бесконечный цикл в коде ученика.'
+
+- key: worker-errors
+  type: qa
+  front: Как узнать об ошибках в воркере?
+  back: Событие `error` на объекте `Worker` — необработанное исключение; `messageerror` — сообщение не удалось разобрать; отклонённые промисы внутри — `unhandledrejection` в самом воркере.

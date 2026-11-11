@@ -1,0 +1,209 @@
+export const meta = {
+  verified: '11.11.2026',
+  versions: 'HTML Living Standard, Chrome, Firefox, Safari',
+}
+
+## Learn
+
+### Суть за минуту
+
+У каждой вкладки, iframe и воркера своя память. Чтобы они договорились — синхронно выйти из аккаунта, держать одно соединение на всех, передать данные виджету оплаты, — нужен **канал сообщений**. В браузере их несколько, и выбор зависит от того, **кто с кем** общается и **одного ли они origin**.
+
+```js
+// Вкладка, где нажали «Выйти»
+const auth = new BroadcastChannel('auth')
+auth.postMessage({ type: 'logout' })
+
+// Все остальные вкладки сайта
+auth.onmessage = ({ data }) => {
+  if (data.type === 'logout') location.assign('/login')
+}
+```
+
+### Каналы и когда какой
+
+| Механизм | Кто с кем | Ограничение | Данные |
+|---|---|---|---|
+| `window.postMessage(data, targetOrigin)` | окно ↔ окно, iframe, попап — **любые origin** | нужна ссылка на окно | клон, transfer |
+| `MessageChannel` | два порта, прямой канал | порт передают через `postMessage` | клон, transfer |
+| `BroadcastChannel(name)` | все контексты **одного origin**: вкладки, iframe, воркеры | только свой origin | клон |
+| событие `storage` | вкладки одного origin, кроме автора | только `localStorage`, только строки | строки |
+| `SharedWorker` | все окна одного origin, общий код и состояние | отдельный воркер | клон |
+| Service Worker, `clients` | воркер ↔ управляемые вкладки | нужен зарегистрированный SW | клон |
+| Web Locks, `navigator.locks` | координация: работу делает одна вкладка | не канал данных | — |
+
+### Что общее у вкладок
+
+| Общее для origin | Своё у каждой вкладки |
+|---|---|
+| `localStorage`, cookie, IndexedDB, Cache API | `sessionStorage` |
+| | глобальные переменные, состояние JS |
+
+`sessionStorage` копируется в новую вкладку при «Дублировать вкладку» и при `window.open` того же origin без `noopener` — и дальше живёт своей жизнью.
+
+### BroadcastChannel
+
+```js
+const channel = new BroadcastChannel('cart')
+channel.postMessage({ type: 'added', id: 42 })
+channel.onmessage = ({ data }) => refreshCart(data)
+channel.close() // при уходе со страницы
+```
+
+- Сообщение получают **все** объекты канала с этим именем в том же origin — в других вкладках, iframe, воркерах и в **этой же** вкладке. Не получает только сам объект-отправитель.
+- Данные — структурный клон: объекты, массивы, Date, Map. Не функции.
+- Закрывайте канал на `pagehide`: открытые каналы держат ресурсы.
+- Во всех браузерах с 2022 года (Safari 15.4).
+
+**Событие `storage`** — старый способ: срабатывает в других вкладках при изменении `localStorage`, но **не во вкладке-авторе**, и только для строк. BroadcastChannel удобнее, `storage` оставляют как запасной путь.
+
+### postMessage между окнами
+
+`postMessage` — единственный способ общаться с окном **другого origin**: встроенный виджет, платёжная форма, попап входа.
+
+```js
+// Родитель → iframe платёжной формы
+frame.contentWindow.postMessage({ type: 'init', amount: 990 }, 'https://pay.example')
+
+// Внутри iframe
+window.addEventListener('message', (event) => {
+  if (event.origin !== 'https://shop.example') return // чужим — нет
+  if (event.data?.type !== 'init') return
+  showForm(event.data.amount)
+  event.source.postMessage({ type: 'ready' }, event.origin)
+})
+```
+
+Это **граница безопасности** в обе стороны:
+- **отправитель** указывает точный `targetOrigin`, а не `'*'`. Если iframe перенаправили на чужой сайт, сообщение туда не уйдёт;
+- **получатель всегда проверяет `event.origin`** точным сравнением и форму `event.data`. Сообщение может прислать любое окно, у которого есть ссылка на ваше. Проверка через `includes` по строке — уязвимость: `'https://app.example.evil.com'.includes('app.example')` — `true`.
+
+**Рукопожатие.** iframe грузится не сразу, и сообщение, отправленное до его подписки, потеряется. Обе стороны при старте шлют `hello`, на `hello` отвечают `ready` — канал готов, кто бы ни запустился первым. Поверх строят запросы с `id`, как RPC с воркером.
+
+### Вкладка-лидер на Web Locks
+
+Задача: десять открытых вкладок — десять WebSocket-соединений и десять опросов сервера. Нужно, чтобы работала одна вкладка, а остальные получали данные.
+
+```js
+navigator.locks.request('realtime-leader', async () => {
+  const socket = new WebSocket('wss://example.com/events')
+  const channel = new BroadcastChannel('events')
+  socket.onmessage = (event) => channel.postMessage(JSON.parse(event.data))
+  await new Promise(() => {}) // держим лидерство, пока вкладка жива
+})
+```
+
+- Блокировку получает **одна** вкладка, остальные ждут в очереди.
+- Вкладку закрыли — браузер **сам освобождает** блокировку, лидером становится следующая.
+- Флаг в `localStorage` так не умеет: после падения вкладки он остаётся, и лидера не будет ни у кого.
+- То же применяют для обновления токена (обновляет одна вкладка, остальные ждут) и для фоновой синхронизации.
+
+Опции: `{ ifAvailable: true }` — не ждать, если занято; `{ signal }` — отменить ожидание. Web Locks — во всех браузерах с 2022 года.
+
+Альтернатива — **SharedWorker**: соединение живёт в нём, а вкладки подключаются к воркеру через порты.
+
+### Разделение состояния во встроенных iframe
+
+Ваш виджет `widget.com` встроен на `a.com` и `b.com`. Раньше оба iframe видели общий `localStorage` и могли общаться через BroadcastChannel — этим пользовались для слежки между сайтами. Теперь браузеры **разделяют состояние** стороннего контекста по сайту верхнего уровня (storage partitioning; в Chrome — с версии 115, в Safari и Firefox — раньше):
+- `localStorage`, IndexedDB, BroadcastChannel, SharedWorker во встроенном iframe — отдельные для каждого сайта, куда он встроен;
+- сторонние cookie блокируются или разделяются.
+
+Виджету, которому нужно своё общее состояние, — Storage Access API (`document.requestStorageAccess()`) или серверная сессия.
+
+### Порядок сообщений
+
+Порядок гарантирован только для сообщений **одного** отправителя по одному каналу. Две вкладки, почти одновременно отправившие «тёмная тема» и «светлая тема», третья получит в любом порядке. Для «последний побеждает» в сообщение добавляют время или счётчик версии и применяют только более новое.
+
+<Example file="src/entities/session/sync.ts" verdict="good">
+
+Выход и вход синхронизированы между вкладками через BroadcastChannel `auth`. При выходе вкладка сбрасывает кэш запросов и публикует `logout`, остальные делают то же и уходят на страницу входа. Обновление токена делает только вкладка, получившая Web Lock `token-refresh`; остальные ждут блокировку и читают свежий токен из хранилища. Запасной путь для старых браузеров — событие `storage`.
+
+</Example>
+
+<Example file="src/widgets/chat/embed.ts" verdict="review">
+
+```js
+window.addEventListener('message', (event) => {
+  if (event.data.action === 'openChat') openChat(event.data.userId)
+})
+parent.postMessage({ action: 'chatReady', token: session.token }, '*')
+```
+
+Виджет чата выполняет команды от любого окна — проверки `event.origin` нет. И отправляет токен сессии на `'*'`: если виджет встроят на чужой сайт, токен получит он. Нужны список разрешённых origin, точный `targetOrigin` и никаких токенов в сообщениях родителю.
+
+</Example>
+
+<Callout type="deep">
+- **`MessagePort` как способ передать канал.** `const { port1, port2 } = new MessageChannel()`; `port2` передают iframe или воркеру через `postMessage(msg, origin, [port2])`. Дальше стороны общаются напрямую, без общего `message` у окна.
+- **BroadcastChannel и bfcache.** Открытый канал раньше мешал странице попасть в bfcache. Закрывайте канал на `pagehide` и открывайте снова на `pageshow`.
+- **COOP и `window.opener`.** С `Cross-Origin-Opener-Policy: same-origin` попап другого origin теряет ссылку на открывшее окно — `postMessage` через `opener` перестаёт работать. Для OAuth-попапов есть `same-origin-allow-popups`.
+</Callout>
+
+### Частые ошибки
+
+| Ошибка | Признак | Исправление |
+|---|---|---|
+| нет проверки `event.origin` | любой сайт шлёт команды виджету | точное сравнение со списком |
+| `postMessage(data, '*')` с токеном | утечка при перенаправлении iframe | точный `targetOrigin` |
+| ожидание `storage` во вкладке-авторе | своё изменение «не видно» | обновить состояние сразу, событие — для других |
+| лидер по флагу в `localStorage` | после падения вкладки лидера нет | Web Locks |
+| сообщение в iframe до его загрузки | первое сообщение теряется | рукопожатие `hello` и `ready` |
+| ставка на порядок сообщений из разных вкладок | «прыгающая» тема или язык | версия или время в сообщении |
+
+<Callout type="interview">
+Частые вопросы: делится ли `localStorage` и `sessionStorage` между вкладками; как синхронизировать выход во всех вкладках; чем BroadcastChannel лучше события `storage`; как безопасно общаться с iframe. Сильный ответ называет проверку `event.origin` и точный `targetOrigin`, вкладку-лидера через Web Locks, рукопожатие с iframe и разделение состояния во встроенных iframe.
+</Callout>
+
+## Implement
+
+<Practice id="quiz-storage-sharing" />
+
+<Practice id="quiz-target-origin" />
+
+<Practice id="quiz-leader" />
+
+<Practice id="quiz-partition" />
+
+<Practice id="code-trusted-message" />
+
+<Practice id="code-tab-sync" />
+
+<Practice id="code-leader" />
+
+<Practice id="code-frame-channel" />
+
+## Confirm
+
+<Question q="Какие хранилища общие для вкладок одного origin, а какие нет?">
+Общие: `localStorage`, cookie, IndexedDB, Cache API. Своё у каждой вкладки: `sessionStorage` (копируется при дублировании и `window.open` без `noopener`) и состояние JavaScript.
+</Question>
+
+<Question q="Чем BroadcastChannel лучше события storage?">
+Передаёт любые клонируемые данные, а не только строки; работает между вкладками, iframe и воркерами; сообщения получает и та же вкладка (другие объекты канала). Событие `storage` срабатывает только в других вкладках и только для `localStorage`.
+</Question>
+
+<Question q="Как безопасно общаться с iframe другого origin?">
+Отправлять на точный `targetOrigin`, а не `'*'`. В обработчике `message` проверять `event.origin` точным сравнением и форму `event.data`. Начинать с рукопожатия, чтобы первые сообщения не потерялись.
+</Question>
+
+<Question q="Как сделать одно WebSocket-соединение на все вкладки?">
+Выбрать вкладку-лидера через `navigator.locks.request`: она держит соединение и раздаёт данные через BroadcastChannel; при закрытии вкладки блокировка освобождается сама, и лидером становится следующая. Или держать соединение в SharedWorker.
+</Question>
+
+<Question q="Что такое разделение состояния во встроенных iframe?">
+Хранилища, BroadcastChannel и SharedWorker стороннего iframe разделены по сайту верхнего уровня: виджет на `a.com` и на `b.com` не видит общего состояния. Это защита от слежки между сайтами; для общего состояния — Storage Access API или серверная сессия.
+</Question>
+
+## Источники
+
+<Sources>
+
+- [HTML Standard, Cross-document messaging](https://html.spec.whatwg.org/multipage/web-messaging.html)
+- [HTML Standard, Broadcasting to other browsing contexts](https://html.spec.whatwg.org/multipage/web-messaging.html#broadcasting-to-other-browsing-contexts)
+- [MDN, `Window.postMessage`](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage)
+- [MDN, Broadcast Channel API](https://developer.mozilla.org/en-US/docs/Web/API/Broadcast_Channel_API)
+- [MDN, Web Locks API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API)
+- [MDN, State Partitioning](https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/State_Partitioning)
+- [MDN, Storage Access API](https://developer.mozilla.org/en-US/docs/Web/API/Storage_Access_API)
+
+</Sources>

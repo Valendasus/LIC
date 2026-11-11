@@ -1,0 +1,70 @@
+# Карточки темы «Кадр: requestAnimationFrame, порядок шагов, планирование задач». Ключи не переименовывать.
+
+- key: rendering-opportunity
+  type: term
+  front: Возможность отрисовки (rendering opportunity)
+  back: Момент, когда браузер может показать новый кадр. Задаётся частотой экрана и решениями браузера; для невидимой страницы — редко или никогда. Тогда в очередь ставится задача «обновить отрисовку».
+  reverse: true
+
+- key: frame-steps
+  type: qa
+  front: Порядок шагов кадра по HTML Standard?
+  back: |
+    - resize и scroll
+    - медиазапросы
+    - анимации
+    - колбэки requestAnimationFrame
+    - стили и layout вместе с ResizeObserver
+    - IntersectionObserver
+    - отрисовка
+
+- key: raf-def
+  type: term
+  front: '`requestAnimationFrame(cb)`'
+  back: Вызвать `cb(timestamp)` один раз перед следующей отрисовкой. Для анимации колбэк вызывает rAF снова. В скрытой вкладке не вызывается.
+  reverse: true
+
+- key: raf-timestamp
+  type: qa
+  front: Зачем аргумент `timestamp` у колбэка rAF?
+  back: Это время начала кадра, одно на все колбэки кадра. Анимацию считают по прошедшему времени, а не по числу кадров — тогда она одинакова на 60 и 120 Гц.
+
+- key: raf-before-paint
+  type: qa
+  front: rAF выполняется до или после отрисовки?
+  back: До — перед стилями и layout кадра. Изменения DOM в rAF попадут в этот же кадр. «После отрисовки» — двойной rAF.
+
+- key: resize-observer-timing
+  type: qa
+  front: Когда срабатывает ResizeObserver и почему изменения из него не мигают?
+  back: После layout, но до отрисовки того же кадра. Если колбэк что-то изменил, layout пересчитывается снова — и пользователь видит уже итог.
+
+- key: frame-budget
+  type: qa
+  front: Какой бюджет кадра на 60 и 120 Гц?
+  back: Около 16,7 и 8,3 мс, причём часть уходит браузеру на стили, layout и отрисовку. Работа в rAF и обработчиках должна быть короткой.
+
+- key: scheduler-yield
+  type: term
+  front: '`scheduler.yield()`'
+  back: Уступить поток браузеру (ввод и отрисовка идут первыми), а продолжение поставить впереди обычных задач. Chrome 129+, Firefox 142+, в Safari нет — нужен запасной `setTimeout`.
+
+- key: request-idle-callback
+  type: term
+  front: '`requestIdleCallback(cb)`'
+  back: Вызвать `cb(deadline)` в простое; `deadline.timeRemaining()` — сколько осталось, не больше 50 мс. Для несрочной работы. В Safari нет.
+
+- key: post-task
+  type: term
+  front: '`scheduler.postTask(fn, { priority })`'
+  back: 'Задача с приоритетом `user-blocking`, `user-visible` или `background` и отменой через `TaskController`. Chrome и Firefox, в Safari нет.'
+
+- key: microtask-not-yield
+  type: qa
+  front: Почему `await Promise.resolve()` не уступает поток браузеру?
+  back: Это микрозадача — она выполняется до отрисовки. Уступает только новая задача — `setTimeout`, `MessageChannel`, `scheduler.yield()`.
+
+- key: layout-thrashing-batch
+  type: qa
+  front: Как избежать layout thrashing при работе с DOM?
+  back: Сначала все чтения размеров, потом все записи стилей — например, записи в rAF. Чтение после записи заставляет браузер пересчитать layout прямо сейчас.

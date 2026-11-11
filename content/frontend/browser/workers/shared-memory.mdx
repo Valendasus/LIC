@@ -1,0 +1,217 @@
+export const meta = {
+  verified: '11.11.2026',
+  versions: 'ECMAScript 2026, HTML Living Standard, Chrome, Firefox, Safari',
+}
+
+## Learn
+
+### Суть за минуту
+
+Обычно воркер и страница обмениваются **копиями** данных через `postMessage`. `SharedArrayBuffer` даёт им **одну и ту же память**: запись в одном потоке сразу видна в другом, без копирования и сообщений. Чтобы потоки не портили данные друг другу, есть `Atomics` — неделимые операции над этой памятью.
+
+```js
+// main.js
+const shared = new SharedArrayBuffer(4)
+const counter = new Int32Array(shared)
+worker.postMessage(shared) // не копия, а доступ к той же памяти
+
+// worker.js
+self.onmessage = ({ data }) => {
+  const counter = new Int32Array(data)
+  Atomics.add(counter, 0, 1) // страница увидит 1
+}
+```
+
+Ловушка: в большинстве проектов `SharedArrayBuffer` **не определён**. Браузер даёт его только странице, включившей **cross-origin isolation** двумя HTTP-заголовками. Почему — ниже.
+
+### SharedArrayBuffer
+
+- Буфер байтов, как `ArrayBuffer`, но при передаче через `postMessage` **разделяется**, а не копируется.
+- Работают с ним через типизированные массивы: `new Int32Array(shared)`, `new Float64Array(shared)`.
+- Его нельзя «передать» (transfer) — его делят.
+- Есть в Chrome 68, Firefox 79, Safari 15.2 — но только при `crossOriginIsolated === true`.
+
+### Гонки данных
+
+Когда два потока пишут в одну ячейку, обычные операции ломаются:
+
+```js
+counter[0]++ // на самом деле: прочитать → прибавить 1 → записать
+```
+
+Два потока могут прочитать одно и то же значение, и оба запишут «плюс один» — один инкремент потерян. Четыре воркера по тысяче инкрементов дадут меньше 4000.
+
+### Atomics
+
+Объект `Atomics` выполняет операцию **целиком, без вмешательства** других потоков. Работает с целочисленными типизированными массивами (`Int32Array`, `BigInt64Array` и другими).
+
+| Операция | Что делает |
+|---|---|
+| `Atomics.load(a, i)`, `Atomics.store(a, i, v)` | прочитать и записать с гарантией видимости другим потокам |
+| `Atomics.add`, `sub`, `and`, `or`, `xor` | изменить и вернуть **старое** значение |
+| `Atomics.exchange(a, i, v)` | записать и вернуть старое |
+| `Atomics.compareExchange(a, i, expected, v)` | записать, только если там `expected`; вернуть старое |
+| `Atomics.wait(a, i, v)` | заснуть, пока в ячейке `v` и никто не разбудил (только в воркере) |
+| `Atomics.waitAsync(a, i, v)` | то же, но промисом — можно в главном потоке |
+| `Atomics.notify(a, i, count)` | разбудить ждущих |
+| `Atomics.pause()` | подсказка процессору в цикле ожидания (ES2027) |
+
+```js
+Atomics.add(counter, 0, 1) // никаких потерь при любом числе потоков
+```
+
+**`compareExchange` — основа блокировок:** «если свободно (0) — занять (1)» одним шагом.
+
+```js
+const locked = new Int32Array(shared, 0, 1)
+function tryLock() {
+  return Atomics.compareExchange(locked, 0, 0, 1) === 0
+}
+function unlock() {
+  Atomics.store(locked, 0, 0)
+  Atomics.notify(locked, 0, 1)
+}
+```
+
+**Почему `Atomics.wait` запрещён в главном потоке окна:** он блокирует поток, как сон, — окно перестало бы отвечать. В окне — `Atomics.waitAsync` (во всех основных браузерах с ноября 2025 года).
+
+Обычные чтения и записи в общей памяти допустимы, но без `Atomics` порядок, в котором другой поток увидит изменения, не гарантирован. Модель памяти описана в ECMA-262, раздел Memory Model.
+
+### Почему нужна изоляция
+
+В 2018 году атака **Spectre** показала: код может прочитать любую память своего процесса, измеряя время доступа. Общая память позволяет собрать очень точный таймер — один поток крутит счётчик, другой его читает. Поэтому браузеры отключили `SharedArrayBuffer`, а потом вернули с условием: страница должна гарантировать, что в её процессе **нет чужих незащищённых ресурсов**. Это и есть **cross-origin isolation**.
+
+Связанная тема — site isolation, разнесение сайтов по процессам («Процессы и потоки браузера»).
+
+### Как включить изоляцию
+
+Два заголовка в ответе на **документ**:
+
+```http
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+| Заголовок | Что требует |
+|---|---|
+| `Cross-Origin-Opener-Policy: same-origin` | окна других origin не получают ссылку на ваше (`window.opener` рвётся) |
+| `Cross-Origin-Embedder-Policy: require-corp` | каждый чужой ресурс должен явно разрешить встраивание: заголовок `Cross-Origin-Resource-Policy` или CORS |
+| `Cross-Origin-Embedder-Policy: credentialless` | чужие ресурсы загружаются **без cookie** — тогда разрешение не нужно; Chrome 96, Firefox 119, в Safari нет |
+
+Проверка в коде:
+
+```js
+if (globalThis.crossOriginIsolated) {
+  // доступны SharedArrayBuffer, точный performance.now(),
+  // performance.measureUserAgentSpecificMemory()
+}
+```
+
+Где ставить заголовки: Vite — `server.headers` для разработки и настройки хостинга для прода; Next.js — `headers()` в `next.config`. Частая ошибка — заголовки есть локально, а на хостинге нет (или наоборот).
+
+### Цена изоляции
+
+После включения перестаёт работать:
+- картинки, видео, шрифты и скрипты с чужих доменов без CORP или CORS — нужен атрибут `crossorigin` и правильные заголовки на CDN;
+- iframe чужих виджетов без разрешения на встраивание;
+- попапы оплаты и OAuth, которые общаются с вашей страницей через `window.opener`.
+
+На большом сайте включение изоляции — проект: инвентаризация сторонних ресурсов, перевод на `credentialless` там, где можно, и проверка в режиме отчётов (`Cross-Origin-Embedder-Policy-Report-Only`). Часто изоляцию включают только на тех страницах, где нужна общая память, — например, на странице редактора.
+
+### Где это нужно
+
+- **Потоки WebAssembly**: ffmpeg.wasm (видео в браузере), официальная сборка SQLite с OPFS, редакторы изображений, игровые движки.
+- **Звук и видео**: AudioWorklet получает отсчёты от главного потока через кольцевой буфер в общей памяти.
+- **Быстрые очереди** между воркерами, где `postMessage` слишком медленный.
+
+Обычному веб-приложению это почти никогда не нужно: хватает `postMessage` и передачи `ArrayBuffer` без копирования (тема «Web Workers и transferable»).
+
+<Example file="src/features/video-editor/README.md" verdict="good">
+
+Редактор обрезает видео в браузере на ffmpeg.wasm с потоками. Изоляция включена только на странице редактора: `COOP: same-origin` и `COEP: credentialless`, чтобы превью с CDN грузились без доработки. Для Safari, где `credentialless` нет, редактор проверяет `crossOriginIsolated` и переключается на однопоточную сборку ffmpeg — медленнее, но работает.
+
+</Example>
+
+<Example file="src/widgets/sync/counter.ts" verdict="review">
+
+```js
+// общий счётчик обработанных записей для прогресс-бара
+const progress = new Int32Array(new SharedArrayBuffer(4))
+workers.forEach((w) => w.postMessage(progress.buffer))
+// в воркерах: progress[0] += batch.length
+```
+
+Две проблемы. Без изоляции на проде `SharedArrayBuffer` не определён — код упадёт сразу. А `+=` из нескольких воркеров теряет обновления: прогресс «застрянет» на 95%. Нужен `Atomics.add`, а для прогресс-бара проще всего сообщения `postMessage` с числом обработанных — общая память здесь лишняя.
+
+</Example>
+
+<Callout type="deep">
+- **`Document-Isolation-Policy`** (Chrome 137, только Chromium) — изоляция для одного документа без COOP на весь сайт.
+- **Неизменяемые ArrayBuffer** — предложение на стадии 2.7; Structs и примитивы синхронизации (общие объекты и мьютексы) — на стадии 2.
+- **Переполнение индексов** в долгоживущих счётчиках: `Int32Array` переполнится через 2³¹ операций. Берут `BigInt64Array` или сбрасывают индексы.
+</Callout>
+
+### Частые ошибки
+
+| Ошибка | Признак | Исправление |
+|---|---|---|
+| нет заголовков изоляции | `SharedArrayBuffer is not defined` | COOP и COEP на документе |
+| `++` и `+=` из нескольких потоков | теряются обновления | `Atomics.add` |
+| проверка-потом-запись вместо CAS | два потока «заняли» одно | `Atomics.compareExchange` |
+| `Atomics.wait` в окне | ошибка | `Atomics.waitAsync` |
+| изоляция на весь сайт без инвентаризации | сломались картинки, оплата, виджеты | Report-Only, `credentialless`, изоляция только где нужна |
+| общая память вместо сообщений | сложность без выигрыша | `postMessage` и transfer |
+
+<Callout type="interview">
+Вопросы уровня senior: что такое `SharedArrayBuffer` и `Atomics`, чем общая память отличается от передачи, зачем COOP, COEP и CORP. Сильный ответ объясняет гонку данных и неделимые операции, связывает изоляцию со Spectre, называет цену включения изоляции и знает, что в обычном приложении общая память почти не нужна.
+</Callout>
+
+## Implement
+
+<Practice id="out-atomics-cas" />
+
+<Practice id="quiz-data-race" />
+
+<Practice id="quiz-isolation-breaks" />
+
+<Practice id="code-isolation-headers" />
+
+<Practice id="code-spin-lock" />
+
+<Practice id="code-ring-buffer" />
+
+## Confirm
+
+<Question q="Чем SharedArrayBuffer отличается от передачи ArrayBuffer через transfer?">
+Передача отдаёт владение: у отправителя буфер становится пустым. `SharedArrayBuffer` делится: обе стороны видят и меняют одни байты одновременно.
+</Question>
+
+<Question q="Что такое гонка данных и как её избежать?">
+Неатомарная операция (чтение → изменение → запись) из нескольких потоков теряет обновления. Избежать — `Atomics`: `add`, `exchange`, `compareExchange` выполняются одним неделимым шагом.
+</Question>
+
+<Question q="Почему SharedArrayBuffer требует cross-origin isolation?">
+После Spectre общая память позволяет собрать точный таймер и читать чужие данные в процессе. Поэтому её дают только странице, гарантирующей, что в процессе нет чужих незащищённых ресурсов.
+</Question>
+
+<Question q="Какие заголовки включают изоляцию и что может сломаться?">
+`Cross-Origin-Opener-Policy: same-origin` и `Cross-Origin-Embedder-Policy: require-corp` или `credentialless`. Ломаются чужие ресурсы без CORP или CORS, чужие iframe и попапы, которые общаются через `window.opener`.
+</Question>
+
+<Question q="Почему Atomics.wait нельзя в главном потоке окна?">
+Он блокирует поток до сигнала — окно перестало бы отвечать. В главном потоке используют `Atomics.waitAsync`, который возвращает промис.
+</Question>
+
+## Источники
+
+<Sources>
+
+- [ECMA-262, SharedArrayBuffer, Atomics, Memory Model](https://tc39.es/ecma262/#sec-sharedarraybuffer-objects)
+- [HTML Standard, Cross-origin opener policies](https://html.spec.whatwg.org/multipage/browsers.html#cross-origin-opener-policies)
+- [HTML Standard, Cross-origin embedder policies](https://html.spec.whatwg.org/multipage/browsers.html#coep)
+- [MDN, SharedArrayBuffer — security requirements](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements)
+- [MDN, Atomics](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Atomics)
+- [web.dev, Making your website cross-origin isolated using COOP and COEP](https://web.dev/articles/coop-coep)
+- [web.dev, Why you need cross-origin isolated for powerful features](https://web.dev/articles/why-coop-coep)
+
+</Sources>

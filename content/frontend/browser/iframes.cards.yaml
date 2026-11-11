@@ -1,0 +1,64 @@
+# Карточки темы «iframe: изоляция, sandbox и общение с окном». Ключи не переименовывать.
+
+- key: iframe-def
+  type: term
+  front: '`<iframe>`'
+  back: Встроенный отдельный документ со своим `window`, `document`, историей и event loop. Документ другого сайта обычно живёт в отдельном процессе.
+  reverse: true
+
+- key: iframe-access
+  type: qa
+  front: Что доступно между окнами разных origin?
+  back: Только `postMessage`, запись `location`, `close()`, `frames` и пара свойств. Доступ к DOM — SecurityError. У iframe того же origin доступ полный.
+
+- key: sandbox-attr
+  type: term
+  front: Атрибут `sandbox`
+  back: 'Ограничения для встроенного документа. Пустой — без скриптов, форм, попапов и с непрозрачным origin. Разрешения — токенами: `allow-scripts`, `allow-forms`, `allow-popups`, `allow-same-origin` и другие.'
+  reverse: true
+
+- key: sandbox-danger
+  type: qa
+  front: Почему `allow-scripts` вместе с `allow-same-origin` опасны?
+  back: Для документа вашего же origin скрипт дотянется до родителя и снимет `sandbox` у своего iframe — изоляции не останется. Недоверенный код — без `allow-same-origin` или на отдельном домене.
+
+- key: allow-attr
+  type: term
+  front: Атрибут `allow`
+  back: 'Permissions Policy для iframe: какие мощные возможности ему разрешены — `camera`, `microphone`, `geolocation`, `fullscreen`, `clipboard-write`, `payment`. По умолчанию у чужого iframe их нет.'
+
+- key: clickjacking
+  type: term
+  front: Clickjacking
+  back: Атака, когда чужой сайт кладёт вашу страницу в прозрачный iframe и заставляет кликнуть. Защита — заголовок `frame-ancestors` в CSP на вашей странице.
+  reverse: true
+
+- key: frame-ancestors
+  type: qa
+  front: Чем `frame-ancestors` отличается от `X-Frame-Options`?
+  back: "`frame-ancestors` — директива CSP со списком разрешённых сайтов, `'none'` или `'self'`. `X-Frame-Options` — устаревший заголовок только с `DENY` и `SAMEORIGIN`. При обоих браузеры следуют `frame-ancestors`; для совместимости ставят оба."
+
+- key: srcdoc
+  type: term
+  front: '`srcdoc`'
+  back: HTML документа прямо в атрибуте iframe, без отдельного запроса. С `sandbox` — песочница для превью и чужого кода.
+
+- key: iframe-storage
+  type: qa
+  front: Почему виджет в iframe «забывает» вход пользователя?
+  back: Сторонние cookie и хранилища во встроенном iframe заблокированы или разделены по сайту верхнего уровня. Решения — Storage Access API по действию пользователя или вход через попап.
+
+- key: iframe-height
+  type: qa
+  front: Как подогнать высоту iframe под содержимое?
+  back: Сам виджет по ResizeObserver сообщает высоту через `postMessage`, страница ставит `style.height`. Родитель не может прочитать высоту документа другого origin.
+
+- key: iframe-load
+  type: qa
+  front: Можно ли по `load` понять, что документ в iframe загрузился успешно?
+  back: Нет — `load` срабатывает и для страницы ошибки. Готовность сообщает сам документ через `postMessage`, плюс таймаут.
+
+- key: iframe-a11y
+  type: qa
+  front: Что нужно iframe для доступности?
+  back: '`title`, описывающий содержимое, — по нему скринридер объявляет фрейм. Фокус уходит внутрь и обратно по Tab — не убирайте iframe из порядка табуляции.'

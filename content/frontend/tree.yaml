@@ -117,13 +117,30 @@
   group: Платформа
   summary: Процессы и потоки, рендеринг и кадр, DOM и события, хранилища, воркеры, iframe, наблюдатели, сеть, безопасность, DevTools.
   children:
-    - { slug: process-model, title: 'Процессы и потоки браузера: site isolation, главный поток, компоновщик', grade: M }
+    - slug: process-model
+      title: 'Процессы и потоки браузера: site isolation, главный поток, компоновщик'
+      grade: M
+      content: true
+      goals:
+        - Назвать процессы браузера и объяснить песочницу и site isolation
+        - Отличать сайт от origin и связывать изоляцию с безопасностью и cross-origin isolation
+        - Объяснить главный поток и компоновщик и почему transform плавнее, чем left
+        - Делать пассивные обработчики прокрутки и выбирать дешёвые для анимации свойства
+        - Учитывать фоновые вкладки, заморозку и bfcache: visibilitychange и pageshow вместо unload
     - slug: rendering
       title: Как браузер рисует
       children:
         - { slug: pipeline, title: 'Парсинг, стили, layout, paint, composite', grade: J }
         - { slug: reflow, title: 'Reflow, repaint и layout thrashing', grade: M }
-        - { slug: frame, title: 'Кадр: requestAnimationFrame, порядок шагов, планирование задач', grade: M }
+        - slug: frame
+          title: 'Кадр: requestAnimationFrame, порядок шагов, планирование задач'
+          grade: M
+          content: true
+          goals:
+            - Назвать шаги кадра по HTML Standard и предсказать, где сработают rAF и наблюдатели
+            - Писать анимацию на requestAnimationFrame с расчётом по времени и отменой
+            - Выбирать инструмент планирования: микрозадача, таймер, rAF, простой, scheduler — с запасным путём для Safari
+            - Избегать layout thrashing: разделять чтения и записи DOM по кадрам
     - slug: dom-events
       title: DOM и события
       children:
@@ -138,21 +155,71 @@
     - slug: workers
       title: Потоки и фон
       children:
-        - { slug: web-workers, title: 'Web Workers и transferable', grade: M }
-        - { slug: cross-tab, title: 'BroadcastChannel и postMessage', grade: M }
-        - { slug: service-worker, title: 'Service Worker и PWA', grade: M }
-        - { slug: shared-memory, title: 'SharedArrayBuffer, Atomics и cross-origin isolation', grade: S }
+        - slug: web-workers
+          title: 'Web Workers и transferable'
+          grade: M
+          content: true
+          goals:
+            - Объяснить, что такое воркер, какие бывают и что в нём доступно
+            - Различать клонирование, передачу и общую память и знать цену клонирования
+            - Решать, когда воркер помогает, а когда нет
+            - Писать протокол запрос-ответ с id и таймаутом и пул воркеров
+        - slug: cross-tab
+          title: 'BroadcastChannel и postMessage'
+          grade: M
+          content: true
+          goals:
+            - Выбрать канал сообщений под задачу: postMessage, MessageChannel, BroadcastChannel, storage, SharedWorker
+            - Безопасно общаться с окнами других origin: точный targetOrigin и проверка event.origin
+            - Синхронизировать вкладки через BroadcastChannel и выбирать вкладку-лидера через Web Locks
+            - Строить протокол с iframe: рукопожатие и запросы с ответами
+            - Объяснить разделение состояния во встроенных iframe
+        - slug: service-worker
+          title: 'Service Worker и PWA'
+          grade: M
+          content: true
+          goals:
+            - Объяснить жизненный цикл Service Worker и почему новая версия ждёт
+            - Выбирать стратегию кэширования по типу запроса и писать cache first, network first и stale-while-revalidate
+            - Безопасно обновлять воркер и не оставлять пользователей на старой версии
+            - Понимать слои кэша, требования PWA, отладку и аварийное отключение
+        - slug: shared-memory
+          title: 'SharedArrayBuffer, Atomics и cross-origin isolation'
+          grade: S
+          content: true
+          goals:
+            - Объяснить общую память, гонку данных и атомарные операции
+            - Писать блокировку на compareExchange и очередь на Atomics.load и Atomics.store
+            - Включать cross-origin isolation заголовками COOP и COEP и понимать, что при этом ломается
+            - Решать, когда общая память нужна, а когда хватает сообщений
     - slug: observers-navigation
       title: Наблюдатели и навигация
       children:
-        - { slug: observers, title: 'Intersection, Resize, Mutation Observer', grade: M }
+        - slug: observers
+          title: 'Intersection, Resize, Mutation Observer'
+          grade: M
+          content: true
+          goals:
+            - Выбрать наблюдатель под задачу и знать, когда каждый срабатывает в цикле событий
+            - Делать ленивую загрузку и бесконечную ленту на IntersectionObserver без обработчиков scroll
+            - Ждать появления элементов через MutationObserver и собирать метрики через PerformanceObserver
+            - Использовать наблюдатели в React без утечек и тестировать их моками
         - { slug: navigation, title: 'History API, Navigation API, View Transitions', grade: M }
     - slug: network
       title: Сеть из браузера
       children:
         - { slug: fetch, title: 'Fetch API, AbortController, таймауты', grade: J }
         - { slug: realtime, title: 'WebSocket и Server-Sent Events', grade: M }
-    - { slug: iframes, title: 'iframe: изоляция, sandbox и общение с окном', grade: M }
+    - slug: iframes
+      title: 'iframe: изоляция, sandbox и общение с окном'
+      grade: M
+      content: true
+      goals:
+        - Объяснить, что доступно между окнами одного и разных origin
+        - Ограничивать встроенное через sandbox и allow по принципу наименьших прав
+        - Защищать свою страницу от clickjacking через frame-ancestors
+        - Строить безопасное превью кода на srcdoc, sandbox и CSP
+        - Учитывать разделение хранилищ, высоту, загрузку и доступность iframe
     - { slug: web-components, title: 'Web Components и Shadow DOM', grade: M }
     - { slug: security, title: 'Same-origin, CORS, CSP, Trusted Types', grade: M }
     - { slug: devtools, title: 'DevTools как рабочий инструмент', grade: J }

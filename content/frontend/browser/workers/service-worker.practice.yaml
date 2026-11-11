@@ -1,0 +1,337 @@
+# Практика темы «Service Worker и PWA». Стратегии кэша — чистые функции над фейковыми cache и fetch:
+# в тестах запрос — строка-адрес, ответ — обычный объект.
+
+- key: order-sw-lifecycle
+  kind: order
+  prompt: Расставьте этапы жизни новой версии Service Worker с момента, когда браузер обнаружил изменённый `sw.js`.
+  steps:
+    - Новая версия скачивается и устанавливается — событие install
+    - Ожидание (waiting), пока закроются все вкладки со старой версией
+    - Активация — событие activate, удаление старых кэшей
+    - Новая версия управляет страницами и получает события fetch
+    - В простое браузер останавливает воркер, при новом событии — запускает снова
+  explain: 'Новая версия по умолчанию ждёт, пока не закроются **все** вкладки со старой, — чтобы одна страница не работала с двумя разными воркерами. `skipWaiting()` пропускает ожидание, но тогда старая страница может получить новые кэши.'
+
+- key: quiz-sw-waiting
+  kind: quiz
+  question: Выкатили новую версию сайта, но пользователи с открытой вкладкой видят старую, даже после перезагрузки. Почему?
+  options:
+    - text: Новый Service Worker ждёт, пока закроются все вкладки со старым, — перезагрузка одной вкладки не помогает
+      correct: true
+    - text: Браузер не видит изменений в `sw.js`
+      why: Браузер проверяет `sw.js` при навигации — новая версия установилась, но ждёт.
+    - text: Старый HTML в HTTP-кэше
+      why: Возможно и это, но типичная причина при SW — ожидание активации.
+    - text: Service Worker обновляется раз в неделю
+      why: Проверка — при навигации и не реже раза в сутки.
+  explain: 'Обычное решение — показать «Доступно обновление» и по согласию вызвать `skipWaiting()` в новом воркере и перезагрузить страницу. Так пользователь не потеряет ввод, а все вкладки перейдут на одну версию.'
+
+- key: quiz-strategy-choice
+  kind: quiz
+  question: Какая стратегия подходит для HTML-страниц приложения, которое должно открываться офлайн, но обычно показывать свежую версию?
+  options:
+    - text: Network first — сначала сеть, при ошибке или таймауте — из кэша
+      correct: true
+    - text: Cache first — всегда из кэша
+      why: Пользователи месяцами будут видеть старую версию приложения.
+    - text: Network only
+      why: Офлайн страница не откроется.
+    - text: Cache only
+  explain: 'HTML — network first: свежесть важнее, кэш — запасной путь. Статика с хешем в имени (`app.3f9a.js`) — cache first: файл с этим именем никогда не меняется. Аватары и ленты — stale-while-revalidate. Платежи и мутации — только сеть.'
+
+- key: quiz-first-visit
+  kind: quiz
+  question: Пользователь впервые открыл сайт, Service Worker зарегистрировался. Перехватывает ли он запросы этой страницы?
+  options:
+    - text: Нет — страница загрузилась без него; он начнёт управлять со следующей навигации или после `clients.claim()`
+      correct: true
+    - text: Да, сразу после регистрации
+      why: Страница уже загружена. Воркер возьмёт управление, только если вызовет `clients.claim()` при активации.
+    - text: Только запросы картинок
+    - text: Да, если сайт по HTTPS
+  explain: '`navigator.serviceWorker.controller` — `null` на первом визите. Офлайн-кэш при этом можно заполнить заранее в `install`.'
+
+- key: quiz-sw-security
+  kind: quiz
+  question: Чем опасен скомпрометированный Service Worker?
+  options:
+    - text: Перехватывает и подменяет все запросы сайта и переживает перезагрузку и закрытие вкладки
+      correct: true
+    - text: Ничем, его удаляет перезагрузка страницы
+      why: Воркер зарегистрирован в браузере и живёт между визитами.
+    - text: Может читать данные других сайтов
+      why: Только своего origin — но это весь ваш сайт.
+    - text: Может установить программы на компьютер
+  explain: 'Защита — отсутствие XSS, CSP, воркер только со своего origin и по HTTPS. Аварийный выключатель — ответ сервера с заголовком `Clear-Site-Data: "storage"` или воркер, который удаляет кэши и вызывает `registration.unregister()`.'
+
+- key: quiz-sw-https
+  kind: quiz
+  question: Почему Service Worker работает только по HTTPS (и на localhost)?
+  options:
+    - text: Он перехватывает все запросы сайта — по HTTP его могли бы подменить по дороге
+      correct: true
+    - text: По HTTP он слишком медленный
+    - text: Это ограничение только Safari
+      why: Требование есть во всех браузерах.
+    - text: На HTTP нет кэша
+  explain: 'Подменённый в сети воркер стал бы постоянным «человеком посередине» для сайта. Для разработки `localhost` считается безопасным.'
+
+- key: quiz-sw-http-cache
+  kind: quiz
+  question: Как Service Worker связан с HTTP-кэшем браузера?
+  options:
+    - text: Это разные слои — запрос из воркера (`fetch`) тоже проходит через HTTP-кэш
+      correct: true
+    - text: Service Worker заменяет HTTP-кэш
+      why: HTTP-кэш работает и с воркером, и без него.
+    - text: Это одно и то же хранилище
+      why: Cache Storage воркера — отдельное хранилище, которым управляет ваш код.
+    - text: HTTP-кэш отключается при регистрации воркера
+  explain: 'Слои: память (memory cache), Service Worker и его Cache Storage, HTTP-кэш на диске, сеть. Поэтому `sw.js` и HTML нельзя кэшировать надолго заголовками — иначе обновление застрянет в HTTP-кэше.'
+
+- key: quiz-sw-debug
+  kind: quiz
+  question: Как отключить Service Worker при измерении производительности и отладке?
+  options:
+    - text: 'DevTools → Application → Service Workers: «Bypass for network» или «Unregister»; плюс «Update on reload» при разработке'
+      correct: true
+    - text: Перезагрузить страницу с Ctrl+R
+      why: Обычная перезагрузка идёт через воркер.
+    - text: Очистить историю браузера
+    - text: Его нельзя отключить
+  explain: 'Жёсткая перезагрузка (Shift+Ctrl+R) обходит воркер для этой навигации. Для постоянной работы — «Bypass for network». В тестах Playwright — `serviceWorkers: "block"`.'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+
+- key: code-cache-first
+  kind: code
+  level: easy
+  title: Cache first
+  prompt: |
+    Напишите `cacheFirst(request, { cache, fetch })`:
+    - если `await cache.match(request)` вернул ответ — отдать его, сеть не трогать;
+    - иначе `await fetch(request)`; если `response.ok` — положить в кэш (`cache.put(request, response)`) и вернуть; не ok — вернуть, не кэшируя.
+  starter: |
+    async function cacheFirst(request, { cache, fetch }) {
+      return fetch(request)
+    }
+  hints:
+    - '`const cached = await cache.match(request); if (cached) return cached` — дальше сеть.'
+  tests: |
+    const makeCache = (initial = {}) => {
+      const store = new Map(Object.entries(initial))
+      return { store, match: async (key) => store.get(key), put: async (key, value) => void store.set(key, value) }
+    }
+    test('из кэша — без сети', async () => {
+      const cache = makeCache({ '/app.js': { ok: true, body: 'кэш' } })
+      const fetch = spy(async () => ({ ok: true, body: 'сеть' }))
+      await expect(cacheFirst('/app.js', { cache, fetch })).resolves.toEqual({ ok: true, body: 'кэш' })
+      expect(fetch.calls.length).toBe(0)
+    })
+    test('нет в кэше — сеть и запись в кэш', async () => {
+      const cache = makeCache()
+      const fetch = async () => ({ ok: true, body: 'сеть' })
+      await cacheFirst('/app.js', { cache, fetch })
+      expect(cache.store.get('/app.js')).toEqual({ ok: true, body: 'сеть' })
+    })
+    test('ошибочный ответ не кэшируется', async () => {
+      const cache = makeCache()
+      await expect(cacheFirst('/x', { cache, fetch: async () => ({ ok: false, status: 404 }) })).resolves.toEqual({ ok: false, status: 404 })
+      expect(cache.store.size).toBe(0)
+    })
+  solution: |
+    async function cacheFirst(request, { cache, fetch }) {
+      const cached = await cache.match(request)
+      if (cached) return cached
+      const response = await fetch(request)
+      if (response.ok) await cache.put(request, response)
+      return response
+    }
+  explain: |
+    **Для чего:** файлы с хешем в имени (`app.3f9a.js`), шрифты, иконки — то, что под этим адресом никогда не меняется.
+
+    **Ошибки не кэшируем:** иначе 404 или 500 застрянет в кэше навсегда.
+
+    **В настоящем воркере** ответ можно прочитать один раз — в кэш кладут копию: `cache.put(request, response.clone())`.
+
+- key: code-network-first
+  kind: code
+  level: medium
+  title: Network first с таймаутом
+  prompt: |
+    Напишите `networkFirst(request, { cache, fetch, timeout = 3000 })`:
+    - пробовать сеть; успешный ответ (`ok`) — положить в кэш и вернуть;
+    - если сеть упала, ответила не `ok` или не уложилась в `timeout` мс — вернуть из кэша;
+    - нет в кэше — вернуть ответ сети, если он был, иначе отклонить с ошибкой сети или `new Error('Нет сети и нет копии в кэше')` при таймауте.
+  starter: |
+    async function networkFirst(request, { cache, fetch, timeout = 3000 }) {
+      return cache.match(request)
+    }
+  hints:
+    - 'Гонка сети и таймера: `Promise.race([fetch(request), timer])`, где таймер отклоняется через `timeout`. Не забудьте очистить таймер.'
+    - 'Весь сетевой путь — в `try`. В `catch` и при не-`ok` — `cache.match`. Если там пусто — бросить ошибку или вернуть ответ сети.'
+    - 'Запомните ответ сети в переменной, чтобы вернуть его, если в кэше пусто.'
+  tests: |
+    const makeCache = (initial = {}) => {
+      const store = new Map(Object.entries(initial))
+      return { store, match: async (key) => store.get(key), put: async (key, value) => void store.set(key, value) }
+    }
+    test('сеть доступна — свежий ответ и обновление кэша', async () => {
+      const cache = makeCache({ '/': { ok: true, body: 'старое' } })
+      await expect(networkFirst('/', { cache, fetch: async () => ({ ok: true, body: 'новое' }) })).resolves.toEqual({ ok: true, body: 'новое' })
+      expect(cache.store.get('/').body).toBe('новое')
+    })
+    test('нет сети — из кэша', async () => {
+      const cache = makeCache({ '/': { ok: true, body: 'офлайн' } })
+      await expect(networkFirst('/', { cache, fetch: async () => { throw new TypeError('Failed to fetch') } })).resolves.toEqual({ ok: true, body: 'офлайн' })
+    })
+    test('медленная сеть — из кэша по таймауту', async () => {
+      const cache = makeCache({ '/': { ok: true, body: 'офлайн' } })
+      const start = Date.now()
+      const slow = () => new Promise((r) => setTimeout(() => r({ ok: true, body: 'поздно' }), 500))
+      await expect(networkFirst('/', { cache, fetch: slow, timeout: 20 })).resolves.toEqual({ ok: true, body: 'офлайн' })
+      expect(Date.now() - start).toBeLessThan(300)
+    })
+    test('ошибка сервера — из кэша; нет и в кэше — ответ сервера', async () => {
+      const cache = makeCache({ '/a': { ok: true, body: 'копия' } })
+      const fail = async () => ({ ok: false, status: 503 })
+      await expect(networkFirst('/a', { cache, fetch: fail })).resolves.toEqual({ ok: true, body: 'копия' })
+      await expect(networkFirst('/b', { cache, fetch: fail })).resolves.toEqual({ ok: false, status: 503 })
+    })
+    test('нет сети и нет копии — ошибка', async () => {
+      await expect(networkFirst('/', { cache: makeCache(), fetch: async () => { throw new TypeError('Failed to fetch') } })).rejects.toThrow('Failed to fetch')
+      const slow = () => new Promise((r) => setTimeout(() => r({ ok: true }), 500))
+      await expect(networkFirst('/', { cache: makeCache(), fetch: slow, timeout: 10 })).rejects.toThrow('Нет сети и нет копии в кэше')
+    })
+  solution: |
+    async function networkFirst(request, { cache, fetch, timeout = 3000 }) {
+      let timer
+      let networkResponse
+      try {
+        const timeoutPromise = new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Нет сети и нет копии в кэше')), timeout)
+        })
+        networkResponse = await Promise.race([fetch(request), timeoutPromise])
+        if (networkResponse.ok) {
+          await cache.put(request, networkResponse)
+          return networkResponse
+        }
+      } catch (error) {
+        const cached = await cache.match(request)
+        if (cached) return cached
+        throw error
+      } finally {
+        clearTimeout(timer)
+      }
+      return (await cache.match(request)) ?? networkResponse
+    }
+  explain: |
+    **Таймаут — главное в офлайн-режиме.** «Плохая сеть» в метро чаще не падает, а висит минуту. Без таймаута пользователь смотрит на белый экран, хотя копия страницы лежит в кэше.
+
+    **Не-`ok` — тоже повод взять копию:** 503 во время выкладки не должен ломать приложение, если есть вчерашняя версия.
+
+    **Workbox** реализует это как `NetworkFirst({ networkTimeoutSeconds })` — в реальном проекте стратегии берут оттуда, а писать их стоит, чтобы понимать, что выбираешь.
+
+- key: code-swr
+  kind: code
+  level: medium
+  title: Stale-while-revalidate
+  prompt: |
+    Напишите `staleWhileRevalidate(request, { cache, fetch, waitUntil })`:
+    - если есть копия в кэше — **сразу** вернуть её, а в фоне сходить в сеть и обновить кэш успешным ответом;
+    - если копии нет — дождаться сети, положить успешный ответ в кэш и вернуть его;
+    - фоновое обновление передать в `waitUntil(promise)` — в браузере это `event.waitUntil`, чтобы воркер не остановили раньше времени. Ошибки фонового обновления не должны отклонять результат.
+  starter: |
+    async function staleWhileRevalidate(request, { cache, fetch, waitUntil }) {
+      return (await cache.match(request)) ?? fetch(request)
+    }
+  hints:
+    - 'Сначала запустить обновление `const update = fetch(request).then(…put…)`, потом посмотреть в кэш.'
+    - 'Есть копия — `waitUntil(update.catch(() => {}))` и вернуть копию. Нет — `return await update`.'
+  tests: |
+    const makeCache = (initial = {}) => {
+      const store = new Map(Object.entries(initial))
+      return { store, match: async (key) => store.get(key), put: async (key, value) => void store.set(key, value) }
+    }
+    test('копия сразу, кэш обновляется в фоне', async () => {
+      const cache = makeCache({ '/avatar': { ok: true, body: 'старый' } })
+      const background = []
+      const fetch = () => new Promise((r) => setTimeout(() => r({ ok: true, body: 'новый' }), 20))
+      const result = await staleWhileRevalidate('/avatar', { cache, fetch, waitUntil: (p) => background.push(p) })
+      expect(result.body).toBe('старый')
+      expect(background).toHaveLength(1)
+      await background[0]
+      expect(cache.store.get('/avatar').body).toBe('новый')
+    })
+    test('без копии — ждёт сеть', async () => {
+      const cache = makeCache()
+      const result = await staleWhileRevalidate('/x', { cache, fetch: async () => ({ ok: true, body: 'сеть' }), waitUntil: () => {} })
+      expect(result.body).toBe('сеть')
+      expect(cache.store.get('/x').body).toBe('сеть')
+    })
+    test('ошибка фонового обновления не ломает ответ', async () => {
+      const cache = makeCache({ '/x': { ok: true, body: 'копия' } })
+      const background = []
+      const result = await staleWhileRevalidate('/x', { cache, fetch: async () => { throw new TypeError('offline') }, waitUntil: (p) => background.push(p) })
+      expect(result.body).toBe('копия')
+      await background[0]
+    })
+  solution: |
+    async function staleWhileRevalidate(request, { cache, fetch, waitUntil }) {
+      const update = fetch(request).then(async (response) => {
+        if (response.ok) await cache.put(request, response)
+        return response
+      })
+      const cached = await cache.match(request)
+      if (cached) {
+        waitUntil(update.catch(() => {}))
+        return cached
+      }
+      return await update
+    }
+  explain: |
+    **Быстро и почти свежо:** пользователь сразу видит копию, а следующий запрос получит уже обновлённую. Подходит для аватаров, списков, ленты — где отставание на один визит не страшно.
+
+    **`waitUntil` обязателен.** Браузер останавливает воркер, как только обработчик `fetch` ответил. Без `waitUntil` фоновое обновление оборвалось бы.
+
+    **`.catch(() => {})`** — фоновая ошибка не должна стать необработанным отклонением: офлайн — нормальная ситуация, копия уже отдана.
+
+- key: code-clean-caches
+  kind: code
+  level: easy
+  title: Удалить старые кэши при активации
+  prompt: |
+    Напишите `cleanCaches(caches, keep)` для обработчика `activate`. `caches` — как глобальный `caches`: `keys()` возвращает имена, `delete(name)` удаляет. Удалить все кэши, имени которых нет в массиве `keep`, и вернуть массив удалённых имён.
+  starter: |
+    async function cleanCaches(caches, keep) {
+      return []
+    }
+  hints:
+    - '`(await caches.keys()).filter((name) => !keep.includes(name))`, затем `Promise.all` удалений.'
+  tests: |
+    const makeCaches = (names) => {
+      const set = new Set(names)
+      return { set, keys: async () => [...set], delete: spy(async (name) => set.delete(name)) }
+    }
+    test('удаляет только старые', async () => {
+      const caches = makeCaches(['static-v1', 'static-v2', 'images-v1'])
+      await expect(cleanCaches(caches, ['static-v2', 'images-v1'])).resolves.toEqual(['static-v1'])
+      expect([...caches.set]).toEqual(['static-v2', 'images-v1'])
+    })
+    test('нечего удалять', async () => {
+      const caches = makeCaches(['a'])
+      await expect(cleanCaches(caches, ['a'])).resolves.toEqual([])
+      expect(caches.delete.calls.length).toBe(0)
+    })
+  solution: |
+    async function cleanCaches(caches, keep) {
+      const old = (await caches.keys()).filter((name) => !keep.includes(name))
+      await Promise.all(old.map((name) => caches.delete(name)))
+      return old
+    }
+  explain: |
+    **Версия в имени кэша** (`static-v2`) — простой способ обновлять статику: новая версия воркера кладёт файлы в новый кэш, а при активации удаляет старые.
+
+    **В настоящем воркере:** `self.addEventListener('activate', (event) => event.waitUntil(cleanCaches(caches, CURRENT)))` — `waitUntil` не даст активации завершиться раньше уборки.
+
+    **Не удаляйте чужое:** если на origin несколько приложений, фильтруйте по префиксу своего.

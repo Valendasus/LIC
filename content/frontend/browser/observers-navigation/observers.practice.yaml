@@ -1,0 +1,420 @@
+# Практика темы «Intersection, Resize, Mutation Observer». Наблюдатели в тестах — fakeObserver() из помощников:
+# Observer подставляется вместо настоящего класса, trigger(target, entry) вызывает колбэки.
+
+- key: quiz-io-first-call
+  kind: quiz
+  question: 'Сделали `observer.observe(el)` для IntersectionObserver, а элемент далеко внизу страницы. Вызовется ли колбэк до прокрутки?'
+  options:
+    - text: 'Да — первый вызов приходит сразу после `observe` с текущим состоянием, `isIntersecting: false`'
+      correct: true
+    - text: Нет, только когда элемент появится на экране
+      why: Первая запись приходит всегда — проверяйте `isIntersecting`, а не сам факт вызова.
+    - text: Только если указан `threshold`
+    - text: Только в Chrome
+  explain: 'Частая ошибка — считать любой вызов колбэка «элемент виден» и запускать загрузку сразу. Проверяйте `entry.isIntersecting`.'
+
+- key: quiz-mo-timing
+  kind: quiz
+  question: В одном обработчике изменили три атрибута элемента. Сколько раз и когда вызовется колбэк MutationObserver?
+  options:
+    - text: Один раз, микрозадачей после обработчика, с тремя записями
+      correct: true
+    - text: Три раза, синхронно при каждом изменении
+      why: Так работали устаревшие Mutation Events — из-за этого они тормозили страницу и удалены.
+    - text: Один раз, в следующем кадре
+      why: MutationObserver не ждёт кадра — это микрозадача.
+    - text: Ни разу, атрибуты не отслеживаются
+  explain: 'MutationObserver собирает изменения пачкой и вызывает колбэк микрозадачей. Это быстро и предсказуемо: обработка идёт после всех изменений текущей задачи.'
+
+- key: quiz-ro-vs-resize
+  kind: quiz
+  question: Чем ResizeObserver лучше события `resize` у окна для адаптивного компонента?
+  options:
+    - text: Он сообщает размер самого элемента — компонент реагирует на свой контейнер, а не на окно
+      correct: true
+    - text: Он срабатывает чаще
+    - text: Он работает в фоновой вкладке
+    - text: Он сообщает о движении мыши
+  explain: 'Сайдбар раскрылся — окно не изменилось, а ширина компонента изменилась. Для стилей ту же задачу решают container queries (`@container`), для JS-логики — графики, canvas, виртуальные списки — ResizeObserver.'
+
+- key: quiz-root-margin
+  kind: quiz
+  question: Картинки ленты должны начинать загружаться чуть раньше, чем появятся на экране. Как это сделать с IntersectionObserver?
+  options:
+    - text: "`rootMargin: '300px'` — расширить зону пересечения на 300 px"
+      correct: true
+    - text: '`threshold: 1`'
+      why: Это «полностью видим» — загрузка начнётся ещё позже.
+    - text: Вызывать `observe` позже
+    - text: Это невозможно, нужен обработчик `scroll`
+  explain: '`rootMargin` расширяет (или сужает) корень, с которым считается пересечение. Для простых картинок есть `loading="lazy"` без JS — браузер сам выбирает запас.'
+
+- key: quiz-observer-leak
+  kind: quiz
+  question: Компонент создаёт IntersectionObserver при монтировании и не вызывает `disconnect`. К чему это приводит?
+  options:
+    - text: Наблюдатель и всё, что держит его колбэк, остаются в памяти, а колбэк вызывается для удалённого компонента
+      correct: true
+    - text: Ни к чему, наблюдатели удаляются вместе с элементами
+      why: Наблюдатель — отдельный объект, его держат внутренние ссылки браузера, пока он наблюдает.
+    - text: Страница перестанет прокручиваться
+    - text: Браузер выбросит ошибку при уходе со страницы
+  explain: 'В React — `disconnect` в очистке эффекта или в функции очистки callback ref (React 19). Один наблюдатель на много элементов дешевле, чем свой на каждый.'
+
+- key: quiz-observers-tests
+  kind: quiz
+  question: Как тестировать компонент с IntersectionObserver в Vitest с jsdom?
+  options:
+    - text: Подменить глобальный класс управляемым моком и вызывать его колбэк из теста; реальное поведение — в Playwright
+      correct: true
+    - text: Просто запустить — jsdom поддерживает наблюдатели
+      why: В jsdom нет IntersectionObserver и ResizeObserver — нет layout.
+    - text: Прокрутить `window.scrollTo` в тесте
+      why: В jsdom нет layout, пересечения не считаются.
+    - text: Такие компоненты не тестируют
+  explain: 'Мок — класс с `observe`, `unobserve`, `disconnect` и способом вызвать колбэк. Так устроен `fakeObserver` в задачах этой темы.'
+
+- key: quiz-visible-vs-intersect
+  kind: quiz
+  question: '`isIntersecting: true`, но пользователь элемент не видит. Как такое возможно?'
+  options:
+    - text: 'Элемент перекрыт другим или у него `opacity: 0` — пересечение считается по геометрии, а не по видимости'
+      correct: true
+    - text: Это ошибка браузера
+    - text: Так бывает только в iframe
+    - text: Элемент находится в фоновой вкладке
+  explain: 'Для «реально видим» есть IntersectionObserver v2 (`trackVisibility`), но только в Chromium. Для аналитики «показ рекламы» это важно, для ленивой загрузки — нет.'
+
+- key: quiz-perf-observer
+  kind: quiz
+  question: 'Зачем `PerformanceObserver.observe({ type: "largest-contentful-paint", buffered: true })`?'
+  options:
+    - text: Получить и записи, которые случились до подписки, — LCP часто происходит раньше, чем загрузился код аналитики
+      correct: true
+    - text: Ускорить отрисовку крупных элементов
+    - text: Отключить буферизацию событий
+    - text: Записать LCP в localStorage
+  explain: 'Так собирают Web Vitals в поле: LCP, CLS (`layout-shift`), INP (`event`), длинные задачи. Библиотека `web-vitals` делает это за вас.'
+
+- key: order-observer-timing
+  kind: order
+  prompt: 'В обработчике клика изменили атрибут и ширину элемента. За ним следят MutationObserver, ResizeObserver и IntersectionObserver, ещё есть колбэк rAF. В каком порядке они сработают?'
+  steps:
+    - MutationObserver — микрозадачей сразу после обработчика
+    - Колбэк requestAnimationFrame — в начале кадра
+    - ResizeObserver — после layout кадра
+    - IntersectionObserver — в конце кадра, перед отрисовкой
+  explain: 'MutationObserver — микрозадача. Остальное — шаги кадра по HTML Standard: rAF, стили и layout с ResizeObserver, затем IntersectionObserver.'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+
+- key: code-observe-in-view
+  kind: code
+  level: easy
+  title: Сообщить, когда элемент виден
+  prompt: |
+    Напишите `onVisible(element, callback, { Observer = IntersectionObserver, once = false, rootMargin = '0px' } = {})`:
+    - создать наблюдатель с `{ rootMargin }` и наблюдать за `element`;
+    - на записи с `isIntersecting: true` вызывать `callback(entry)`; записи с `false` — игнорировать;
+    - при `once: true` после первого вызова прекратить наблюдение (`disconnect`);
+    - вернуть функцию, которая прекращает наблюдение.
+  starter: |
+    function onVisible(element, callback, { Observer = IntersectionObserver, once = false, rootMargin = '0px' } = {}) {
+      const observer = new Observer((entries) => entries.forEach(callback))
+      observer.observe(element)
+      return () => {}
+    }
+  hints:
+    - 'В колбэке наблюдателя — `for (const entry of entries) if (entry.isIntersecting) { callback(entry); if (once) observer.disconnect() }`.'
+  tests: |
+    test('только видимые записи и rootMargin', () => {
+      const io = fakeObserver()
+      const el = {}
+      const seen = spy()
+      onVisible(el, seen, { Observer: io.Observer, rootMargin: '200px' })
+      io.trigger(el, { isIntersecting: false })
+      io.trigger(el, { isIntersecting: true })
+      expect(seen.calls.length).toBe(1)
+      expect(io.instances[0].options).toEqual({ rootMargin: '200px' })
+    })
+    test('once — один раз', () => {
+      const io = fakeObserver()
+      const el = {}
+      const seen = spy()
+      onVisible(el, seen, { Observer: io.Observer, once: true })
+      io.trigger(el, { isIntersecting: true })
+      io.trigger(el, { isIntersecting: true })
+      expect(seen.calls.length).toBe(1)
+    })
+    test('отписка', () => {
+      const io = fakeObserver()
+      const el = {}
+      const seen = spy()
+      const stop = onVisible(el, seen, { Observer: io.Observer })
+      stop()
+      io.trigger(el, { isIntersecting: true })
+      expect(seen.calls.length).toBe(0)
+    })
+  solution: |
+    function onVisible(element, callback, { Observer = IntersectionObserver, once = false, rootMargin = '0px' } = {}) {
+      const observer = new Observer(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue
+            callback(entry)
+            if (once) observer.disconnect()
+          }
+        },
+        { rootMargin },
+      )
+      observer.observe(element)
+      return () => observer.disconnect()
+    }
+  explain: |
+    **Проверка `isIntersecting`** обязательна: первая запись приходит сразу после `observe`, даже для невидимого элемента, и при уходе с экрана тоже приходит запись — с `false`.
+
+    **`once`** — для аналитики «блок показан» и ленивой загрузки: после первого показа наблюдение не нужно.
+
+    **Класс параметром** (`Observer`) делает функцию тестируемой без браузера — та же идея, что подмена rAF в задачах про кадр.
+
+- key: code-infinite-list
+  kind: code
+  level: medium
+  title: Бесконечная лента на сторожевом элементе
+  prompt: |
+    Напишите `infiniteScroll({ sentinel, loadMore, Observer = IntersectionObserver })`. `sentinel` — пустой элемент в конце списка. Когда он становится видимым (`isIntersecting: true`), вызвать `await loadMore()`:
+    - пока идёт загрузка, новые появления сторожа игнорировать;
+    - если `loadMore()` вернул `false` — данных больше нет: прекратить наблюдение;
+    - ошибка `loadMore` не должна ломать ленту — следующая видимость пробует снова;
+    - вернуть функцию остановки.
+  starter: |
+    function infiniteScroll({ sentinel, loadMore, Observer = IntersectionObserver }) {
+      const observer = new Observer(() => loadMore())
+      observer.observe(sentinel)
+      return () => observer.disconnect()
+    }
+  hints:
+    - 'Флаг `loading`: если он стоит или запись не `isIntersecting` — выйти. Иначе поставить флаг и вызвать `loadMore` в `try/finally`.'
+    - 'Результат `false` — `observer.disconnect()`. Ошибку поймать в `catch` и просто снять флаг.'
+  tests: |
+    test('загрузка по видимости сторожа, без наложения', async () => {
+      const io = fakeObserver()
+      const sentinel = {}
+      const gate = deferred()
+      const loadMore = spy(() => gate.promise)
+      infiniteScroll({ sentinel, loadMore, Observer: io.Observer })
+      io.trigger(sentinel, { isIntersecting: false })
+      io.trigger(sentinel, { isIntersecting: true })
+      io.trigger(sentinel, { isIntersecting: true })
+      expect(loadMore.calls.length).toBe(1)
+      gate.resolve(true)
+      await sleep(1)
+      io.trigger(sentinel, { isIntersecting: true })
+      expect(loadMore.calls.length).toBe(2)
+    })
+    test('false — конец данных, наблюдение прекращено', async () => {
+      const io = fakeObserver()
+      const sentinel = {}
+      infiniteScroll({ sentinel, loadMore: async () => false, Observer: io.Observer })
+      io.trigger(sentinel, { isIntersecting: true })
+      await sleep(1)
+      expect(io.trigger(sentinel, { isIntersecting: true })).toBe(0)
+    })
+    test('ошибка не ломает ленту', async () => {
+      const io = fakeObserver()
+      const sentinel = {}
+      const loadMore = spy(flaky(1, true))
+      infiniteScroll({ sentinel, loadMore, Observer: io.Observer })
+      io.trigger(sentinel, { isIntersecting: true })
+      await sleep(1)
+      io.trigger(sentinel, { isIntersecting: true })
+      await sleep(1)
+      expect(loadMore.calls.length).toBe(2)
+    })
+  solution: |
+    function infiniteScroll({ sentinel, loadMore, Observer = IntersectionObserver }) {
+      let loading = false
+      const observer = new Observer(async (entries) => {
+        if (loading || !entries.some((entry) => entry.isIntersecting)) return
+        loading = true
+        try {
+          if ((await loadMore()) === false) observer.disconnect()
+        } catch {
+          // ошибку покажет сам loadMore; лента попробует снова при следующей видимости
+        } finally {
+          loading = false
+        }
+      })
+      observer.observe(sentinel)
+      return () => observer.disconnect()
+    }
+  explain: |
+    **Сторожевой элемент** — пустой `div` в конце списка. Когда он появился, пора грузить. Никаких вычислений `scrollTop` и обработчиков прокрутки — браузер сам сообщает о пересечении, и главный поток свободен.
+
+    **Флаг `loading`** — без него быстрая прокрутка вызовет несколько загрузок одной страницы.
+
+    **Тонкость:** если после загрузки сторож остаётся на экране (страница короткая), новой записи не придёт — пересечение не изменилось. В реальном коде после загрузки проверяют, виден ли он ещё, или пересоздают наблюдение. В TanStack Query это `useInfiniteQuery` с тем же сторожем.
+
+- key: code-wait-for-element
+  kind: code
+  level: medium
+  title: Дождаться появления элемента
+  prompt: |
+    Напишите `waitForElement(root, selector, { timeout = 3000, Observer = MutationObserver } = {})` → промис элемента:
+    - если `root.querySelector(selector)` уже находит элемент — выполнить сразу;
+    - иначе наблюдать за `root` с `{ childList: true, subtree: true }` и на каждой пачке изменений проверять снова;
+    - нашёлся — выполнить и прекратить наблюдение; через `timeout` мс — отклонить `new Error('Элемент <selector> не появился')` и тоже прекратить.
+  starter: |
+    function waitForElement(root, selector, { timeout = 3000, Observer = MutationObserver } = {}) {
+      return Promise.resolve(root.querySelector(selector))
+    }
+  hints:
+    - 'Сначала проверка без наблюдателя. Потом `new Promise` с наблюдателем и таймером.'
+    - 'В колбэке наблюдателя — `querySelector`; нашёлся — `disconnect`, `clearTimeout`, `resolve`. В таймере — `disconnect` и `reject`.'
+  tests: |
+    // Корень с управляемым содержимым: тест «добавляет» элементы и сообщает наблюдателю.
+    const makeRoot = () => {
+      const found = new Map()
+      return { found, querySelector: (selector) => found.get(selector) ?? null }
+    }
+    test('уже есть — сразу', async () => {
+      const root = makeRoot()
+      root.found.set('.modal', 'модалка')
+      await expect(waitForElement(root, '.modal', { Observer: fakeObserver().Observer })).resolves.toBe('модалка')
+    })
+    test('появился позже — после изменения DOM', async () => {
+      const mo = fakeObserver()
+      const root = makeRoot()
+      const waiting = waitForElement(root, '.toast', { Observer: mo.Observer })
+      expect(mo.instances[0].options).toEqual({ childList: true, subtree: true })
+      mo.trigger(root)
+      root.found.set('.toast', 'тост')
+      mo.trigger(root)
+      await expect(waiting).resolves.toBe('тост')
+      expect(mo.instances[0].disconnected).toBe(true)
+    })
+    test('таймаут', async () => {
+      const mo = fakeObserver()
+      await expect(waitForElement(makeRoot(), '.nope', { timeout: 20, Observer: mo.Observer })).rejects.toThrow('Элемент .nope не появился')
+      expect(mo.instances[0].disconnected).toBe(true)
+    })
+  solution: |
+    function waitForElement(root, selector, { timeout = 3000, Observer = MutationObserver } = {}) {
+      const existing = root.querySelector(selector)
+      if (existing) return Promise.resolve(existing)
+      return new Promise((resolve, reject) => {
+        const observer = new Observer(() => {
+          const element = root.querySelector(selector)
+          if (!element) return
+          observer.disconnect()
+          clearTimeout(timer)
+          resolve(element)
+        })
+        const timer = setTimeout(() => {
+          observer.disconnect()
+          reject(new Error(`Элемент ${selector} не появился`))
+        }, timeout)
+        observer.observe(root, { childList: true, subtree: true })
+      })
+    }
+  explain: |
+    **Где это нужно:** сторонний виджет рисует кнопку позже вас, расширение меняет страницу, CMS вставляет блоки. В своём React-коде наблюдать за DOM почти не нужно — состояние и так известно.
+
+    **Так работают e2e-утилиты:** `findByRole` в Testing Library и ожидания Playwright ждут элемент, проверяя DOM при изменениях и по таймауту.
+
+    **Колбэк — микрозадача с пачкой изменений,** поэтому проверка `querySelector` один раз на пачку дешевле, чем разбор каждой записи.
+
+- key: react-use-element-size
+  kind: react
+  level: hard
+  title: Хук размера элемента
+  prompt: |
+    Сделайте хук `useElementSize()` → `[ref, size]`. `ref` — callback ref для элемента, `size` — `{ width, height }` из `entry.contentRect`, до первого измерения — `null`.
+    - Наблюдение — `ResizeObserver`; при смене элемента наблюдать за новым, при размонтировании — `disconnect`.
+    - Обновлять состояние, только если размер действительно изменился.
+
+    И компонент `SizeLabel`, который показывает размер своего `div` текстом «ширина × высота» (например «320 × 200») или «…» до первого измерения.
+  starter: |
+    function useElementSize() {
+      return [() => {}, null]
+    }
+    function SizeLabel() {
+      const [ref, size] = useElementSize()
+      return <div ref={ref}>…</div>
+    }
+  preview: <SizeLabel />
+  hints:
+    - '`const [element, setElement] = useState(null)` — callback ref это и есть `setElement`. Эффект зависит от `element`.'
+    - 'В эффекте: если элемента нет — выйти; иначе `new ResizeObserver(([entry]) => …)`, `observe(element)`, очистка — `disconnect()`.'
+    - 'Чтобы не создавать новое состояние без изменений: `setSize((prev) => prev && prev.width === width && prev.height === height ? prev : { width, height })`.'
+  tests: |
+    // Подменяем ResizeObserver управляемым наблюдателем.
+    let ro
+    const install = () => {
+      ro = fakeObserver()
+      globalThis.ResizeObserver = ro.Observer
+    }
+    const resize = (el, width, height) => ro.trigger(el, { contentRect: { width, height } })
+
+    test('до измерения «…», потом размер', async () => {
+      install()
+      render(<SizeLabel />)
+      const box = screen.getByText('…')
+      expect(ro.instances).toHaveLength(1)
+      resize(box, 320, 200)
+      await waitFor(() => expect(screen.getByText('320 × 200')).toBeInTheDocument())
+    })
+    test('новый размер — новый текст, тот же — тот же объект состояния', async () => {
+      install()
+      const sizes = new Set()
+      function Probe() {
+        const [ref, size] = useElementSize()
+        if (size) sizes.add(size)
+        return <div ref={ref}>{size ? `${size.width}` : 'нет'}</div>
+      }
+      render(<Probe />)
+      const box = screen.getByText('нет')
+      resize(box, 100, 50)
+      await waitFor(() => expect(screen.getByText('100')).toBeInTheDocument())
+      resize(box, 100, 50)
+      await sleep(20)
+      // Тот же размер не создаёт новый объект — React может пропустить перерисовку детей.
+      expect(sizes.size).toBe(1)
+      resize(box, 140, 50)
+      await waitFor(() => expect(screen.getByText('140')).toBeInTheDocument())
+    })
+    test('при размонтировании наблюдение прекращается', async () => {
+      install()
+      const view = render(<SizeLabel />)
+      await waitFor(() => expect(ro.instances).toHaveLength(1))
+      view.unmount()
+      expect(ro.instances[0].disconnected).toBe(true)
+    })
+  solution: |
+    function useElementSize() {
+      const [element, setElement] = useState(null)
+      const [size, setSize] = useState(null)
+      useEffect(() => {
+        if (!element) return
+        const observer = new ResizeObserver(([entry]) => {
+          const { width, height } = entry.contentRect
+          setSize((prev) => (prev && prev.width === width && prev.height === height ? prev : { width, height }))
+        })
+        observer.observe(element)
+        return () => observer.disconnect()
+      }, [element])
+      return [setElement, size]
+    }
+
+    function SizeLabel() {
+      const [ref, size] = useElementSize()
+      return <div ref={ref}>{size ? `${Math.round(size.width)} × ${Math.round(size.height)}` : '…'}</div>
+    }
+  explain: |
+    **Callback ref вместо `useRef`.** Эффект с `useRef` не узнает, что элемент сменился, — ref меняется без перерисовки. Элемент в состоянии (`useState` как ref) перезапускает эффект при смене узла.
+
+    **Тот же объект — без перерисовки.** Функциональное обновление возвращает `prev`, если размер тот же: React сравнивает через `Object.is` и не рендерит. ResizeObserver может прислать запись с прежним размером — например, после смены `box-sizing`.
+
+    **React 19:** callback ref может вернуть функцию очистки — наблюдение можно поставить прямо в ref без эффекта: `ref={(el) => { const ro = new ResizeObserver(…); ro.observe(el); return () => ro.disconnect() }}`.
+
+    **Для стилей** вместо хука — container queries: `@container (width > 400px)`. Хук нужен, когда размер нужен в JavaScript — график, canvas, виртуальный список.

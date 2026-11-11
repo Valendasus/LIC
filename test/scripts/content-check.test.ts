@@ -146,7 +146,7 @@ describe('проверка контента', () => {
   })
 
   it('«что выведет»: в песочнице есть таймеры и отмена', async () => {
-    expect(await runOutput("const c = new AbortController(); c.abort(); const t = setTimeout(() => console.log('нет')); clearTimeout(t); console.log(c.signal.reason instanceof DOMException, AbortSignal.abort().aborted)")).toEqual(['true true'])
+    expect(await runOutput("const c = new AbortController(); c.abort(); const t = setTimeout(() => console.log('нет')); clearTimeout(t); console.log(c.signal.reason instanceof DOMException, AbortSignal.abort().aborted, structuredClone({ a: 1 }).a)")).toEqual(['true true 1'])
   })
 
   it('«что выведет» ждёт асинхронный вывод', async () => {

@@ -334,21 +334,22 @@ export function fakeWorker() {
 }
 
 /**
- * Два окна разных origin, например страница и iframe. a.postMessage(data, targetOrigin) доставляет сообщение в b,
- * только если targetOrigin — '*' или origin окна b; событие несёт origin и source отправителя.
+ * Два окна разных origin, например страница и iframe. Как в браузере, postMessage вызывают у окна-получателя:
+ * b.postMessage(data, targetOrigin) — сообщение от a окну b. Доставляется, только если targetOrigin — '*' или origin b;
+ * событие несёт origin и source отправителя.
  */
 export function fakeWindows(originA = 'https://app.example', originB = 'https://widget.example') {
   type FakeWindow = ReturnType<typeof messageTarget> & { origin: string; postMessage(data: unknown, targetOrigin: string): void }
   const make = (origin: string) => Object.assign(messageTarget(), { origin }) as FakeWindow
   const a = make(originA)
   const b = make(originB)
-  for (const [from, to] of [
+  for (const [receiver, sender] of [
     [a, b],
     [b, a],
   ] as const) {
-    from.postMessage = (data, targetOrigin) => {
-      if (targetOrigin !== '*' && targetOrigin !== to.origin) return
-      to.deliver({ data, origin: from.origin, source: from })
+    receiver.postMessage = (data, targetOrigin) => {
+      if (targetOrigin !== '*' && targetOrigin !== receiver.origin) return
+      receiver.deliver({ data, origin: sender.origin, source: sender })
     }
   }
   return { a, b }
@@ -368,9 +369,11 @@ export function fakeObserver() {
       this.#self = { callback, targets: new Set(), options, disconnected: false }
       instances.push(this.#self)
     }
-    observe(target: unknown) {
+    /** У MutationObserver опции передаются в observe — тогда они заменяют опции конструктора. */
+    observe(target: unknown, options?: unknown) {
       this.#self.disconnected = false
       this.#self.targets.add(target)
+      if (options !== undefined) this.#self.options = options
     }
     unobserve(target: unknown) {
       this.#self.targets.delete(target)

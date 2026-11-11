@@ -1,0 +1,452 @@
+# Практика темы «BroadcastChannel и postMessage». В тестах окна — fakeWindows() из помощников (docs/TRAINERS.md).
+# Каналы BroadcastChannel в тестах обязательно закрываются: открытый канал не даёт процессу проверки завершиться.
+
+- key: quiz-storage-sharing
+  kind: quiz
+  question: Пользователь открыл сайт в двух вкладках. Что у них общее? Отметьте все.
+  options:
+    - text: '`localStorage`'
+      correct: true
+    - text: Cookie
+      correct: true
+    - text: '`sessionStorage`'
+      why: У каждой вкладки свой. Он копируется только при «дублировать вкладку» и при `window.open` того же origin без `noopener`.
+    - text: Глобальные переменные JavaScript
+      why: У каждой вкладки свой агент и своя память.
+  explain: '`localStorage`, cookie, IndexedDB и Cache API общие для origin. `sessionStorage` и состояние JS — свои у каждой вкладки.'
+
+- key: quiz-storage-event
+  kind: quiz
+  question: Вкладка A записала `localStorage.setItem('theme', 'dark')`. Где сработает событие `storage`?
+  options:
+    - text: В других вкладках того же origin, но не в A
+      correct: true
+    - text: Во всех вкладках, включая A
+      why: Событие сообщает об изменении **из другого** документа. Сама вкладка свою запись не получает.
+    - text: Только в A
+    - text: Нигде — для этого нужен BroadcastChannel
+      why: Событие `storage` работает, просто не во вкладке-авторе.
+  explain: 'Событие `storage` — старый способ синхронизации вкладок: только строки, только `localStorage`, не во вкладке-авторе. BroadcastChannel удобнее: любые клонируемые данные и явный канал.'
+
+- key: quiz-target-origin
+  kind: quiz
+  question: 'Страница передаёт токен во встроенный платёжный iframe: `frame.contentWindow.postMessage({ token }, "*")`. В чём опасность?'
+  options:
+    - text: Если iframe перенаправили на чужой сайт, токен получит он — нужно указать точный origin получателя
+      correct: true
+    - text: Ни в чём, `postMessage` всегда безопасен
+      why: Без точного `targetOrigin` сообщение уйдёт тому, кто сейчас загружен в окне.
+    - text: '`"*"` замедляет доставку'
+    - text: Токен будет виден в адресной строке
+  explain: '`targetOrigin` — проверка на стороне отправителя: доставить, только если в окне сейчас этот origin. Для чувствительных данных — всегда точный origin, например `"https://pay.example"`.'
+
+- key: quiz-check-origin
+  kind: quiz
+  question: Виджет внутри iframe слушает `message` и выполняет команды. Что обязательно проверить в обработчике?
+  options:
+    - text: '`event.origin` — что это ожидаемый сайт, и формат `event.data`'
+      correct: true
+    - text: Ничего, в iframe сообщения может прислать только родитель
+      why: Сообщение может прислать любое окно, у которого есть ссылка на ваше, — например, страница, встроившая ваш виджет без спроса.
+    - text: '`event.source === window`'
+      why: '`source` — окно-отправитель. Это не ваше окно.'
+    - text: Только что сообщение — объект
+  explain: Без проверки `event.origin` любой сайт, встроивший или открывший вашу страницу, сможет слать ей команды. Плюс проверка формы данных — сообщение могло прийти от расширения или другой библиотеки.
+
+- key: quiz-broadcast-self
+  kind: quiz
+  question: 'Код: `const a = new BroadcastChannel("auth"); const b = new BroadcastChannel("auth")` в **одной** вкладке; `a.postMessage("logout")`. Кто получит сообщение?'
+  options:
+    - text: '`b` — и все каналы `auth` в других вкладках, кроме самого `a`'
+      correct: true
+    - text: Только другие вкладки
+      why: Другие объекты канала в той же вкладке тоже получают сообщение.
+    - text: Все, включая `a`
+      why: Объект-отправитель своё сообщение не получает.
+    - text: Никто — каналы в одной вкладке не работают
+  explain: Сообщение получают все объекты BroadcastChannel с тем же именем в том же origin — окна, iframe, воркеры, — кроме объекта-отправителя.
+
+- key: quiz-leader
+  kind: quiz
+  question: Каждая открытая вкладка держит своё WebSocket-соединение, и сервер не справляется. Как сделать одно соединение на всех?
+  options:
+    - text: 'Выбрать вкладку-лидера через `navigator.locks.request("leader", …)`; лидер держит соединение и раздаёт данные через BroadcastChannel'
+      correct: true
+    - text: Хранить соединение в `localStorage`
+      why: В хранилище кладут только строки, соединение туда не положить.
+    - text: Открывать соединение только в первой вкладке по флагу в `localStorage`
+      why: Если первую вкладку закроют, флаг останется — и соединения не будет ни у кого.
+    - text: Закрыть все вкладки, кроме одной
+  explain: 'Блокировка Web Locks освобождается сама, когда вкладка-владелец закрывается, — следующая в очереди станет лидером. Альтернатива — SharedWorker, который держит соединение для всех вкладок.'
+
+- key: quiz-partition
+  kind: quiz
+  question: Ваш виджет `widget.com` встроен iframe на сайтах `a.com` и `b.com`. Видят ли iframe на этих сайтах общий `localStorage` и BroadcastChannel?
+  options:
+    - text: Нет — хранилища и каналы во встроенных iframe разделены по сайту верхнего уровня
+      correct: true
+    - text: Да, это один origin `widget.com`
+      why: Так было раньше. Сейчас браузеры разделяют состояние стороннего контекста по сайту, в который он встроен.
+    - text: Только в Safari
+      why: Разделение есть во всех основных браузерах — в Chrome с версии 115.
+    - text: Да, если включить cookie
+  explain: 'Разделение состояния (storage partitioning) защищает от слежки между сайтами. Виджету, которому нужен свой общий кэш, — Storage Access API или серверная схема.'
+
+- key: quiz-order-tabs
+  kind: quiz
+  question: Две вкладки почти одновременно отправили в BroadcastChannel «тема — тёмная» и «тема — светлая». В каком порядке их получит третья вкладка?
+  options:
+    - text: Порядок между разными отправителями не гарантирован — в сообщения добавляют время или версию
+      correct: true
+    - text: В порядке, в котором пользователь переключал вкладки
+    - text: Всегда сначала из той вкладки, что открыта раньше
+    - text: Сообщения объединятся в одно
+  explain: 'Порядок гарантирован только для сообщений одного отправителя. Для «последний побеждает» добавляют метку времени или счётчик версии и применяют сообщение, только если оно новее текущего состояния.'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+
+- key: code-trusted-message
+  kind: code
+  level: easy
+  title: Принимать сообщения только от своих
+  prompt: |
+    Напишите `onTrustedMessage(win, allowed, handler)`:
+    - подписаться на `message` у `win`;
+    - вызывать `handler(event.data, event)`, только если `event.origin` есть в массиве `allowed` и `event.data` — объект со строковым полем `type`;
+    - вернуть функцию отписки.
+  starter: |
+    function onTrustedMessage(win, allowed, handler) {
+      const listener = (event) => handler(event.data, event)
+      win.addEventListener('message', listener)
+      return () => win.removeEventListener('message', listener)
+    }
+  hints:
+    - 'Две проверки в начале обработчика: `allowed.includes(event.origin)` и `typeof event.data?.type === "string"`. Не прошло — выйти.'
+  tests: |
+    test('свой origin и правильная форма — обработчик вызывается', async () => {
+      const { a, b } = fakeWindows('https://app.example', 'https://widget.example')
+      const handler = spy()
+      onTrustedMessage(b, ['https://app.example'], handler)
+      b.postMessage({ type: 'resize', height: 300 }, '*')
+      await sleep(5)
+      expect(handler.calls.map(([data]) => data)).toEqual([{ type: 'resize', height: 300 }])
+    })
+    test('чужой origin и неверная форма — игнор', async () => {
+      const { a, b } = fakeWindows('https://evil.example', 'https://widget.example')
+      const handler = spy()
+      onTrustedMessage(b, ['https://app.example'], handler)
+      b.postMessage({ type: 'steal' }, '*')
+      await sleep(5)
+      const ok = fakeWindows('https://app.example', 'https://widget.example')
+      onTrustedMessage(ok.b, ['https://app.example'], handler)
+      ok.b.postMessage('просто строка', '*')
+      ok.b.postMessage({ type: 1 }, '*')
+      await sleep(5)
+      expect(handler.calls.length).toBe(0)
+    })
+    test('отписка', async () => {
+      const { a, b } = fakeWindows('https://app.example', 'https://widget.example')
+      const handler = spy()
+      const stop = onTrustedMessage(b, ['https://app.example'], handler)
+      stop()
+      b.postMessage({ type: 'x' }, '*')
+      await sleep(5)
+      expect(handler.calls.length).toBe(0)
+    })
+  solution: |
+    function onTrustedMessage(win, allowed, handler) {
+      const listener = (event) => {
+        if (!allowed.includes(event.origin)) return
+        if (typeof event.data?.type !== 'string') return
+        handler(event.data, event)
+      }
+      win.addEventListener('message', listener)
+      return () => win.removeEventListener('message', listener)
+    }
+  explain: |
+    **Проверка origin — граница безопасности** между окнами разных сайтов. Без неё любой, кто встроил ваш виджет или открыл вашу страницу, отправит ей команды.
+
+    **Проверка формы** защищает от чужих сообщений того же origin: расширения браузера, другие библиотеки и DevTools тоже используют `postMessage`.
+
+    **Сравнивайте origin точно**, а не через `includes` по строке: `'https://app.example.evil.com'.includes('app.example')` — `true`.
+
+- key: code-tab-sync
+  kind: code
+  level: medium
+  title: Синхронизация вкладок через BroadcastChannel
+  prompt: |
+    Напишите `createTabSync(name)` поверх `BroadcastChannel`:
+    - `publish(type, payload)` — отправить `{ type, payload }` всем остальным;
+    - `subscribe(type, fn)` — вызывать `fn(payload)` на сообщения этого типа; вернуть отписку;
+    - `close()` — закрыть канал.
+
+    Типичное применение — выход из аккаунта во всех вкладках сразу.
+  starter: |
+    function createTabSync(name) {
+      return {
+        publish: () => {},
+        subscribe: () => () => {},
+        close: () => {},
+      }
+    }
+  hints:
+    - 'Один `new BroadcastChannel(name)` и `Map` из типа в множество обработчиков. Один `onmessage` раздаёт сообщение по типу.'
+    - 'Отписка удаляет функцию из множества. `close` — `channel.close()`.'
+  tests: |
+    test('сообщение доходит до другой «вкладки» по типу', async () => {
+      const tab1 = createTabSync('auth-test-1')
+      const tab2 = createTabSync('auth-test-1')
+      try {
+        const logout = spy()
+        const other = spy()
+        tab2.subscribe('logout', logout)
+        tab2.subscribe('theme', other)
+        tab1.publish('logout', { reason: 'вышел' })
+        await sleep(20)
+        expect(logout.calls).toEqual([[{ reason: 'вышел' }]])
+        expect(other.calls.length).toBe(0)
+      } finally {
+        tab1.close()
+        tab2.close()
+      }
+    })
+    test('отправитель своё не получает, отписка работает', async () => {
+      const tab1 = createTabSync('auth-test-2')
+      const tab2 = createTabSync('auth-test-2')
+      try {
+        const self = spy()
+        const fn = spy()
+        tab1.subscribe('ping', self)
+        const stop = tab2.subscribe('ping', fn)
+        tab1.publish('ping', 1)
+        await sleep(20)
+        stop()
+        tab1.publish('ping', 2)
+        await sleep(20)
+        expect(self.calls.length).toBe(0)
+        expect(fn.calls).toEqual([[1]])
+      } finally {
+        tab1.close()
+        tab2.close()
+      }
+    })
+  solution: |
+    function createTabSync(name) {
+      const channel = new BroadcastChannel(name)
+      const handlers = new Map()
+      channel.onmessage = ({ data }) => {
+        for (const fn of handlers.get(data?.type) ?? []) fn(data.payload)
+      }
+      return {
+        publish: (type, payload) => channel.postMessage({ type, payload }),
+        subscribe(type, fn) {
+          if (!handlers.has(type)) handlers.set(type, new Set())
+          handlers.get(type).add(fn)
+          return () => handlers.get(type).delete(fn)
+        },
+        close: () => channel.close(),
+      }
+    }
+  explain: |
+    **Выход во всех вкладках:** вкладка, где нажали «Выйти», публикует `logout`; остальные сбрасывают состояние и уходят на страницу входа. Без этого в соседней вкладке пользователь продолжит работать с недействительной сессией.
+
+    **Закрывайте канал** при уходе со страницы (`pagehide`) и в тестах — открытый канал держит ресурсы.
+
+    **Для «последний побеждает»** (тема, язык) добавляйте в `payload` время или версию: порядок сообщений от разных вкладок не гарантирован.
+
+- key: code-leader
+  kind: code
+  level: medium
+  title: Вкладка-лидер на Web Locks
+  prompt: |
+    Напишите `becomeLeader(locks, name, onLead)`. `locks` — объект как `navigator.locks`: `request(name, callback)` ждёт, пока блокировка свободна, вызывает `callback()` и держит блокировку, пока промис из `callback` не выполнится.
+    - Когда вкладка стала лидером — вызвать `onLead()`. Лидерство длится, пока его не отпустят.
+    - Вернуть `release()` — отпустить лидерство; следующая вкладка в очереди станет лидером.
+    - Если `release()` вызвали раньше, чем вкладка стала лидером, `onLead` не вызывается, и блокировка сразу освобождается.
+  starter: |
+    function becomeLeader(locks, name, onLead) {
+      onLead()
+      return () => {}
+    }
+  hints:
+    - 'Колбэк `request` должен вернуть промис, который выполнится только по `release()`. Подойдёт `deferred()` или `Promise.withResolvers()`.'
+    - 'Флаг `released`: если колбэк вызвался, а флаг уже стоит, — сразу вернуть, не вызывая `onLead`.'
+  tests: |
+    // Фейковый navigator.locks: исключительная блокировка с очередью.
+    const fakeLocks = () => {
+      const queues = new Map()
+      const run = (name) => {
+        const queue = queues.get(name)
+        if (!queue?.length || queue.busy) return
+        queue.busy = true
+        const { callback, done } = queue.shift()
+        Promise.resolve().then(callback).then(done, done).finally(() => { queue.busy = false; run(name) })
+      }
+      return {
+        request(name, callback) {
+          if (!queues.has(name)) queues.set(name, [])
+          return new Promise((done) => { queues.get(name).push({ callback, done }); run(name) })
+        },
+      }
+    }
+    test('первая — лидер, вторая ждёт', async () => {
+      const locks = fakeLocks()
+      const a = spy()
+      const b = spy()
+      const releaseA = becomeLeader(locks, 'socket', a)
+      becomeLeader(locks, 'socket', b)
+      await sleep(5)
+      expect([a.calls.length, b.calls.length]).toEqual([1, 0])
+      releaseA()
+      await sleep(5)
+      expect(b.calls.length).toBe(1)
+    })
+    test('отпустили до лидерства — onLead не вызывается, очередь идёт дальше', async () => {
+      const locks = fakeLocks()
+      const a = spy()
+      const b = spy()
+      const c = spy()
+      const releaseA = becomeLeader(locks, 'x', a)
+      const releaseB = becomeLeader(locks, 'x', b)
+      becomeLeader(locks, 'x', c)
+      releaseB()
+      await sleep(5)
+      releaseA()
+      await sleep(5)
+      expect([a.calls.length, b.calls.length, c.calls.length]).toEqual([1, 0, 1])
+    })
+  solution: |
+    function becomeLeader(locks, name, onLead) {
+      const held = deferred()
+      let released = false
+      locks.request(name, () => {
+        if (released) return
+        onLead()
+        return held.promise
+      })
+      return () => {
+        released = true
+        held.resolve()
+      }
+    }
+  explain: |
+    **Блокировка как лидерство.** Пока промис колбэка не выполнен, блокировка за этой вкладкой. Закрыли вкладку — браузер сам освобождает блокировку, и лидером становится следующая в очереди. Флаги в `localStorage` так не умеют: после падения вкладки флаг остаётся.
+
+    **Что делает лидер:** держит одно WebSocket-соединение, опрашивает сервер, обновляет токен — и раздаёт результат остальным через BroadcastChannel.
+
+    **В браузере** у `navigator.locks.request` есть опции: `{ ifAvailable: true }` — не ждать, если занято; `{ signal }` — отменить ожидание.
+
+- key: code-frame-channel
+  kind: code
+  level: hard
+  title: Протокол родитель — виджет
+  prompt: |
+    Напишите `connect(self, peer, peerOrigin)` — общий канал между окном и встроенным виджетом. Обе стороны вызывают одну и ту же функцию: `self` — своё окно, `peer` — окно собеседника, `peerOrigin` — его origin.
+    - Принимать сообщения только с `peerOrigin`, отправлять — только на `peerOrigin`.
+    - **Рукопожатие:** при подключении отправить `{ kind: 'hello' }`; на `hello` ответить `{ kind: 'ready' }`. Канал готов, когда пришёл `hello` или `ready`. `ready` — промис.
+    - `request(method, params)` → промис ответа. Запросы до готовности ждут готовности.
+    - `handle(method, fn)` — обработчик запросов; ответ на запрос — `fn(params)` (может быть асинхронной), ошибка — отклонение у вызывающего с тем же текстом.
+  starter: |
+    function connect(self, peer, peerOrigin) {
+      return {
+        ready: Promise.resolve(),
+        request: () => Promise.resolve(),
+        handle: () => {},
+      }
+    }
+  hints:
+    - 'Один обработчик `message` на `self`: проверить `event.origin === peerOrigin`, потом разобрать `kind`: `hello`, `ready`, `request`, `response`.'
+    - '`ready` — `deferred()`. На `hello` ответить `ready` и выполнить свой `ready`; на `ready` — просто выполнить.'
+    - 'Запросы — как RPC с воркером: `id`, `Map` ожидающих. `request` сначала `await ready.promise`, потом отправляет `{ kind: "request", id, method, params }`.'
+    - 'На `request` — найти обработчик, `await` его результат и отправить `{ kind: "response", id, result }` или `{ kind: "response", id, error }`.'
+  tests: |
+    test('рукопожатие и запрос в обе стороны', async () => {
+      const { a, b } = fakeWindows('https://app.example', 'https://widget.example')
+      const page = connect(a, b, b.origin)
+      const widget = connect(b, a, a.origin)
+      widget.handle('size', () => ({ height: 320 }))
+      page.handle('theme', async () => 'dark')
+      await Promise.all([page.ready, widget.ready])
+      await expect(page.request('size')).resolves.toEqual({ height: 320 })
+      await expect(widget.request('theme')).resolves.toBe('dark')
+    })
+    test('ошибка обработчика приходит вызывающему', async () => {
+      const { a, b } = fakeWindows()
+      const page = connect(a, b, b.origin)
+      const widget = connect(b, a, a.origin)
+      widget.handle('pay', () => { throw new Error('Карта отклонена') })
+      await expect(page.request('pay', { amount: 100 })).rejects.toThrow('Карта отклонена')
+    })
+    test('запрос до готовности ждёт рукопожатия', async () => {
+      const { a, b } = fakeWindows()
+      const page = connect(a, b, b.origin)
+      const pending = page.request('size')
+      await sleep(10)
+      const widget = connect(b, a, a.origin)
+      widget.handle('size', () => 1)
+      await expect(pending).resolves.toBe(1)
+    })
+    test('сообщения с чужого origin не принимаются', async () => {
+      const page = fakeWindows('https://app.example', 'https://widget.example')
+      const evil = fakeWindows('https://evil.example', 'https://app.example')
+      const channel = connect(evil.b, page.b, 'https://widget.example')
+      let ready = false
+      channel.ready.then(() => (ready = true))
+      evil.b.postMessage({ kind: 'hello' }, '*')
+      await sleep(10)
+      expect(ready).toBe(false)
+    })
+  solution: |
+    function connect(self, peer, peerOrigin) {
+      const ready = deferred()
+      const handlers = new Map()
+      const pending = new Map()
+      let nextId = 0
+      const send = (message) => peer.postMessage(message, peerOrigin)
+
+      self.addEventListener('message', async (event) => {
+        if (event.origin !== peerOrigin) return
+        const message = event.data
+        if (message?.kind === 'hello') {
+          send({ kind: 'ready' })
+          ready.resolve()
+        } else if (message?.kind === 'ready') {
+          ready.resolve()
+        } else if (message?.kind === 'request') {
+          try {
+            const fn = handlers.get(message.method)
+            if (!fn) throw new Error(`Нет обработчика ${message.method}`)
+            send({ kind: 'response', id: message.id, result: await fn(message.params) })
+          } catch (error) {
+            send({ kind: 'response', id: message.id, error: error.message })
+          }
+        } else if (message?.kind === 'response') {
+          const entry = pending.get(message.id)
+          if (!entry) return
+          pending.delete(message.id)
+          if ('error' in message) entry.reject(new Error(message.error))
+          else entry.resolve(message.result)
+        }
+      })
+
+      send({ kind: 'hello' })
+
+      return {
+        ready: ready.promise,
+        async request(method, params) {
+          await ready.promise
+          return new Promise((resolve, reject) => {
+            const id = ++nextId
+            pending.set(id, { resolve, reject })
+            send({ kind: 'request', id, method, params })
+          })
+        },
+        handle: (method, fn) => void handlers.set(method, fn),
+      }
+    }
+  explain: |
+    **Зачем рукопожатие.** iframe грузится не сразу: сообщение, отправленное до того, как виджет подписался на `message`, потеряется. Обе стороны шлют `hello` при старте и отвечают `ready` — кто бы ни запустился первым, канал станет готов.
+
+    **Безопасность в обе стороны:** приём — только с `peerOrigin`, отправка — только на `peerOrigin`, никогда `'*'`. Если виджет перенаправят на чужой сайт, данные туда не уйдут.
+
+    **В продакшене** добавляют таймаут на запросы, версию протокола в `hello` и отписку при уничтожении виджета. Готовые библиотеки: post-robot, penpal.

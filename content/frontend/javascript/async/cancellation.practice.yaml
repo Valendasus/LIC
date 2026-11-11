@@ -419,7 +419,7 @@
       const [query, setQuery] = useState('')
       const [results, setResults] = useState(null)
       useEffect(() => {
-        if (query) search(query).then(setResults)
+        if (query) search(query).then(setResults, () => {})
       }, [query])
       return (
         <div>

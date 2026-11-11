@@ -1,0 +1,54 @@
+# Карточки темы «SharedArrayBuffer, Atomics и cross-origin isolation». Ключи не переименовывать.
+
+- key: sab-def
+  type: term
+  front: '`SharedArrayBuffer`'
+  back: Буфер памяти, который видят сразу несколько агентов — окно и воркеры. `postMessage(sab)` даёт доступ к тем же байтам, а не копию. Доступен только при cross-origin isolation.
+  reverse: true
+
+- key: atomics-def
+  type: term
+  front: '`Atomics`'
+  back: 'Атомарные операции над целочисленными типизированными массивами — `load`, `store`, `add`, `sub`, `exchange`, `compareExchange`, `wait`, `notify`. Неделимые: другой поток не вклинится посередине.'
+  reverse: true
+
+- key: data-race
+  type: qa
+  front: Почему `counter[0]++` по общей памяти из нескольких потоков теряет инкременты?
+  back: '`++` — это чтение, сложение и запись. Два потока могут прочитать одно значение и оба записать «плюс один». Нужен `Atomics.add`.'
+
+- key: compare-exchange
+  type: qa
+  front: Что делает `Atomics.compareExchange(arr, i, expected, value)`?
+  back: Записывает `value`, только если в ячейке сейчас `expected`, и возвращает старое значение. Основа блокировок и неблокирующих структур.
+
+- key: wait-notify
+  type: qa
+  front: Чем `Atomics.wait` отличается от `Atomics.waitAsync`?
+  back: '`wait` блокирует поток до `Atomics.notify` — запрещён в главном потоке окна. `waitAsync` возвращает промис и работает везде; во всех основных браузерах с ноября 2025 года.'
+
+- key: cross-origin-isolation
+  type: term
+  front: Cross-origin isolation
+  back: 'Состояние документа, при котором в его процессе нет чужих незащищённых ресурсов. Включается заголовками COOP `same-origin` и COEP `require-corp` или `credentialless`. Проверка — `crossOriginIsolated === true`.'
+  reverse: true
+
+- key: why-isolation
+  type: qa
+  front: Зачем `SharedArrayBuffer` требует изоляции?
+  back: После Spectre (2018) стало ясно, что общая память позволяет собрать точный таймер и читать чужие данные в процессе. Поэтому мощные API дают только изолированным страницам.
+
+- key: coop-coep
+  type: qa
+  front: Что делают COOP и COEP?
+  back: 'COOP `same-origin` — отрывает окна других origin (`window.opener`). COEP `require-corp` — каждый чужой ресурс должен разрешить встраивание через CORP или CORS; `credentialless` — грузить чужое без cookie.'
+
+- key: isolation-cost
+  type: qa
+  front: Что ломает включение cross-origin isolation?
+  back: Чужие картинки, скрипты и iframe без CORP или CORS, попапы оплаты и OAuth, которые общаются через `window.opener`. На большом сайте это проект, а не строчка.
+
+- key: sab-usage
+  type: qa
+  front: Где во фронтенде нужна общая память?
+  back: Потоки WebAssembly (ffmpeg.wasm, SQLite в браузере), обработка звука и видео, быстрые очереди между воркерами. Обычному приложению хватает `postMessage` и transfer.

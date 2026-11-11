@@ -1,0 +1,229 @@
+export const meta = {
+  verified: '11.11.2026',
+  versions: 'HTML Living Standard, Chrome, Firefox, Safari, Vite 8',
+}
+
+## Learn
+
+### Суть за минуту
+
+Весь JavaScript страницы выполняется в одном главном потоке. Тяжёлое вычисление — разбор большого файла, сжатие картинки, поиск по индексу — занимает этот поток, и интерфейс замирает. **Web Worker** — отдельный поток со своим циклом событий, куда такую работу можно унести. Страница и воркер общаются **сообщениями**.
+
+```js
+// main.js
+const worker = new Worker(new URL('./parse.worker.js', import.meta.url), { type: 'module' })
+worker.postMessage(csvText)
+worker.onmessage = (event) => renderTable(event.data)
+
+// parse.worker.js
+self.onmessage = (event) => {
+  const rows = parseCsv(event.data) // долго, но интерфейс не замирает
+  self.postMessage(rows)
+}
+```
+
+### Виды воркеров
+
+| Вид | Кто подключается | Сколько живёт | Поддержка |
+|---|---|---|---|
+| Выделенный `Worker` | только создатель | пока жив создатель или до `terminate()` | везде |
+| `SharedWorker` | все окна и iframe одного origin | пока подключён хоть один | во всех основных браузерах с 2026 года |
+| Service Worker | весь scope сайта | управляет браузер, просыпается по событиям | везде — отдельная тема |
+| Worklet (Audio, Paint) | движок | крошечные, для узких задач | Audio — везде |
+
+В этой теме — выделенный воркер, самый частый. `SharedWorker` нужен, когда одно ресурсное соединение или кэш должны делить все вкладки; он общается с каждой вкладкой через свой `MessagePort`.
+
+### Создание
+
+```js
+const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
+```
+
+- **`type: 'module'`** разрешает `import` внутри воркера. Модульные воркеры — во всех браузерах с 2023 года.
+- **Форма `new URL(…, import.meta.url)`** нужна бандлерам: Vite, webpack 5, Next.js распознают именно её и собирают воркер отдельным файлом. Строка-путь `'/src/worker.ts'` в проде не найдётся.
+- Скрипт воркера — того же origin (или `blob:`/`data:`). Его загрузку разрешает директива CSP `worker-src`.
+
+Остановить: `worker.terminate()` снаружи — немедленно, без `finally`; `self.close()` изнутри.
+
+### Что есть внутри воркера
+
+| Есть | Нет |
+|---|---|
+| `fetch`, WebSocket, EventSource | `document`, DOM, `window` |
+| IndexedDB, Cache API, OPFS | `localStorage`, `sessionStorage` |
+| `crypto`, `TextEncoder`, `structuredClone` | `alert`, `confirm` |
+| таймеры, `requestAnimationFrame` | синхронный доступ к странице |
+| `OffscreenCanvas` | |
+
+Глобальный объект — `self` (`DedicatedWorkerGlobalScope`). Воркер присылает данные, а меняет DOM страница.
+
+### Передача данных
+
+`postMessage(data, transfer)` передаёт данные одним из трёх способов.
+
+**1. Структурное клонирование** — по умолчанию. Данные копируются тем же алгоритмом, что у `structuredClone`:
+- понимает Date, Map, Set, массивы, типизированные массивы, ошибки, циклические ссылки;
+- **не копирует** функции, DOM-узлы и символы — бросит `DataCloneError`;
+- **теряет прототип**: экземпляр класса приходит обычным объектом без методов.
+
+**2. Передача (transfer)** — владение без копирования:
+
+```js
+const pixels = new Uint8ClampedArray(width * height * 4)
+worker.postMessage({ pixels }, [pixels.buffer])
+pixels.byteLength // 0 — буфер теперь принадлежит воркеру
+```
+
+Передаются `ArrayBuffer`, `MessagePort`, `ImageBitmap`, `OffscreenCanvas`, `ReadableStream` (последний — в Chrome и Firefox). У отправителя объект **отсоединяется**.
+
+**3. Общая память** — `SharedArrayBuffer`: обе стороны видят одни байты без копирования. Требует cross-origin isolation — тема «SharedArrayBuffer, Atomics и cross-origin isolation».
+
+**Цена клонирования.** Сериализация происходит **синхронно** в момент `postMessage`. Объект на десятки мегабайт заметно блокирует и страницу, и воркер. Решения:
+- бинарные данные — через transfer;
+- данные с сервера — загружать сразу в воркере;
+- не гонять одно и то же туда и обратно.
+
+### Когда воркер помогает
+
+**Помогает** — вычисления без DOM:
+- разбор CSV, JSON, Markdown на сотни килобайт и больше;
+- сжатие и обработка изображений (`OffscreenCanvas`), видео, звука;
+- криптография, хеширование файлов перед загрузкой;
+- поиск и фильтрация по большому индексу;
+- подсветка синтаксиса, компиляция TypeScript, линтер в редакторе;
+- выполнение чужого кода с таймаутом: `terminate()` остановит даже бесконечный цикл.
+
+**Не помогает:**
+- медленный layout и отрисовка — это работа главного потока; помогают виртуализация, `content-visibility`, меньше DOM;
+- множество мелких сообщений — накладные расходы на клонирование больше выигрыша;
+- работа, которой нужен DOM на каждом шаге.
+
+**Запуск стоит дорого** — десятки миллисекунд и мегабайты памяти. Держите воркер живым или пулом, а не создавайте на каждую задачу. Число параллельных вычислений ограничено ядрами: `navigator.hardwareConcurrency`.
+
+### Протокол сообщений
+
+Голый `postMessage` неудобен, когда запросов много: непонятно, какой ответ к какому запросу. Стандартное решение — **RPC**: у каждого запроса свой `id`, ответ несёт тот же `id`.
+
+```js
+// страница
+const pending = new Map()
+let nextId = 0
+worker.onmessage = ({ data }) => {
+  pending.get(data.id)?.[data.error ? 'reject' : 'resolve'](data.error ?? data.result)
+  pending.delete(data.id)
+}
+const call = (method, ...args) =>
+  new Promise((resolve, reject) => {
+    const id = ++nextId
+    pending.set(id, { resolve, reject })
+    worker.postMessage({ id, method, args })
+  })
+
+const rows = await call('parseCsv', text)
+```
+
+Порядок сообщений между двумя сторонами одного канала сохраняется, но асинхронные обработчики отвечают в порядке **завершения**. Поэтому без `id` не обойтись. Добавьте таймаут — воркер мог упасть или зависнуть. Готовое решение — библиотека **Comlink**: она делает то же через Proxy.
+
+**`MessageChannel`** даёт пару портов для прямого канала — например, между двумя воркерами без участия страницы.
+
+### Ошибки
+
+| Событие | Где | Когда |
+|---|---|---|
+| `error` | на объекте `Worker` | необработанное исключение в воркере |
+| `messageerror` | на обеих сторонах | сообщение не удалось десериализовать |
+| `unhandledrejection` | внутри воркера | отклонённый промис без обработчика |
+
+Ошибку для ответа надёжнее передавать полем `message` (и `name`): объект `Error` клонируется, но свои поля и стек могут потеряться.
+
+<Example file="src/features/solve-task/lib/runner.worker.ts" verdict="good">
+
+Тренажёр с задачами на код запускает решение ученика в отдельном воркере. Код и тесты уходят сообщением, результаты тестов возвращаются сообщением. Если ответа нет за 5 секунд, воркер останавливается через `terminate()` — так бесконечный цикл в решении не вешает страницу. На каждый запуск — новый воркер: состояние прошлого решения не протекает в следующее.
+
+</Example>
+
+<Example file="src/widgets/report/build.ts" verdict="review">
+
+```js
+const worker = new Worker('/report.worker.js')
+for (const row of rows) worker.postMessage(row) // 100 000 сообщений
+```
+
+Сто тысяч мелких сообщений: на каждое — клонирование, событие и задача в очереди. Это медленнее, чем посчитать всё на главном потоке. Плюс строковый путь сломается после сборки. Отправить массив одним сообщением (или `ArrayBuffer` через transfer) и создать воркер через `new URL(…, import.meta.url)`.
+
+</Example>
+
+<Callout type="deep">
+- **У воркера свой event loop** — с задачами и микрозадачами, но без шагов отрисовки окна. `requestAnimationFrame` в выделенном воркере привязан к кадрам, если воркер рисует в `OffscreenCanvas`.
+- **Модули в Service Worker** — во всех основных браузерах с января 2026 года, модульные SharedWorker — с мая 2026.
+- **Тесты.** В Vitest с jsdom воркеров нет. Логику держат в чистых функциях и тестируют отдельно, протокол — на фейке (`fakeWorker` в задачах практики), реальное поведение — в Playwright.
+</Callout>
+
+### Частые ошибки
+
+| Ошибка | Признак | Исправление |
+|---|---|---|
+| строковый путь к воркеру | 404 после сборки | `new URL('./w.ts', import.meta.url)` |
+| экземпляр класса в сообщении | на той стороне нет методов | передавать данные, создавать объект заново |
+| функция или DOM-узел в сообщении | `DataCloneError` | только данные |
+| огромный объект клонированием | рывки в момент отправки | transfer или загрузка в воркере |
+| воркер на каждую задачу | задержка на старте, память | держать живым или пулом |
+| нет таймаута и обработки `error` | промисы висят вечно | таймаут, `error`, `terminate()` |
+
+<Callout type="interview">
+Спросят: что такое Web Workers, что в них можно и нельзя, как передать данные и что такое transferable, почему воркеры не решают все проблемы производительности. Сильный ответ различает клонирование, передачу и общую память, знает цену клонирования и запуска, называет протокол с `id` или Comlink и объясняет, почему layout воркер не ускорит.
+</Callout>
+
+## Implement
+
+<Practice id="out-transfer-detach" />
+
+<Practice id="out-clone-class" />
+
+<Practice id="quiz-worker-helps" />
+
+<Practice id="quiz-clone-cost" />
+
+<Practice id="code-collect-transfer" />
+
+<Practice id="code-expose" />
+
+<Practice id="code-worker-rpc" />
+
+<Practice id="code-worker-pool" />
+
+## Confirm
+
+<Question q="Что такое Web Worker и что в нём недоступно?">
+Отдельный поток со своим event loop и глобальным объектом `self`, который общается со страницей сообщениями. Недоступны DOM, `window`, `localStorage` и синхронный доступ к странице.
+</Question>
+
+<Question q="Чем клонирование отличается от передачи (transfer)?">
+Клонирование копирует данные (Date, Map, Set, циклы — да; функции, DOM, прототипы — нет). Передача отдаёт владение без копирования: у отправителя `ArrayBuffer` становится пустым. Для общей памяти — `SharedArrayBuffer`.
+</Question>
+
+<Question q="Когда воркер не поможет производительности?">
+Когда тормозит layout или отрисовка — это работа главного потока; когда сообщений много и они мелкие; когда работе нужен DOM на каждом шаге.
+</Question>
+
+<Question q="Как вызывать функции воркера как промисы?">
+Протокол с `id`: каждый запрос получает уникальный `id`, ответ возвращает его же, страница находит ожидающий промис в `Map`. Плюс таймаут на случай падения воркера. Готовое — Comlink.
+</Question>
+
+<Question q="Почему воркеры держат пулом?">
+Запуск воркера стоит десятки миллисекунд и мегабайты памяти. Пул создаёт их один раз и раздаёт задачи свободным; размер — по числу ядер.
+</Question>
+
+## Источники
+
+<Sources>
+
+- [HTML Standard, Web workers](https://html.spec.whatwg.org/multipage/workers.html)
+- [HTML Standard, Structured serialize and transfer](https://html.spec.whatwg.org/multipage/structured-data.html)
+- [MDN, Using Web Workers](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers)
+- [MDN, Transferable objects](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects)
+- [MDN, Functions and classes available to workers](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Functions_and_classes_available_to_workers)
+- [Vite, Web Workers](https://vite.dev/guide/features#web-workers)
+- [Comlink](https://github.com/GoogleChromeLabs/comlink)
+
+</Sources>

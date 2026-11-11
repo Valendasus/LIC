@@ -1,0 +1,232 @@
+export const meta = {
+  verified: '11.11.2026',
+  versions: 'HTML Living Standard, CSP Level 3, Chrome, Firefox, Safari',
+}
+
+## Learn
+
+### Суть за минуту
+
+`<iframe>` встраивает в страницу **отдельный документ** со своим `window`, `document`, историей и циклом событий. Документ другого сайта обычно живёт ещё и в отдельном процессе. Поэтому iframe — главный инструмент **изоляции** во фронтенде: платёжные поля, чужие виджеты, реклама, песочницы для кода пользователя.
+
+```html
+<iframe
+  src="https://pay.example/card"
+  title="Оплата картой"
+  allow="payment"
+  loading="lazy"
+></iframe>
+```
+
+У изоляции две стороны:
+- вы встраиваете чужое и ограничиваете его — атрибуты `sandbox` и `allow`;
+- вас встраивают чужие, и вы защищаетесь — заголовок `frame-ancestors`.
+
+### Доступ между окнами
+
+| Родитель и iframe | Что можно |
+|---|---|
+| **один origin** | всё: `iframe.contentWindow.document`, `parent.document`, общие объекты |
+| **разные origin** | только `postMessage`, запись `location`, `close()`, `frames` и пара свойств; всё остальное — SecurityError |
+
+```js
+frame.contentWindow.document // SecurityError, если origin другой
+frame.contentWindow.postMessage({ type: 'init' }, 'https://pay.example') // можно
+```
+
+Общаться с iframe другого origin можно **только сообщениями** — с проверкой `event.origin` и точным `targetOrigin`. Протокол с рукопожатием разобран в теме «BroadcastChannel и postMessage».
+
+Именно поэтому поля карты у платёжных систем — iframe: скрипты магазина физически не могут прочитать номер карты. Это требование стандарта безопасности карт (PCI DSS) и лучший пример изоляции.
+
+### sandbox: ограничить встроенное
+
+Пустой `sandbox` запрещает почти всё:
+- скрипты;
+- отправку форм;
+- попапы и модальные окна (`alert`);
+- навигацию верхнего окна;
+- автоматическое воспроизведение и другие возможности.
+
+Origin документа становится **непрозрачным** (`null`): у него нет доступа к своим cookie и хранилищам, а для родителя он всегда «чужой».
+
+Разрешения возвращают токенами:
+
+| Токен | Что разрешает |
+|---|---|
+| `allow-scripts` | выполнять JavaScript |
+| `allow-forms` | отправлять формы |
+| `allow-popups` | открывать окна |
+| `allow-modals` | `alert`, `confirm`, `print` |
+| `allow-same-origin` | сохранить настоящий origin документа |
+| `allow-top-navigation-by-user-activation` | менять адрес верхнего окна только по действию пользователя |
+| `allow-downloads` | скачивать файлы |
+
+<Callout type="mistake" title="allow-scripts вместе с allow-same-origin">
+Для документа **вашего же** origin это почти отменяет песочницу. Скрипт внутри получает настоящий origin, дотягивается до родителя и может сам снять атрибут `sandbox` у своего iframe. Недоверенный код запускают либо без `allow-same-origin`, либо на отдельном домене — так устроены CodeSandbox и StackBlitz.
+</Callout>
+
+**Принцип наименьших прав:** начинать с пустого `sandbox` и добавлять только нужное.
+- Превью письма — без скриптов совсем.
+- Онлайн-редактор — `allow-scripts`, без `allow-same-origin`.
+- Чужой виджет — `allow-scripts allow-popups allow-same-origin`, но он на своём домене.
+
+### allow: возможности для iframe
+
+Атрибут `allow` — **Permissions Policy** для конкретного iframe. Мощные возможности по умолчанию у iframe другого origin выключены:
+
+```html
+<iframe src="https://meet.example/room/42" allow="camera; microphone; fullscreen; display-capture" title="Видеозвонок"></iframe>
+```
+
+Список: `camera`, `microphone`, `geolocation`, `fullscreen`, `clipboard-write`, `payment`, `display-capture` и другие. Пользователь всё равно увидит запрос разрешения — `allow` лишь даёт iframe право спросить.
+
+### srcdoc: документ без запроса
+
+`srcdoc` — HTML прямо в атрибуте. Вместе с `sandbox` это лёгкая песочница для превью:
+
+```js
+frame.sandbox = 'allow-scripts'
+frame.srcdoc = buildPreview({ html, css, js })
+```
+
+Три слоя защиты для кода пользователя:
+1. `sandbox` без `allow-same-origin` — непрозрачный origin, нет доступа к странице и её cookie;
+2. CSP в `<meta>` с `default-src 'none'` — код не может грузить ресурсы и отправлять данные наружу;
+3. экранирование `</` в коде — `</script>` внутри строки не закроет тег раньше времени.
+
+Собрать такой документ — задача в практике.
+
+### frame-ancestors: защитить себя
+
+**Clickjacking:** чужой сайт кладёт вашу страницу в прозрачный iframe поверх своей кнопки «Выиграть приз». Пользователь кликает — и на самом деле нажимает «Удалить аккаунт» на вашей странице.
+
+Защиту задаёт **сама встраиваемая страница** заголовком:
+
+```http
+Content-Security-Policy: frame-ancestors 'self' https://partner.example
+X-Frame-Options: SAMEORIGIN
+```
+
+- `frame-ancestors` — современный способ: `'none'`, `'self'`, список сайтов.
+- `X-Frame-Options` — устаревший, только `DENY` и `SAMEORIGIN`. Его ставят для старых браузеров; при обоих заголовках браузеры следуют `frame-ancestors`.
+- Проверка в JavaScript (`if (window !== top)`) — не защита: встраивающий сайт может запретить скрипты в iframe через `sandbox`.
+
+### Хранилища во встроенном iframe
+
+Браузеры защищают пользователей от слежки между сайтами:
+- **сторонние cookie** в iframe блокируются: в Safari и Firefox давно, в Chrome — по выбору пользователя;
+- **хранилища** (`localStorage`, IndexedDB), BroadcastChannel и SharedWorker во встроенном iframe **разделены** по сайту верхнего уровня.
+
+Виджет комментариев, встроенный на `a.com`, не видит, что пользователь вошёл в него на своём домене. Решения:
+- **Storage Access API**: `await document.requestStorageAccess()` по клику пользователя;
+- вход через попап и серверная сессия;
+- `credentialless` iframe (только Chromium) — загрузка вовсе без cookie, для встраивания, которому они не нужны.
+
+### Высота, загрузка, производительность, доступность
+
+- **Высота.** iframe не подстраивается под содержимое, а родитель не может прочитать высоту документа другого origin. Виджет сам сообщает высоту через `postMessage` по ResizeObserver, страница ставит `style.height`.
+- **Загрузка.** Событие `load` срабатывает и для страницы ошибки. Признак готовности — сообщение от самого документа плюс таймаут. `loading="lazy"` откладывает загрузку iframe вне экрана — во всех браузерах с 2023 года.
+- **Производительность.** Каждый iframe — отдельный документ: память, время загрузки, свои скрипты. Десятки iframe на странице — заметно. iframe того же сайта может делить главный поток с родителем и тормозить его.
+- **Невидимый iframe** не получает rAF и замедляет таймеры.
+- **Доступность.** Обязателен `title`, описывающий содержимое, — по нему скринридер объявляет фрейм. Фокус уходит внутрь и обратно по Tab; не убирайте iframe из порядка табуляции.
+
+### Где iframe нужен во фронтенде
+
+| Задача | Почему iframe |
+|---|---|
+| платёжные поля | скрипты магазина не видят номер карты |
+| сторонние виджеты, реклама | их код не трогает вашу страницу и наоборот |
+| превью писем, песочница кода | недоверенный HTML и JS изолированы |
+| видео, карты | встраивание чужого сервиса |
+| микрофронтенды на iframe | самая сильная изоляция, но ценой UX: прокрутка, размеры, фокус, история (тема «Микрофронтенды») |
+
+<Example file="src/features/checkout/card-fields.tsx" verdict="good">
+
+Поля карты — iframe платёжного провайдера на его домене. Страница оформления знает только, что форма готова, валидна и вернула токен оплаты — всё через `postMessage` с проверкой origin. Высоту iframe виджет сообщает сам. На странице оформления стоит `frame-ancestors 'self'`, чтобы её саму нельзя было встроить и подменить клики.
+
+</Example>
+
+<Example file="src/widgets/email-preview/preview.tsx" verdict="review">
+
+```jsx
+<iframe srcDoc={email.html} sandbox="allow-same-origin allow-scripts" />
+```
+
+HTML письма — недоверенный: его прислал кто угодно. С `allow-same-origin` и `allow-scripts` скрипт из письма получает доступ к странице почтового клиента и её cookie. Для превью письма скрипты не нужны вовсе: `sandbox=""` (или только `allow-popups` для ссылок) и CSP, запрещающая загрузку внешних ресурсов, — чтобы письмо не отслеживало открытие через картинку-пиксель.
+
+</Example>
+
+<Callout type="deep">
+- **Fenced Frames** — iframe для рекламы Privacy Sandbox без канала связи со страницей. По данным web-features на ноябрь 2026 года — без поддержки в стабильных браузерах.
+- **`credentialless` iframe** (Chromium) загружается в отдельном «эфемерном» хранилище без cookie и помогает включить cross-origin isolation, не требуя заголовков от встраиваемого сайта.
+- **Изоляция процессов.** iframe другого сайта при site isolation — отдельный процесс отрисовки. Поэтому сложный чужой виджет не тормозит главный поток вашей страницы, а iframe своего сайта — может.
+</Callout>
+
+### Частые ошибки
+
+| Ошибка | Признак | Исправление |
+|---|---|---|
+| `allow-scripts allow-same-origin` для недоверенного кода | код из iframe читает данные страницы | без `allow-same-origin` или отдельный домен |
+| нет `frame-ancestors` | страницу можно встроить и подменить клики | CSP `frame-ancestors` и `X-Frame-Options` |
+| защита от встраивания в JS | обходится через `sandbox` | заголовок на сервере |
+| `load` как признак успеха | ошибка загрузки выглядит как успех | сообщение `ready` от документа и таймаут |
+| нет `title` | скринридер говорит «фрейм» | описательный `title` |
+| ставка на сторонние cookie в виджете | вход «забывается» | Storage Access API или попап |
+
+<Callout type="interview">
+Спросят: что такое `sandbox` и какие ограничения можно задать; может ли iframe читать `localStorage` родителя; чем опасны сторонние iframe; разница `X-Frame-Options` и `frame-ancestors`; как общаться с iframe другого origin. Сильный ответ знает про непрозрачный origin, опасную пару `allow-scripts` + `allow-same-origin`, clickjacking, Permissions Policy, разделение хранилищ и почему платёжные поля живут в iframe.
+</Callout>
+
+## Implement
+
+<Practice id="quiz-empty-sandbox" />
+
+<Practice id="quiz-sandbox-danger" />
+
+<Practice id="quiz-frame-ancestors" />
+
+<Practice id="quiz-third-party-storage" />
+
+<Practice id="code-sandbox-tokens" />
+
+<Practice id="code-frame-ancestors" />
+
+<Practice id="code-auto-height" />
+
+<Practice id="code-srcdoc-preview" />
+
+## Confirm
+
+<Question q="Что можно и чего нельзя между окнами разных origin?">
+Можно `postMessage`, запись `location`, `close()`, `frames`. Доступ к DOM и большинству свойств — SecurityError. Поэтому с iframe другого origin общаются только сообщениями с проверкой origin.
+</Question>
+
+<Question q="Что делает пустой sandbox и почему allow-scripts с allow-same-origin опасны?">
+Пустой `sandbox` запрещает скрипты, формы, попапы и делает origin непрозрачным. С `allow-scripts` и `allow-same-origin` документ вашего же origin получает доступ к родителю и может снять `sandbox` — изоляция пропадает.
+</Question>
+
+<Question q="Как защитить свою страницу от встраивания и что такое clickjacking?">
+Clickjacking — чужой сайт кладёт вашу страницу в прозрачный iframe и подменяет клики. Защита — заголовок `Content-Security-Policy: frame-ancestors` (и `X-Frame-Options` для старых браузеров) на вашей странице; проверка в JS не защищает.
+</Question>
+
+<Question q="Может ли встроенный iframe читать cookie и localStorage своего сайта?">
+Обычно нет: сторонние cookie блокируются, хранилища разделены по сайту верхнего уровня. Доступ — через Storage Access API по действию пользователя или через попап с серверной сессией.
+</Question>
+
+<Question q="Зачем атрибут allow и чем он отличается от sandbox?">
+`allow` — Permissions Policy: разрешает iframe мощные возможности вроде камеры, геолокации, полноэкранного режима. `sandbox` ограничивает базовые возможности документа: скрипты, формы, попапы, origin.
+</Question>
+
+## Источники
+
+<Sources>
+
+- [HTML Standard, The iframe element](https://html.spec.whatwg.org/multipage/iframe-embed-object.html#the-iframe-element)
+- [HTML Standard, Sandboxing](https://html.spec.whatwg.org/multipage/browsers.html#sandboxing)
+- [MDN, `<iframe>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe)
+- [MDN, CSP `frame-ancestors`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/frame-ancestors)
+- [MDN, Clickjacking](https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/Clickjacking)
+- [MDN, Permissions Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Permissions_Policy)
+- [MDN, Storage Access API](https://developer.mozilla.org/en-US/docs/Web/API/Storage_Access_API)
+
+</Sources>

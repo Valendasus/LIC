@@ -1,0 +1,64 @@
+# Карточки темы «BroadcastChannel и postMessage». Ключи не переименовывать.
+
+- key: post-message
+  type: term
+  front: '`window.postMessage(data, targetOrigin)`'
+  back: Сообщение в другое окно — iframe, попап, родителя — в том числе другого origin. Данные клонируются. `targetOrigin` — доставить, только если в окне сейчас этот origin.
+  reverse: true
+
+- key: broadcast-channel
+  type: term
+  front: '`BroadcastChannel(name)`'
+  back: Канал для всех контекстов одного origin — вкладок, iframe, воркеров. Сообщение получают все объекты канала с этим именем, кроме отправителя.
+  reverse: true
+
+- key: message-channel
+  type: term
+  front: '`MessageChannel`'
+  back: Пара портов для прямого канала. Один порт передают другой стороне через `postMessage` с transfer — например, воркеру или iframe.
+
+- key: storage-event
+  type: qa
+  front: Когда срабатывает событие `storage`?
+  back: В других вкладках того же origin, когда меняется `localStorage`. Во вкладке-авторе не срабатывает. Данные — только строки.
+
+- key: session-storage-tabs
+  type: qa
+  front: Общий ли `sessionStorage` для вкладок?
+  back: Нет, у каждой вкладки свой. Он копируется при «дублировать вкладку» и при `window.open` того же origin без `noopener`. `localStorage`, cookie и IndexedDB — общие для origin.
+
+- key: check-origin
+  type: qa
+  front: Что обязательно проверять в обработчике `message`?
+  back: '`event.origin` — точным сравнением со списком разрешённых — и форму `event.data`. Иначе любой сайт, встроивший или открывший вашу страницу, сможет слать ей команды.'
+
+- key: target-origin-star
+  type: qa
+  front: Чем опасен `postMessage(data, '*')`?
+  back: Сообщение уйдёт тому, кто сейчас загружен в окне, даже если iframe перенаправили на чужой сайт. Для чувствительных данных — точный origin.
+
+- key: web-locks
+  type: term
+  front: Web Locks (`navigator.locks`)
+  back: 'Блокировки между вкладками и воркерами одного origin. `request(name, callback)` держит блокировку, пока промис колбэка не выполнится; при закрытии вкладки она освобождается сама.'
+  reverse: true
+
+- key: tab-leader
+  type: qa
+  front: Как сделать одно соединение на все вкладки?
+  back: Выбрать вкладку-лидера через Web Locks — она держит соединение и раздаёт данные через BroadcastChannel. Или держать соединение в SharedWorker.
+
+- key: storage-partitioning
+  type: term
+  front: Разделение состояния (storage partitioning)
+  back: Хранилища, BroadcastChannel и SharedWorker во встроенном iframe разделены по сайту верхнего уровня. Один виджет на `a.com` и `b.com` не видит общего состояния. Во всех основных браузерах.
+
+- key: message-order
+  type: qa
+  front: Гарантирован ли порядок сообщений из разных вкладок?
+  back: Нет, только для одного отправителя. Для «последний побеждает» в сообщения добавляют время или версию.
+
+- key: iframe-handshake
+  type: qa
+  front: Зачем рукопожатие между страницей и iframe?
+  back: iframe грузится не сразу, и сообщение до его подписки потеряется. Обе стороны шлют `hello` при старте и отвечают `ready` — канал готов, кто бы ни запустился первым.

@@ -1,0 +1,421 @@
+# Практика темы «Web Workers и transferable». В тестах воркер — fakeWorker() из помощников (docs/TRAINERS.md).
+
+- key: out-transfer-detach
+  kind: output
+  code: |
+    const b = new ArrayBuffer(8)
+    const copy = structuredClone(b, { transfer: [b] })
+    console.log(b.byteLength, copy.byteLength)
+  answer:
+    - 0 8
+  explain: 'Передача (transfer) отдаёт владение без копирования. У отправителя буфер **отсоединяется** — его `byteLength` становится 0. `postMessage(buffer, [buffer])` в воркер работает так же.'
+
+- key: out-clone-class
+  kind: output
+  code: |
+    class User { constructor(name) { this.name = name } greet() { return 'привет' } }
+    const copy = structuredClone(new User('Аня'))
+    console.log(copy.name, copy instanceof User, typeof copy.greet)
+  answer:
+    - Аня false undefined
+  explain: 'Структурное клонирование копирует данные, но не прототип: экземпляр класса приходит в воркер обычным объектом, без методов. Передавайте данные и создавайте объекты заново на той стороне.'
+
+- key: out-clone-types
+  kind: output
+  code: |
+    const data = { when: new Date(0), tags: new Set(['a']), self: null }
+    data.self = data
+    const copy = structuredClone(data)
+    console.log(Object.prototype.toString.call(copy.when), copy.tags.has('a'), copy.self === copy, copy === data)
+  answer:
+    - '[object Date] true true false'
+  explain: 'Клонирование понимает Date, Map, Set, массивы, типизированные массивы, ошибки и циклические ссылки. В отличие от JSON, дата остаётся датой, а цикл — циклом.'
+
+- key: out-clone-function
+  kind: output
+  code: |
+    try { structuredClone({ onClick() {} }) } catch (e) { console.log(e.name) }
+  answer:
+    - DataCloneError
+  explain: 'Функции, DOM-узлы и символы не клонируются — `postMessage` бросит `DataCloneError`. Передавать в воркер можно только данные.'
+
+- key: quiz-worker-has
+  kind: quiz
+  question: Что доступно внутри выделенного Web Worker? Отметьте все.
+  options:
+    - text: '`fetch`, WebSocket, IndexedDB, таймеры'
+      correct: true
+    - text: '`OffscreenCanvas` и `requestAnimationFrame`'
+      correct: true
+    - text: '`document` и DOM'
+      why: DOM живёт только в главном потоке. Воркер присылает данные, страница меняет DOM.
+    - text: '`localStorage`'
+      why: Синхронное хранилище в воркере недоступно. Есть IndexedDB.
+  explain: Воркер — отдельный поток со своим глобальным объектом `self`. Всё, что связано с DOM и синхронным доступом к странице, остаётся в главном потоке.
+
+- key: quiz-worker-helps
+  kind: quiz
+  question: Где Web Worker **не** поможет ускорить интерфейс?
+  options:
+    - text: Медленный layout из-за тысяч узлов DOM
+      correct: true
+    - text: Разбор большого CSV перед показом таблицы
+      why: Здесь как раз поможет — разбор уйдёт из главного потока.
+    - text: Подсветка синтаксиса в редакторе кода
+      why: Тоже хороший случай — это вычисления без DOM.
+    - text: Сжатие изображения перед загрузкой
+      why: Хороший случай, особенно с `OffscreenCanvas`.
+  explain: Воркер разгружает главный поток от **вычислений**. Layout, стили и отрисовка — работа главного потока, и их воркер не перенесёт. Там помогают виртуализация, `content-visibility` и меньше DOM.
+
+- key: quiz-worker-kinds
+  kind: quiz
+  question: Нужно одно WebSocket-соединение на все открытые вкладки сайта. Какой вид воркера?
+  options:
+    - text: '`SharedWorker` — его делят все окна одного origin'
+      correct: true
+    - text: Выделенный `Worker`
+      why: У каждой вкладки был бы свой воркер и своё соединение.
+    - text: Service Worker
+      why: Его останавливает браузер в простое, долгое соединение он держать не может.
+    - text: Worklet
+      why: Worklet — для узких задач движка, например обработки звука.
+  explain: '`SharedWorker` живёт, пока подключено хоть одно окно, и общается с каждым через свой порт. Во всех основных браузерах с 2026 года (пришёл в Chrome на Android). Альтернатива — выбрать вкладку-лидера через Web Locks.'
+
+- key: quiz-clone-cost
+  kind: quiz
+  question: В воркер раз в секунду отправляется объект с 50 МБ данных, и интерфейс подтормаживает в момент отправки. Почему и что делать?
+  options:
+    - text: Структурное клонирование копирует данные и блокирует обе стороны; передать `ArrayBuffer` через transfer или загружать данные сразу в воркере
+      correct: true
+    - text: Воркер медленный, нужно больше воркеров
+      why: Тормозит копирование при отправке, а не сам воркер.
+    - text: '`postMessage` асинхронный, тормозить не может'
+      why: Доставка асинхронная, но сериализация происходит синхронно в момент вызова.
+    - text: Нужно отправлять данные через `localStorage`
+      why: В воркере его нет, и он тоже копирует, только медленнее.
+  explain: 'Клонирование сериализует данные синхронно. Для больших бинарных данных — transfer: владение переходит без копирования. А данные с сервера лучше сразу запрашивать внутри воркера.'
+
+- key: quiz-worker-create
+  kind: quiz
+  question: Как правильно создать модульный воркер, чтобы его понял бандлер (Vite, webpack, Next.js)?
+  options:
+    - text: "`new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })`"
+      correct: true
+    - text: "`new Worker('/src/worker.ts')`"
+      why: Бандлер не узнает, что файл нужно собрать, — в проде путь не найдётся.
+    - text: "`import worker from './worker.ts'; new Worker(worker)`"
+      why: Так импортируется модуль, а не URL скрипта воркера.
+    - text: Воркеры нельзя писать модулями
+      why: Модульные воркеры — во всех браузерах с 2023 года.
+  explain: 'Бандлеры распознают именно форму `new URL(…, import.meta.url)` и собирают воркер отдельным файлом. `type: "module"` разрешает `import` внутри воркера.'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+# fakeWorker() даёт { worker, scope, posted }: worker — сторона страницы, scope — self внутри воркера.
+
+- key: code-collect-transfer
+  kind: code
+  level: easy
+  title: Что передать без копирования
+  prompt: |
+    Напишите `collectTransfer(message)`: найти во вложенном сообщении все `ArrayBuffer` (в том числе буферы типизированных массивов) и вернуть их **без повторов** — это список для второго аргумента `postMessage(message, transfer)`.
+    - Обходить объекты и массивы любой вложенности.
+    - Для `Uint8Array` и других типизированных массивов брать их `.buffer`.
+  starter: |
+    function collectTransfer(message) {
+      return []
+    }
+  hints:
+    - 'Рекурсивный обход и `Set` для уникальности. `ArrayBuffer.isView(x)` — проверка на типизированный массив или DataView.'
+  tests: |
+    test('находит вложенные буферы', () => {
+      const a = new ArrayBuffer(4)
+      const b = new Uint8Array(8)
+      const result = collectTransfer({ image: { pixels: a }, list: [1, { audio: b }], name: 'x' })
+      expect(result).toHaveLength(2)
+      expect(result.includes(a)).toBe(true)
+      expect(result.includes(b.buffer)).toBe(true)
+    })
+    test('без повторов', () => {
+      const buffer = new ArrayBuffer(4)
+      const view = new Uint8Array(buffer)
+      expect(collectTransfer([buffer, view, { again: buffer }])).toHaveLength(1)
+    })
+    test('примитивы и пустые значения', () => {
+      expect(collectTransfer(null)).toEqual([])
+      expect(collectTransfer({ a: 1, b: 'x', c: undefined })).toEqual([])
+    })
+  solution: |
+    function collectTransfer(message) {
+      const found = new Set()
+      const visit = (value) => {
+        if (value instanceof ArrayBuffer) return void found.add(value)
+        if (ArrayBuffer.isView(value)) return void found.add(value.buffer)
+        if (value && typeof value === 'object') for (const item of Object.values(value)) visit(item)
+      }
+      visit(message)
+      return [...found]
+    }
+  explain: |
+    **Без повторов — обязательно.** Один буфер в списке передачи дважды — `DataCloneError`.
+
+    **После `postMessage(message, transfer)`** все эти буферы у отправителя станут пустыми (`byteLength === 0`). Если данные ещё нужны странице — не передавайте, а копируйте.
+
+    **Что ещё передаётся:** `MessagePort`, `ImageBitmap`, `OffscreenCanvas`, `ReadableStream` (в Chrome и Firefox).
+
+- key: code-expose
+  kind: code
+  level: easy
+  title: Обработчик запросов внутри воркера
+  prompt: |
+    Напишите `expose(scope, handlers)` — код на стороне воркера. `scope` — это `self` (в тестах — сторона воркера из `fakeWorker()`).
+    - Сообщение `{ id, method, args }` — вызвать `handlers[method](...args)`; обработчик может быть асинхронным.
+    - Ответить `scope.postMessage({ id, result })` или при ошибке `{ id, error: сообщение }`.
+    - Неизвестный метод — ошибка `Неизвестный метод: имя`.
+  starter: |
+    function expose(scope, handlers) {
+      scope.onmessage = () => {}
+    }
+  hints:
+    - '`scope.addEventListener("message", async ({ data }) => { … })`, внутри — `try/catch` вокруг `await handlers[data.method](...data.args)`.'
+  tests: |
+    const reply = (worker) => new Promise((resolve) => worker.addEventListener('message', (e) => resolve(e.data)))
+    test('вызывает обработчик и отвечает с тем же id', async () => {
+      const { worker, scope } = fakeWorker()
+      expose(scope, { sum: (a, b) => a + b })
+      const answer = reply(worker)
+      worker.postMessage({ id: 7, method: 'sum', args: [2, 3] })
+      expect(await answer).toEqual({ id: 7, result: 5 })
+    })
+    test('асинхронный обработчик и ошибка', async () => {
+      const { worker, scope } = fakeWorker()
+      expose(scope, { slow: async () => { await sleep(5); return 'ок' }, fail: () => { throw new Error('плохо') } })
+      const answers = []
+      worker.addEventListener('message', (e) => answers.push(e.data))
+      worker.postMessage({ id: 1, method: 'slow', args: [] })
+      worker.postMessage({ id: 2, method: 'fail', args: [] })
+      worker.postMessage({ id: 3, method: 'nope', args: [] })
+      await sleep(20)
+      expect(answers).toEqual([{ id: 2, error: 'плохо' }, { id: 3, error: 'Неизвестный метод: nope' }, { id: 1, result: 'ок' }])
+    })
+  solution: |
+    function expose(scope, handlers) {
+      scope.addEventListener('message', async ({ data }) => {
+        const { id, method, args } = data
+        try {
+          if (typeof handlers[method] !== 'function') throw new Error(`Неизвестный метод: ${method}`)
+          scope.postMessage({ id, result: await handlers[method](...args) })
+        } catch (error) {
+          scope.postMessage({ id, error: error.message })
+        }
+      })
+    }
+  explain: |
+    **`id` связывает ответ с запросом.** Асинхронные обработчики отвечают в порядке завершения, а не вызова — видно в тесте: быстрая ошибка пришла раньше медленного результата.
+
+    **Ошибку передают сообщением.** Объект `Error` клонируется, но надёжнее передать `message` (и, если нужно, `name`): стек и свои поля могут потеряться.
+
+    **Страница-сторона** такого протокола — следующая задача.
+
+- key: code-worker-rpc
+  kind: code
+  level: medium
+  title: Вызов функций воркера как промисов
+  prompt: |
+    Напишите `createRpc(worker, { timeout = 5000 } = {})` — сторона страницы для протокола из прошлой задачи. Возвращает `call(method, ...args)` → промис результата.
+    - Каждый вызов — уникальный `id`, сообщение `{ id, method, args }`.
+    - Ответ `{ id, result }` выполняет промис этого вызова, `{ id, error }` — отклоняет `new Error(error)`.
+    - Нет ответа за `timeout` мс — отклонить `new Error('Воркер не ответил')`; поздний ответ игнорируется.
+    - Ответы с чужими `id` не ломают ничего.
+  starter: |
+    function createRpc(worker, { timeout = 5000 } = {}) {
+      return (method, ...args) => {
+        worker.postMessage({ method, args })
+        return new Promise(() => {})
+      }
+    }
+  hints:
+    - 'Счётчик `nextId` и `Map` ожидающих: `id → { resolve, reject, timer }`. Один обработчик `message` на всё.'
+    - 'В обработчике: найти запись по `data.id`; если нет — выйти. Иначе удалить из `Map`, очистить таймер и выполнить или отклонить.'
+    - 'Таймер при создании вызова: по срабатыванию удалить запись и отклонить — тогда поздний ответ не найдёт запись и будет проигнорирован.'
+  tests: |
+    // Воркер с обработчиками, как в прошлой задаче.
+    function serve(scope, handlers) {
+      scope.addEventListener('message', async ({ data }) => {
+        try { scope.postMessage({ id: data.id, result: await handlers[data.method](...data.args) }) }
+        catch (e) { scope.postMessage({ id: data.id, error: e.message }) }
+      })
+    }
+    test('результат и ошибка', async () => {
+      const { worker, scope } = fakeWorker()
+      serve(scope, { sum: (a, b) => a + b, fail: () => { throw new Error('плохо') } })
+      const call = createRpc(worker)
+      await expect(call('sum', 2, 3)).resolves.toBe(5)
+      await expect(call('fail')).rejects.toThrow('плохо')
+    })
+    test('параллельные вызовы не путаются', async () => {
+      const { worker, scope } = fakeWorker()
+      serve(scope, { echo: async (x, ms) => { await sleep(ms); return x } })
+      const call = createRpc(worker)
+      await expect(Promise.all([call('echo', 'a', 20), call('echo', 'b', 1)])).resolves.toEqual(['a', 'b'])
+    })
+    test('таймаут, поздний ответ игнорируется', async () => {
+      const { worker, scope } = fakeWorker()
+      serve(scope, { slow: async () => { await sleep(50); return 'поздно' } })
+      const call = createRpc(worker, { timeout: 10 })
+      await expect(call('slow')).rejects.toThrow('Воркер не ответил')
+      await sleep(60)
+    })
+    test('чужие ответы не ломают', async () => {
+      const { worker, scope } = fakeWorker()
+      serve(scope, { sum: (a, b) => a + b })
+      const call = createRpc(worker)
+      scope.postMessage({ id: 999, result: 'чужое' })
+      await expect(call('sum', 1, 1)).resolves.toBe(2)
+    })
+  solution: |
+    function createRpc(worker, { timeout = 5000 } = {}) {
+      let nextId = 0
+      const pending = new Map()
+      worker.addEventListener('message', ({ data }) => {
+        const entry = pending.get(data?.id)
+        if (!entry) return
+        pending.delete(data.id)
+        clearTimeout(entry.timer)
+        if ('error' in data) entry.reject(new Error(data.error))
+        else entry.resolve(data.result)
+      })
+      return (method, ...args) =>
+        new Promise((resolve, reject) => {
+          const id = ++nextId
+          const timer = setTimeout(() => {
+            pending.delete(id)
+            reject(new Error('Воркер не ответил'))
+          }, timeout)
+          pending.set(id, { resolve, reject, timer })
+          worker.postMessage({ id, method, args })
+        })
+    }
+  explain: |
+    **RPC поверх сообщений** — стандартный способ работать с воркером «как с функцией». `Map` по `id` — то же, что `deferred` на каждый вызов.
+
+    **Таймаут обязателен.** Воркер мог упасть (событие `error`) или зависнуть в бесконечном цикле — без таймаута промис висел бы вечно. Зависший воркер останавливают `worker.terminate()`; так делает и этот тренажёр при запуске вашего кода.
+
+    **Готовое решение** — библиотека Comlink: она делает то же через Proxy и умеет передавать функции-колбэки через `MessagePort`.
+
+- key: code-worker-pool
+  kind: code
+  level: hard
+  title: Пул воркеров
+  prompt: |
+    Напишите `createPool(createWorker, size)`. `createWorker()` возвращает воркер, который на сообщение `{ id, task }` отвечает `{ id, result }`. Пул создаёт `size` воркеров и возвращает `{ run(task), destroy() }`:
+    - `run(task)` → промис результата. Задача уходит **свободному** воркеру; если все заняты — ждёт в очереди, пока кто-то не освободится.
+    - Очередь — по порядку добавления.
+    - `destroy()` вызывает `terminate()` у всех воркеров и отклоняет ждущие в очереди задачи `new Error('Пул остановлен')`.
+  starter: |
+    function createPool(createWorker, size) {
+      const worker = createWorker()
+      return {
+        run: (task) => new Promise((resolve) => {
+          worker.addEventListener('message', (e) => resolve(e.data.result))
+          worker.postMessage({ id: 1, task })
+        }),
+        destroy: () => worker.terminate(),
+      }
+    }
+  hints:
+    - 'Список свободных воркеров и очередь задач `{ task, resolve, reject }`. Функция `next()` — пока есть и свободный воркер, и задача, отдать задачу.'
+    - 'У каждого воркера один обработчик `message`: нашёл ожидающую задачу по `id` — выполнить её промис, вернуть воркер в свободные и снова вызвать `next()`.'
+    - 'Ожидающие задачи в работе храните в `Map` по `id`, общий счётчик `id` — на весь пул.'
+    - '`destroy`: `terminate()` всем, очередь — отклонить и очистить.'
+  tests: |
+    // Воркер-эмулятор: задача — { value, ms }, ответ — value * 2 через ms.
+    const makeFactory = (stats) => () => {
+      const { worker, scope } = fakeWorker()
+      scope.addEventListener('message', stats.track(async ({ data }) => {
+        await sleep(data.task.ms)
+        scope.postMessage({ id: data.id, result: data.task.value * 2 })
+      }))
+      const terminate = worker.terminate
+      worker.terminated = false
+      worker.terminate = () => { worker.terminated = true; terminate() }
+      return worker
+    }
+    test('результаты и не больше size одновременно', async () => {
+      const stats = concurrency()
+      const pool = createPool(makeFactory(stats), 2)
+      const results = await Promise.all([1, 2, 3, 4, 5].map((value) => pool.run({ value, ms: 10 })))
+      expect(results).toEqual([2, 4, 6, 8, 10])
+      expect(stats.peak).toBe(2)
+    })
+    test('освободившийся воркер берёт следующую задачу сразу', async () => {
+      const pool = createPool(makeFactory(concurrency()), 2)
+      const start = Date.now()
+      const order = []
+      await Promise.all([
+        pool.run({ value: 1, ms: 60 }).then(() => order.push('долгая')),
+        pool.run({ value: 2, ms: 5 }).then(() => order.push('быстрая')),
+        pool.run({ value: 3, ms: 5 }).then(() => order.push('из очереди')),
+      ])
+      expect(order).toEqual(['быстрая', 'из очереди', 'долгая'])
+      expect(Date.now() - start).toBeLessThan(150)
+    })
+    test('destroy останавливает воркеры и отклоняет очередь', async () => {
+      const workers = []
+      const factory = makeFactory(concurrency())
+      const pool = createPool(() => { const w = factory(); workers.push(w); return w }, 1)
+      pool.run({ value: 1, ms: 50 })
+      const queued = pool.run({ value: 2, ms: 1 })
+      pool.destroy()
+      await expect(queued).rejects.toThrow('Пул остановлен')
+      expect(workers.every((w) => w.terminated)).toBe(true)
+    })
+  solution: |
+    function createPool(createWorker, size) {
+      const idle = []
+      const queue = []
+      const running = new Map()
+      const workers = []
+      let nextId = 0
+
+      function next() {
+        while (idle.length && queue.length) {
+          const worker = idle.shift()
+          const job = queue.shift()
+          const id = ++nextId
+          running.set(id, { job, worker })
+          worker.postMessage({ id, task: job.task })
+        }
+      }
+
+      for (let i = 0; i < size; i++) {
+        const worker = createWorker()
+        worker.addEventListener('message', ({ data }) => {
+          const entry = running.get(data.id)
+          if (!entry) return
+          running.delete(data.id)
+          entry.job.resolve(data.result)
+          idle.push(entry.worker)
+          next()
+        })
+        workers.push(worker)
+        idle.push(worker)
+      }
+
+      return {
+        run: (task) =>
+          new Promise((resolve, reject) => {
+            queue.push({ task, resolve, reject })
+            next()
+          }),
+        destroy() {
+          for (const worker of workers) worker.terminate()
+          for (const job of queue.splice(0)) job.reject(new Error('Пул остановлен'))
+        },
+      }
+    }
+  explain: |
+    **Зачем пул.** Запуск воркера — десятки миллисекунд и мегабайты памяти. Пул создаёт их один раз и переиспользует, а число параллельных вычислений ограничено числом ядер: обычно `navigator.hardwareConcurrency - 1`.
+
+    **Свободный воркер берёт задачу сразу** — та же идея, что у `mapLimit` из темы «Event loop», только «рабочие» здесь — настоящие потоки.
+
+    **Чего не хватает для прода:** обработки `error` воркера (упавший заменить новым), отмены задач через `AbortSignal`, таймаута на задачу. Готовые пулы — библиотеки workerpool и piscina (Node).

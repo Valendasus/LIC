@@ -1,0 +1,223 @@
+export const meta = {
+  verified: '11.11.2026',
+  versions: 'HTML Living Standard, Chrome, Firefox, Safari',
+}
+
+## Learn
+
+### Суть за минуту
+
+Экран обновляется 60, 120 или 144 раза в секунду. Перед каждым кадром браузер выполняет фиксированную последовательность шагов: события прокрутки, анимации, ваши колбэки `requestAnimationFrame`, пересчёт стилей и layout, наблюдатели, отрисовка. Понимать этот порядок нужно, чтобы:
+- анимации были плавными на любом экране;
+- изменения DOM попадали в нужный кадр без мигания;
+- тяжёлая работа не съедала кадры и не задерживала ввод.
+
+```js
+function frame(timestamp) {
+  box.style.transform = `translateX(${(timestamp / 10) % 300}px)`
+  requestAnimationFrame(frame) // следующий кадр
+}
+requestAnimationFrame(frame)
+```
+
+### Когда браузер рисует
+
+Отрисовка происходит только при **возможности отрисовки** (rendering opportunity). Её определяют частота экрана и решения браузера. HTML Standard приводит примеры: до 60 раз в секунду, падение до 30, если страница не успевает, 4 раза в секунду и реже для невидимой страницы.
+
+В текущей редакции HTML Standard «обновить отрисовку» — это **задача в очереди отрисовки**. Когда наступает возможность отрисовки, браузер ставит эту задачу в очередь. Выполняется она по общим правилам: после текущей задачи и всех её микрозадач. Старое описание «шаг 4 в каждом обороте цикла» — упрощение того же порядка (тема «Event loop в браузере»).
+
+Браузер **пропускает** кадр, если:
+- документ скрыт;
+- отрисовка заблокирована, например ждёт стилей;
+- рисовать нечего и колбэков rAF нет.
+
+### Шаги кадра
+
+Порядок из HTML Standard («update the rendering»), для каждого документа:
+
+1. События `resize` и `scroll`, `scrollend`.
+2. Медиазапросы: события `change` у `matchMedia`.
+3. Анимации: обновить CSS-анимации и Web Animations, разослать их события.
+4. Полноэкранный режим, восстановление потерянного canvas.
+5. **Колбэки `requestAnimationFrame`** — с одной меткой времени кадра для всех.
+6. **Стили и layout** — в цикле вместе с **ResizeObserver**.
+7. Исправление фокуса, если он оказался на скрытом элементе.
+8. View Transitions.
+9. **IntersectionObserver** — пересчёт пересечений.
+10. Отметки paint timing (FCP и другие).
+11. **Отрисовка** — кадр уходит на компоновку и вывод.
+
+Что из этого следует:
+- **rAF — до стилей и layout.** Изменения DOM в rAF попадут в этот же кадр. Но чтение размеров в rAF после записи заставит браузер пересчитать layout досрочно.
+- **ResizeObserver — после layout, до отрисовки.** Если колбэк изменил размеры, layout пересчитывается снова, и пользователь видит уже итог — без мигания. Каждый следующий проход — только для элементов глубже в дереве. Если уведомления не уложились, браузер сообщает «ResizeObserver loop completed with undelivered notifications».
+- **IntersectionObserver — в конце кадра и асинхронно.** Подходит для ленивой загрузки и аналитики видимости, но не для точной покадровой анимации.
+
+### requestAnimationFrame
+
+- `requestAnimationFrame(cb)` вызывает `cb(timestamp)` один раз перед следующей отрисовкой. Для анимации колбэк снова вызывает rAF.
+- `timestamp` — время начала кадра, **одно на все колбэки** этого кадра. Анимацию считают по прошедшему времени, а не по числу кадров: на 120 Гц кадров вдвое больше.
+- В скрытой вкладке и невидимом iframe rAF не вызывается.
+- rAF, вызванный внутри rAF, выполнится **в следующем кадре**.
+- `cancelAnimationFrame(id)` отменяет запланированный колбэк.
+- rAF есть и в выделенных воркерах — для `OffscreenCanvas`.
+
+```js
+function slide(element, distance, duration) {
+  let start
+  function tick(time) {
+    start ??= time
+    const progress = Math.min(1, (time - start) / duration)
+    element.style.transform = `translateX(${distance * progress}px)`
+    if (progress < 1) requestAnimationFrame(tick)
+  }
+  requestAnimationFrame(tick)
+}
+```
+
+**Почему не `setInterval(fn, 16)`.** Таймер не знает о кадрах: часть кадров пропускается, часть рисуется дважды, на 120 Гц анимация дёргается, а в фоне таймер работает зря.
+
+**Двойной rAF** `requestAnimationFrame(() => requestAnimationFrame(fn))` — «после того, как кадр нарисован». Раньше так запускали CSS-переход из начального состояния. Сегодня для анимации появления есть `@starting-style` в CSS.
+
+### Бюджет кадра
+
+| Частота | Длительность кадра |
+|---|---|
+| 60 Гц | ≈ 16,7 мс |
+| 120 Гц | ≈ 8,3 мс |
+| 144 Гц | ≈ 6,9 мс |
+
+Часть этого времени уходит самому браузеру: стили, layout, отрисовка. Код в rAF и обработчиках событий должен быть коротким. Задача дольше 50 мс — **длинная**: она съедает несколько кадров и задерживает ответ на ввод (метрика INP).
+
+### Планирование работы
+
+| Инструмент | Когда выполнится | Для чего | Поддержка |
+|---|---|---|---|
+| `queueMicrotask`, `then` | сразу после текущей задачи, до отрисовки | досогласовать состояние | везде |
+| `setTimeout(fn, 0)` | следующей задачей, ≥ 4 мс при вложенности | уступить поток | везде |
+| `MessageChannel` | следующей задачей, без ограничения 4 мс | планировщики (так делает React) | везде |
+| `requestAnimationFrame` | перед следующим кадром | изменения DOM и анимации | везде |
+| `requestIdleCallback` | в простое, дедлайн до 50 мс | несрочное: аналитика, прогрев | Chrome, Firefox; в Safari нет |
+| `scheduler.postTask(fn, { priority })` | по приоритету: `user-blocking`, `user-visible`, `background` | очередь с приоритетами и отменой | Chrome 94+, Firefox 142+; в Safari нет |
+| `scheduler.yield()` | уступить и продолжить впереди обычных задач | дробление длинной работы | Chrome 129+, Firefox 142+; в Safari нет |
+
+**Микрозадача не уступает поток.** `await Promise.resolve()` между порциями работы не даст браузеру нарисовать кадр — микрозадачи выполняются до отрисовки.
+
+**Для Safari нужен запасной путь:**
+
+```js
+const yieldToMain = () =>
+  typeof globalThis.scheduler?.yield === 'function'
+    ? scheduler.yield()
+    : new Promise((resolve) => setTimeout(resolve, 0))
+```
+
+### Чтения и записи DOM
+
+Чтение размеров (`offsetHeight`, `getBoundingClientRect()`) после записи стилей заставляет браузер пересчитать layout **прямо сейчас** — это принудительный layout. Чередование чтений и записей в цикле — **layout thrashing**, когда layout пересчитывается на каждом шаге.
+
+```js
+// Плохо: layout на каждой итерации
+for (const card of cards) {
+  card.style.height = `${card.offsetWidth * 0.6}px`
+}
+
+// Хорошо: сначала все чтения, потом все записи
+const widths = cards.map((card) => card.offsetWidth)
+cards.forEach((card, i) => (card.style.height = `${widths[i] * 0.6}px`))
+```
+
+Записи удобно складывать в rAF — они применятся в кадре одним пересчётом. Подробно о стоимости layout и repaint — в теме «Reflow, repaint и layout thrashing».
+
+<Example file="src/widgets/chart/resize.ts" verdict="good">
+
+График перерисовывается по ResizeObserver контейнера. Колбэк только запоминает новый размер, а перерисовку canvas откладывает в rAF; несколько изменений за кадр дают одну перерисовку. Изменения размеров приходят до отрисовки кадра, поэтому при перетаскивании разделителя график не «прыгает» на кадр позже.
+
+</Example>
+
+<Example file="src/features/toast/show.ts" verdict="review">
+
+```js
+toast.classList.add('visible') // transition: opacity
+setTimeout(() => toast.classList.add('shown'), 16)
+```
+
+Задумано «сначала показать элемент, потом запустить переход». Но 16 мс не гарантируют, что кадр с начальным состоянием нарисован: на 60 Гц иногда работает, на 120 Гц и под нагрузкой — нет, и тост появляется без анимации. Надёжнее двойной rAF, а лучше — `@starting-style` в CSS, который задаёт начальное состояние без JavaScript.
+
+</Example>
+
+<Callout type="deep">
+- **Модель «отрисовка — это задача»** появилась в HTML Standard в последние годы. Наблюдаемый порядок для страниц не изменился, но так точнее видно: тяжёлая задача откладывает и задачу отрисовки.
+- **Long Animation Frames API** (`PerformanceObserver` с типом `long-animation-frame`, только Chromium) показывает, какие скрипты замедлили конкретный кадр, — лучший инструмент для разбора плохого INP.
+- **Событие `scrollend`** — во всех основных браузерах с декабря 2025 года (Safari 26.2).
+- **Тесты.** В jsdom настоящего кадра нет, rAF подменяется таймерами. Порядок кадра проверяют в браузерных тестах, а логику — с подменённым rAF, как в задачах практики.
+</Callout>
+
+### Частые ошибки
+
+| Ошибка | Признак | Исправление |
+|---|---|---|
+| анимация на `setInterval` | рывки, работа в фоне | rAF и расчёт по времени |
+| сдвиг на N px за кадр | на 120 Гц вдвое быстрее | позиция по `timestamp` |
+| `await Promise.resolve()` для уступки | интерфейс всё равно замёрз | `scheduler.yield()` или `setTimeout` |
+| чтения и записи вперемешку | долгие кадры, принудительный layout | сначала чтения, потом записи |
+| `scheduler` и `requestIdleCallback` без проверки | ошибка в Safari | запасной путь |
+| таймер вместо двойного rAF для перехода | анимация то есть, то нет | `@starting-style` или двойной rAF |
+
+<Callout type="interview">
+Частые вопросы: что делает `requestAnimationFrame` и почему он лучше `setTimeout` для анимации; где rAF в цикле событий; что такое бюджет кадра. Сильный ответ называет порядок шагов кадра (rAF → стили и layout с ResizeObserver → IntersectionObserver → отрисовка), объясняет расчёт по `timestamp`, разницу микрозадачи и новой задачи для уступки потока, и знает про `scheduler.yield` с запасным путём.
+</Callout>
+
+## Implement
+
+<Practice id="order-frame-steps" />
+
+<Practice id="order-schedulers" />
+
+<Practice id="quiz-timestamp" />
+
+<Practice id="quiz-ro-error" />
+
+<Practice id="code-yield-to-main" />
+
+<Practice id="code-animate" />
+
+<Practice id="code-frame-batcher" />
+
+<Practice id="code-idle-queue" />
+
+## Confirm
+
+<Question q="Какие шаги выполняет браузер перед отрисовкой кадра?">
+resize и scroll, медиазапросы, анимации, колбэки requestAnimationFrame, стили и layout вместе с ResizeObserver, исправление фокуса, View Transitions, IntersectionObserver, отметки paint timing, отрисовка.
+</Question>
+
+<Question q="Когда выполняется requestAnimationFrame и почему анимацию считают по timestamp?">
+Перед стилями и layout следующего кадра, раз в кадр, только в видимой вкладке. `timestamp` — время начала кадра; расчёт по прошедшему времени делает анимацию одинаковой на любой частоте экрана и при пропущенных кадрах.
+</Question>
+
+<Question q="Почему изменения из ResizeObserver не мигают?">
+Он срабатывает после layout, но до отрисовки того же кадра. Если колбэк изменил размеры, layout пересчитывается снова, и пользователь видит итог.
+</Question>
+
+<Question q="Чем отличаются queueMicrotask, setTimeout, requestAnimationFrame, requestIdleCallback и scheduler.yield?">
+Микрозадача — сразу после задачи, до отрисовки. `setTimeout` — следующей задачей. rAF — перед кадром. `requestIdleCallback` — в простое. `scheduler.yield` — уступить браузеру и продолжить впереди обычных задач. Последние два — без Safari, нужен запасной путь.
+</Question>
+
+<Question q="Что такое layout thrashing и как его избежать?">
+Чередование записи стилей и чтения размеров, из-за которого layout пересчитывается на каждом шаге. Избежать — сначала все чтения, потом все записи, записи — пачкой в rAF.
+</Question>
+
+## Источники
+
+<Sources>
+
+- [HTML Standard, Event loop processing model и update the rendering](https://html.spec.whatwg.org/multipage/webappapis.html#event-loop-processing-model)
+- [HTML Standard, Animation frames](https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html#animation-frames)
+- [MDN, `requestAnimationFrame`](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame)
+- [MDN, Prioritized Task Scheduling API](https://developer.mozilla.org/en-US/docs/Web/API/Prioritized_Task_Scheduling_API)
+- [MDN, `requestIdleCallback`](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback)
+- [CSSWG, Resize Observer](https://drafts.csswg.org/resize-observer/)
+- [web.dev, Optimize long tasks](https://web.dev/articles/optimize-long-tasks)
+- [Chrome for Developers, Long Animation Frames API](https://developer.chrome.com/docs/web-platform/long-animation-frames)
+
+</Sources>

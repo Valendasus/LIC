@@ -53,6 +53,7 @@ export async function runOutput(code) {
     AbortController,
     AbortSignal,
     DOMException,
+    structuredClone,
   }
   vm.runInNewContext(code, sandbox, { timeout: 1000 })
   await new Promise((resolve) => setTimeout(resolve, 100))

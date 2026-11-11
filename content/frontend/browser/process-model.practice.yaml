@@ -1,0 +1,348 @@
+# Практика темы «Процессы и потоки браузера».
+
+- key: order-click-path
+  kind: order
+  prompt: Пользователь кликнул по кнопке, обработчик меняет текст. Расставьте, через что проходит событие до появления нового кадра на экране.
+  steps:
+    - Браузерный процесс получает событие от системы и определяет вкладку
+    - Событие передаётся процессу отрисовки этой вкладки
+    - Главный поток выполняет обработчик click
+    - Главный поток пересчитывает стили, layout и записывает команды отрисовки
+    - Компоновщик собирает слои в кадр
+    - Процесс GPU выводит кадр на экран
+  explain: Ввод приходит через браузерный процесс, JavaScript и layout выполняет главный поток процесса отрисовки, а кадр собирает компоновщик и выводит GPU. Если главный поток занят, клик ждёт — это и есть задержка ввода (INP).
+
+- key: quiz-compositor-animation
+  kind: quiz
+  question: Главный поток занят тяжёлым циклом на 2 секунды. Какие анимации продолжат идти плавно? Отметьте все.
+  options:
+    - text: CSS-анимация `transform`
+      correct: true
+    - text: CSS-анимация `opacity`
+      correct: true
+    - text: CSS-анимация `left` или `width`
+      why: Эти свойства требуют layout, а layout выполняет главный поток — он занят.
+    - text: Анимация на `requestAnimationFrame`
+      why: Колбэки rAF выполняются в главном потоке и ждут конца цикла.
+  explain: '`transform` и `opacity` компоновщик анимирует сам, без главного потока. Поэтому анимировать стоит их, а `left`, `top`, `width` — заменять на `transform`.'
+
+- key: quiz-site-vs-origin
+  kind: quiz
+  question: Какие адреса относятся к одному **сайту** (site), но к разным **origin**?
+  options:
+    - text: '`https://app.example.com` и `https://api.example.com`'
+      correct: true
+    - text: '`https://example.com` и `https://example.org`'
+      why: Разные регистрируемые домены — разные сайты.
+    - text: '`https://example.com` и `https://example.com/page`'
+      why: Путь не входит в origin — это один origin.
+    - text: '`http://example.com` и `https://example.com`'
+      why: Схема входит и в origin, и в сайт — это разные сайты.
+  explain: 'Origin — схема, хост и порт. Сайт — схема и регистрируемый домен (eTLD+1): `example.com`, `example.co.uk`. Site isolation разносит по процессам разные **сайты**; SameSite у cookie тоже про сайт.'
+
+- key: quiz-site-isolation
+  kind: quiz
+  question: Зачем браузеры держат документы разных сайтов в разных процессах (site isolation)?
+  options:
+    - text: Чтобы атаки на память вроде Spectre не могли прочитать данные чужого сайта из общего процесса
+      correct: true
+    - text: Чтобы страницы грузились быстрее
+      why: Отдельные процессы стоят памяти и времени запуска — это плата за безопасность.
+    - text: Чтобы у каждой вкладки было больше потоков для JavaScript
+      why: JavaScript страницы по-прежнему выполняется в одном главном потоке.
+    - text: Это требование стандарта HTML
+      why: Это решение браузеров. Стандарт описывает агентов и группы агентов, но не процессы.
+  explain: После Spectre (2018) стало ясно, что код может прочитать любую память своего процесса. Поэтому Chrome (с 2018 года) и Firefox (Fission, с версии 95) разносят сайты по процессам. А мощные API вроде `SharedArrayBuffer` требуют ещё и cross-origin isolation.
+
+- key: quiz-passive
+  kind: quiz
+  question: 'Зачем `addEventListener("touchmove", handler, { passive: true })`?'
+  options:
+    - text: Обещание не вызывать `preventDefault()` — компоновщик прокручивает страницу, не дожидаясь главного потока
+      correct: true
+    - text: Обработчик будет выполняться в отдельном потоке
+      why: Обработчик всё равно выполняется в главном потоке, просто прокрутка его не ждёт.
+    - text: Обработчик вызовется только один раз
+      why: 'Это `{ once: true }`.'
+    - text: Событие не будет всплывать
+      why: Всплытие останавливает `stopPropagation()`, а `passive` на него не влияет.
+  explain: Пока есть непассивный обработчик прокрутки или касания, браузер должен дождаться его — вдруг он отменит прокрутку. Занятый главный поток — дёрганая прокрутка. Chrome делает `touchstart`, `touchmove` и `wheel` на `window` и `document` пассивными по умолчанию.
+
+- key: quiz-background-tab
+  kind: quiz
+  question: Что происходит с JavaScript страницы в фоновой вкладке? Отметьте все.
+  options:
+    - text: Колбэки `requestAnimationFrame` не вызываются
+      correct: true
+    - text: Таймеры замедляются — до раза в секунду и реже
+      correct: true
+    - text: Вкладку могут заморозить или выгрузить из памяти
+      correct: true
+    - text: Ничего, всё работает как в активной вкладке
+      why: Браузеры экономят батарею и память — фоновые вкладки сильно ограничены.
+  explain: 'Код должен переживать возврат во вкладку: обновить данные по `visibilitychange`, не полагаться на точные таймеры в фоне, восстанавливать состояние после выгрузки.'
+
+- key: quiz-bfcache
+  kind: quiz
+  question: Пользователь ушёл со страницы и нажал «Назад». Страница показалась мгновенно, но данные устарели. Что произошло и что делать?
+  options:
+    - text: 'Страница восстановилась из bfcache; обновить данные в обработчике `pageshow` с `event.persisted === true`'
+      correct: true
+    - text: 'Браузер показал HTTP-кэш, поможет `Cache-Control: no-store` на всех ресурсах'
+      why: bfcache хранит всю живую страницу в памяти — это не HTTP-кэш.
+    - text: Сработал Service Worker, его нужно удалить
+      why: Service Worker тут ни при чём.
+    - text: Это ошибка браузера
+  explain: 'bfcache (back/forward cache) сохраняет страницу целиком вместе с состоянием JS. Помешать ему могут обработчик `unload` и открытые соединения. Возврат ловят событием `pageshow` с `persisted: true`.'
+
+- key: quiz-one-thread
+  kind: quiz
+  question: Как точнее всего ответить на «JavaScript однопоточный»?
+  options:
+    - text: У каждого агента — окна, воркера — один поток выполнения JS и свой event loop; параллельность даёт запуск нескольких агентов
+      correct: true
+    - text: Да, браузер всегда выполняет весь JavaScript в одном потоке
+      why: Воркеры выполняют JavaScript в других потоках.
+    - text: Нет, асинхронный код выполняется в отдельных потоках
+      why: '`async`-функции и промисы выполняются в том же главном потоке, просто с паузами.'
+    - text: Нет, движок сам распараллеливает циклы
+  explain: 'Внутри одного агента код выполняется по очереди — поэтому нет гонок за общие переменные. Параллельность — воркеры, у каждого своя память; общая память — только `SharedArrayBuffer`.'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+
+- key: code-same-site
+  kind: code
+  level: easy
+  title: Один origin, один сайт
+  prompt: |
+    Напишите две функции для адресов-строк:
+    - `sameOrigin(a, b)` — совпадают ли схема, хост и порт (порт по умолчанию: 80 для http, 443 для https);
+    - `sameSite(a, b)` — совпадают ли схема и **регистрируемый домен**. Регистрируемый домен — последние две части хоста (`app.example.com` → `example.com`), но для доменов из списка `MULTI_PART` — последние три (`shop.example.co.uk` → `example.co.uk`).
+
+    `MULTI_PART` уже объявлен в тестах: `['co.uk', 'com.au', 'github.io']`. Используйте `new URL()`.
+  starter: |
+    function sameOrigin(a, b) {
+      return a === b
+    }
+    function sameSite(a, b) {
+      return a === b
+    }
+  hints:
+    - '`new URL(a).origin` уже учитывает порт по умолчанию. Для сайта нужны `protocol` и `hostname`.'
+    - 'Регистрируемый домен: разбейте `hostname` по точкам; если две последние части есть в `MULTI_PART` — возьмите три последние, иначе две.'
+  tests: |
+    const MULTI_PART = ['co.uk', 'com.au', 'github.io']
+    test('origin: схема, хост, порт', () => {
+      expect(sameOrigin('https://a.com/x', 'https://a.com:443/y')).toBe(true)
+      expect(sameOrigin('https://a.com', 'http://a.com')).toBe(false)
+      expect(sameOrigin('https://a.com', 'https://b.a.com')).toBe(false)
+      expect(sameOrigin('http://a.com:8080', 'http://a.com')).toBe(false)
+    })
+    test('сайт: поддомены — один сайт', () => {
+      expect(sameSite('https://app.example.com', 'https://api.example.com')).toBe(true)
+      expect(sameSite('https://example.com', 'https://example.org')).toBe(false)
+      expect(sameSite('http://example.com', 'https://example.com')).toBe(false)
+    })
+    test('сайт: составные зоны', () => {
+      expect(sameSite('https://shop.example.co.uk', 'https://blog.example.co.uk')).toBe(true)
+      expect(sameSite('https://alice.github.io', 'https://bob.github.io')).toBe(false)
+    })
+  solution: |
+    function sameOrigin(a, b) {
+      return new URL(a).origin === new URL(b).origin
+    }
+
+    function registrable(hostname) {
+      const parts = hostname.split('.')
+      const lastTwo = parts.slice(-2).join('.')
+      return MULTI_PART.includes(lastTwo) ? parts.slice(-3).join('.') : lastTwo
+    }
+
+    function sameSite(a, b) {
+      const x = new URL(a)
+      const y = new URL(b)
+      return x.protocol === y.protocol && registrable(x.hostname) === registrable(y.hostname)
+    }
+  explain: |
+    **Origin** — граница same-origin policy: доступ к DOM чужого окна, `localStorage`, CORS. **Сайт** — граница site isolation и `SameSite` у cookie.
+
+    **Настоящий список зон** — Public Suffix List: в нём тысячи записей, включая `github.io`, где каждый поддомен — отдельный сайт. В коде его не пишут руками — браузер знает его сам.
+
+- key: code-compositor-props
+  kind: code
+  level: medium
+  title: Что дорого анимировать
+  prompt: |
+    Напишите `animationCost(properties)`: по списку анимируемых CSS-свойств вернуть самый дорогой шаг конвейера, который придётся повторять на каждом кадре:
+    - `'composite'` — только компоновка: `transform`, `opacity`, `filter`, а также отдельные `translate`, `scale`, `rotate`;
+    - `'paint'` — перерисовка без layout: `color`, `background-color`, `background`, `box-shadow`, `border-color`, `outline-color`;
+    - `'layout'` — всё остальное (`width`, `top`, `margin`, `font-size`…).
+
+    Пустой список — `'composite'`.
+  starter: |
+    function animationCost(properties) {
+      return 'composite'
+    }
+  hints:
+    - 'Заведите два множества: свойства только для компоновки и свойства, требующие перерисовки.'
+    - 'Самый дорогой шаг побеждает: если хоть одно свойство требует layout — `layout`; иначе если есть перерисовка — `paint`.'
+  tests: |
+    test('только компоновка', () => {
+      expect(animationCost(['transform', 'opacity'])).toBe('composite')
+      expect(animationCost(['scale', 'rotate', 'filter'])).toBe('composite')
+      expect(animationCost([])).toBe('composite')
+    })
+    test('перерисовка', () => {
+      expect(animationCost(['opacity', 'background-color'])).toBe('paint')
+      expect(animationCost(['box-shadow'])).toBe('paint')
+    })
+    test('layout побеждает', () => {
+      expect(animationCost(['transform', 'width'])).toBe('layout')
+      expect(animationCost(['color', 'top'])).toBe('layout')
+    })
+  solution: |
+    const COMPOSITE = new Set(['transform', 'opacity', 'filter', 'translate', 'scale', 'rotate'])
+    const PAINT = new Set(['color', 'background-color', 'background', 'box-shadow', 'border-color', 'outline-color'])
+
+    function animationCost(properties) {
+      let cost = 'composite'
+      for (const property of properties) {
+        if (COMPOSITE.has(property)) continue
+        if (!PAINT.has(property)) return 'layout'
+        cost = 'paint'
+      }
+      return cost
+    }
+  explain: |
+    **Конвейер:** стили → layout → paint → composite. Изменение свойства запускает конвейер с того шага, который оно затрагивает, и дальше.
+
+    **`transform` и `opacity`** меняют только то, как готовый слой собирается в кадр, — это делает компоновщик в своём потоке, даже когда главный занят. Поэтому «передвинуть» элемент дешевле через `transform: translate()`, а не через `left`.
+
+    **Не всё так просто:** точный набор зависит от браузера и контекста — проверяйте во вкладке Performance DevTools. Но правило «анимируем transform и opacity» верно почти всегда.
+
+- key: code-page-lifecycle
+  kind: code
+  level: medium
+  title: Возврат во вкладку
+  prompt: |
+    Напишите `watchPage(target, { onHide, onShow })`. `target` — объект с `addEventListener` и свойством `visibilityState` (в браузере — `document` и `window` вместе; в тестах — один `EventTarget`).
+    - `visibilitychange` → `onHide()`, если `target.visibilityState === 'hidden'`, иначе `onShow({ restored: false })`;
+    - `pageshow` с `event.persisted === true` → `onShow({ restored: true })` — страница вернулась из bfcache;
+    - вернуть функцию, которая снимает все обработчики.
+  starter: |
+    function watchPage(target, { onHide, onShow }) {
+      return () => {}
+    }
+  hints:
+    - 'Два обработчика: на `visibilitychange` и на `pageshow`. Снять оба проще всего одним `AbortController` — передайте `{ signal }` в `addEventListener`.'
+    - '`pageshow` без `persisted` — обычная загрузка, на неё реагировать не нужно.'
+  tests: |
+    const page = () => Object.assign(new EventTarget(), { visibilityState: 'visible' })
+    const pageshow = (persisted) => Object.assign(new Event('pageshow'), { persisted })
+    test('скрытие и показ вкладки', () => {
+      const target = page()
+      const onHide = spy()
+      const onShow = spy()
+      watchPage(target, { onHide, onShow })
+      target.visibilityState = 'hidden'
+      target.dispatchEvent(new Event('visibilitychange'))
+      target.visibilityState = 'visible'
+      target.dispatchEvent(new Event('visibilitychange'))
+      expect(onHide.calls.length).toBe(1)
+      expect(onShow.calls).toEqual([[{ restored: false }]])
+    })
+    test('возврат из bfcache', () => {
+      const target = page()
+      const onShow = spy()
+      watchPage(target, { onHide: () => {}, onShow })
+      target.dispatchEvent(pageshow(false))
+      target.dispatchEvent(pageshow(true))
+      expect(onShow.calls).toEqual([[{ restored: true }]])
+    })
+    test('отписка снимает всё', () => {
+      const target = page()
+      const onHide = spy()
+      const onShow = spy()
+      const stop = watchPage(target, { onHide, onShow })
+      stop()
+      target.visibilityState = 'hidden'
+      target.dispatchEvent(new Event('visibilitychange'))
+      target.dispatchEvent(pageshow(true))
+      expect(onHide.calls.length + onShow.calls.length).toBe(0)
+    })
+  solution: |
+    function watchPage(target, { onHide, onShow }) {
+      const controller = new AbortController()
+      const { signal } = controller
+      target.addEventListener('visibilitychange', () => {
+        if (target.visibilityState === 'hidden') onHide()
+        else onShow({ restored: false })
+      }, { signal })
+      target.addEventListener('pageshow', (event) => {
+        if (event.persisted) onShow({ restored: true })
+      }, { signal })
+      return () => controller.abort()
+    }
+  explain: |
+    **`visibilitychange` — надёжный момент сохранить состояние и отправить аналитику**: после него вкладку могут заморозить или выгрузить, и `unload` может не прийти вовсе. `navigator.sendBeacon` отправит данные даже при закрытии.
+
+    **`pageshow` с `persisted`** — единственный способ узнать, что страница вернулась из bfcache: JS не перезапускался, но данные могли устареть.
+
+    **Не используйте `unload`**: он мешает bfcache, а Chrome постепенно перестаёт его вызывать.
+
+- key: code-passive-listener
+  kind: code
+  level: easy
+  title: Пассивный обработчик прокрутки
+  prompt: |
+    Напишите `onScroll(target, handler, { throttle = 0 } = {})`:
+    - подписывает `handler` на `scroll` **пассивно** (`{ passive: true }`);
+    - при `throttle > 0` вызывает `handler` не чаще раза в `throttle` мс (первый вызов — сразу);
+    - возвращает функцию отписки.
+  starter: |
+    function onScroll(target, handler, { throttle = 0 } = {}) {
+      target.addEventListener('scroll', handler)
+      return () => target.removeEventListener('scroll', handler)
+    }
+  hints:
+    - 'Опции третьим аргументом: `{ passive: true }`. Для отписки удобно добавить и `signal`.'
+  tests: |
+    test('пассивная подписка и отписка', () => {
+      const target = new EventTarget()
+      const seen = []
+      const add = target.addEventListener.bind(target)
+      target.addEventListener = (type, fn, options) => { seen.push(options?.passive); return add(type, fn, options) }
+      const handler = spy()
+      const stop = onScroll(target, handler)
+      target.dispatchEvent(new Event('scroll'))
+      stop()
+      target.dispatchEvent(new Event('scroll'))
+      expect(seen).toEqual([true])
+      expect(handler.calls.length).toBe(1)
+    })
+    test('throttle: не чаще раза в N мс', async () => {
+      const target = new EventTarget()
+      const handler = spy()
+      onScroll(target, handler, { throttle: 30 })
+      for (let i = 0; i < 5; i++) target.dispatchEvent(new Event('scroll'))
+      expect(handler.calls.length).toBe(1)
+      await sleep(40)
+      target.dispatchEvent(new Event('scroll'))
+      expect(handler.calls.length).toBe(2)
+    })
+  solution: |
+    function onScroll(target, handler, { throttle = 0 } = {}) {
+      const controller = new AbortController()
+      let last = -Infinity
+      target.addEventListener('scroll', (event) => {
+        const now = Date.now()
+        if (throttle > 0 && now - last < throttle) return
+        last = now
+        handler(event)
+      }, { passive: true, signal: controller.signal })
+      return () => controller.abort()
+    }
+  explain: |
+    **`passive: true`** — обещание не вызывать `preventDefault()`. Компоновщик прокручивает, не дожидаясь главного потока, — прокрутка плавная, даже если обработчик медленный.
+
+    **Ещё лучше — не слушать `scroll` вовсе.** Появление элементов — IntersectionObserver, анимации по прокрутке — scroll-driven animations в CSS, «прилипание» — `position: sticky`. Обработчик прокрутки оставляют для того, что иначе не сделать.

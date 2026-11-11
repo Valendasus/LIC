@@ -1,0 +1,301 @@
+# Практика темы «SharedArrayBuffer, Atomics и cross-origin isolation».
+# Страница тренажёра не cross-origin isolated, поэтому в задачах Atomics работают поверх обычного Int32Array —
+# операции те же, в реальном коде буфер был бы SharedArrayBuffer.
+
+- key: out-atomics-cas
+  kind: output
+  code: |
+    const a = new Int32Array(new SharedArrayBuffer(8))
+    Atomics.add(a, 0, 5)
+    console.log(Atomics.load(a, 0), Atomics.compareExchange(a, 0, 5, 7), a[0])
+    console.log(Atomics.compareExchange(a, 0, 5, 9), a[0])
+  answer:
+    - 5 5 7
+    - 7 7
+  explain: '`compareExchange(arr, i, expected, value)` записывает `value`, только если там сейчас `expected`, и всегда возвращает **старое** значение. Во втором вызове ожидали 5, а там 7 — запись не произошла. На этой операции строят блокировки.'
+
+- key: out-atomics-return
+  kind: output
+  code: |
+    const a = new Int32Array(4)
+    console.log(Atomics.add(a, 0, 1), Atomics.add(a, 0, 1), Atomics.exchange(a, 0, 10), a[0])
+  answer:
+    - 0 1 2 10
+  explain: 'Атомарные операции возвращают значение **до** изменения. Так поток узнаёт, что именно он увеличил счётчик с 0 до 1, — даже если другие потоки работают одновременно.'
+
+- key: out-sab-shared
+  kind: output
+  code: |
+    const shared = new SharedArrayBuffer(4)
+    const copy = structuredClone(shared)
+    new Int32Array(copy)[0] = 42
+    console.log(new Int32Array(shared)[0])
+  answer:
+    - '42'
+  explain: '«Клон» `SharedArrayBuffer` указывает на ту же память. Поэтому `postMessage(sab)` даёт воркеру доступ к тем же байтам, а не копию — в отличие от обычного `ArrayBuffer`.'
+
+- key: quiz-sab-undefined
+  kind: quiz
+  question: В консоли `ReferenceError — SharedArrayBuffer is not defined`. Самая вероятная причина?
+  options:
+    - text: Страница не cross-origin isolated — нет заголовков COOP и COEP
+      correct: true
+    - text: Браузер слишком старый
+      why: SharedArrayBuffer есть в Chrome 68, Firefox 79, Safari 15.2. Обычно дело в заголовках.
+    - text: SharedArrayBuffer работает только в воркерах
+      why: Он доступен и в окне, но только при cross-origin isolation.
+    - text: Нужно импортировать его из модуля
+  explain: 'После Spectre браузеры дают `SharedArrayBuffer` только при `crossOriginIsolated === true`. Нужны `Cross-Origin-Opener-Policy: same-origin` и `Cross-Origin-Embedder-Policy: require-corp` (или `credentialless`).'
+
+- key: quiz-isolation-breaks
+  kind: quiz
+  question: На сайте включили COOP `same-origin` и COEP `require-corp`. Что может сломаться? Отметьте все.
+  options:
+    - text: Картинки и скрипты с чужих доменов без заголовка CORP или CORS
+      correct: true
+    - text: Попап оплаты или входа через OAuth, который общается с окном через `window.opener`
+      correct: true
+    - text: iframe чужих виджетов без разрешения на встраивание
+      correct: true
+    - text: Запросы `fetch` к своему же API
+      why: Свои ресурсы того же origin изоляция не затрагивает.
+  explain: 'COEP требует, чтобы каждый чужой ресурс явно разрешил встраивание (`Cross-Origin-Resource-Policy` или CORS). COOP отрывает окна других origin. Включение изоляции на большом сайте — проект: инвентаризация сторонних ресурсов, `crossorigin` на тегах, `credentialless` там, где можно.'
+
+- key: quiz-wait-main
+  kind: quiz
+  question: Почему `Atomics.wait` нельзя вызвать в главном потоке окна?
+  options:
+    - text: Он блокирует поток до сигнала — окно перестало бы отвечать; в главном потоке используют `Atomics.waitAsync`
+      correct: true
+    - text: Он не поддерживается браузерами
+      why: В воркерах он работает. Запрещён только в главном потоке окна.
+    - text: Он работает только с обычным ArrayBuffer
+      why: Наоборот, `wait` работает только с `Int32Array` и `BigInt64Array` поверх общей памяти.
+    - text: Его заменил Promise.all
+  explain: '`Atomics.wait` — блокирующее ожидание, как сон потока. Для окна это зависание. `Atomics.waitAsync` возвращает промис и есть во всех основных браузерах с ноября 2025 года.'
+
+- key: quiz-data-race
+  kind: quiz
+  question: Четыре воркера одновременно выполняют `counter[0]++` по общей памяти тысячу раз каждый. Что окажется в счётчике?
+  options:
+    - text: Скорее всего меньше 4000 — инкременты теряются; нужен `Atomics.add`
+      correct: true
+    - text: Ровно 4000
+      why: '`++` — это чтение, сложение и запись. Два потока могут прочитать одно значение и оба записать «плюс один».'
+    - text: Ошибка — браузер запрещает одновременную запись
+    - text: Ровно 1000 — потоки ждут друг друга
+  explain: 'Гонка данных: операция не атомарна. `Atomics.add(counter, 0, 1)` делает чтение-изменение-запись одним неделимым шагом.'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+
+- key: code-isolation-headers
+  kind: code
+  level: easy
+  title: Заголовки изоляции
+  prompt: |
+    Напишите `isolationHeaders({ credentialless = false } = {})`: объект HTTP-заголовков, который включает cross-origin isolation для документа.
+    - `Cross-Origin-Opener-Policy: same-origin`;
+    - `Cross-Origin-Embedder-Policy`: `require-corp`, а при `credentialless` — `credentialless`.
+
+    И `canShareMemory(scope)`: `true`, только если в `scope` есть `SharedArrayBuffer` и `scope.crossOriginIsolated === true`.
+  starter: |
+    function isolationHeaders({ credentialless = false } = {}) {
+      return {}
+    }
+    function canShareMemory(scope) {
+      return typeof scope.SharedArrayBuffer === 'function'
+    }
+  hints:
+    - 'Два ключа в объекте; значение COEP — тернарный оператор по `credentialless`.'
+  tests: |
+    test('require-corp по умолчанию', () => {
+      expect(isolationHeaders()).toEqual({ 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' })
+    })
+    test('credentialless', () => {
+      expect(isolationHeaders({ credentialless: true })['Cross-Origin-Embedder-Policy']).toBe('credentialless')
+    })
+    test('canShareMemory требует и конструктор, и изоляцию', () => {
+      expect(canShareMemory({ SharedArrayBuffer: function () {}, crossOriginIsolated: true })).toBe(true)
+      expect(canShareMemory({ SharedArrayBuffer: function () {}, crossOriginIsolated: false })).toBe(false)
+      expect(canShareMemory({ crossOriginIsolated: true })).toBe(false)
+    })
+  solution: |
+    function isolationHeaders({ credentialless = false } = {}) {
+      return {
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': credentialless ? 'credentialless' : 'require-corp',
+      }
+    }
+    function canShareMemory(scope) {
+      return typeof scope.SharedArrayBuffer === 'function' && scope.crossOriginIsolated === true
+    }
+  explain: |
+    **Где ставить:** в ответе на HTML-документ. Vite — `server.headers` для dev и настройки хостинга для прода, Next.js — `headers()` в конфиге.
+
+    **`credentialless`** загружает чужие ресурсы без cookie, поэтому им не нужен CORP. Это проще для сайтов с картинками с CDN, но в Safari его нет — там только `require-corp`.
+
+    **Проверять возможность** надо по `crossOriginIsolated`, а не только по наличию конструктора: в некоторых средах конструктор есть, а передать буфер в воркер нельзя.
+
+- key: code-spin-lock
+  kind: code
+  level: medium
+  title: Блокировка на compareExchange
+  prompt: |
+    Напишите `createLock(i32, index)` для ячейки `i32[index]` (0 — свободно, 1 — занято):
+    - `tryLock()` — атомарно занять, если свободно; вернуть `true`, если получилось;
+    - `unlock()` — освободить; если блокировка не была занята — бросить `Error('Блокировка не занята')`;
+    - `withLock(fn)` — если удалось занять, выполнить `fn()` и **всегда** освободить, вернуть результат `fn`; если не удалось — вернуть `undefined`, не вызывая `fn`.
+  starter: |
+    function createLock(i32, index) {
+      return {
+        tryLock: () => { i32[index] = 1; return true },
+        unlock: () => { i32[index] = 0 },
+        withLock: (fn) => fn(),
+      }
+    }
+  hints:
+    - '`Atomics.compareExchange(i32, index, 0, 1) === 0` — «было свободно, и я занял». Любое другое значение — кто-то успел раньше.'
+    - '`unlock` — тоже `compareExchange(…, 1, 0)`: если вернулось не 1, блокировка не была занята. `withLock` — `try/finally`.'
+  tests: |
+    test('занять можно один раз', () => {
+      const memory = new Int32Array(1)
+      const a = createLock(memory, 0)
+      const b = createLock(memory, 0)
+      expect(a.tryLock()).toBe(true)
+      expect(b.tryLock()).toBe(false)
+      a.unlock()
+      expect(b.tryLock()).toBe(true)
+    })
+    test('unlock свободной — ошибка', () => {
+      const lock = createLock(new Int32Array(1), 0)
+      expect(() => lock.unlock()).toThrow('Блокировка не занята')
+    })
+    test('withLock освобождает даже при ошибке', () => {
+      const memory = new Int32Array(1)
+      const lock = createLock(memory, 0)
+      expect(lock.withLock(() => 42)).toBe(42)
+      expect(() => lock.withLock(() => { throw new Error('сбой') })).toThrow('сбой')
+      expect(memory[0]).toBe(0)
+    })
+    test('withLock на занятой — не вызывает fn', () => {
+      const memory = new Int32Array(1)
+      createLock(memory, 0).tryLock()
+      const fn = spy(() => 1)
+      expect(createLock(memory, 0).withLock(fn)).toBeUndefined()
+      expect(fn.calls.length).toBe(0)
+    })
+  solution: |
+    function createLock(i32, index) {
+      const tryLock = () => Atomics.compareExchange(i32, index, 0, 1) === 0
+      const unlock = () => {
+        if (Atomics.compareExchange(i32, index, 1, 0) !== 1) throw new Error('Блокировка не занята')
+      }
+      return {
+        tryLock,
+        unlock,
+        withLock(fn) {
+          if (!tryLock()) return undefined
+          try {
+            return fn()
+          } finally {
+            unlock()
+          }
+        },
+      }
+    }
+  explain: |
+    **Почему не `if (i32[i] === 0) i32[i] = 1`.** Между проверкой и записью другой поток успеет сделать то же самое — оба решат, что заняли. `compareExchange` проверяет и записывает одним неделимым шагом.
+
+    **Как ждать занятую блокировку:** в воркере — `Atomics.wait(i32, index, 1)` до сигнала `Atomics.notify` при освобождении; в главном потоке — `Atomics.waitAsync`. В цикле активного ожидания — `Atomics.pause()` (ES2027).
+
+    **Во фронтенде** свои блокировки на общей памяти нужны редко — для движков на WebAssembly и быстрых очередей. Для координации вкладок есть Web Locks API.
+
+- key: code-ring-buffer
+  kind: code
+  level: hard
+  title: Кольцевой буфер для двух потоков
+  prompt: |
+    Очередь чисел между одним потоком-писателем и одним потоком-читателем без копирования и сообщений. Напишите `createRing(i32, capacity)`. Память — `Int32Array` длиной `capacity + 2`:
+    - `i32[0]` — индекс записи (head), `i32[1]` — индекс чтения (tail), данные — с `i32[2]`;
+    - `push(value)` — записать в конец; если буфер полон — вернуть `false`;
+    - `pop()` — прочитать из начала; если пуст — вернуть `undefined`;
+    - `size()` — сколько элементов лежит.
+
+    Индексы читайте и пишите **только через `Atomics.load` / `Atomics.store`**: в реальном коде их видит другой поток. Полный буфер — когда элементов `capacity`.
+  starter: |
+    function createRing(i32, capacity) {
+      const items = []
+      return {
+        push: (value) => { items.push(value); return true },
+        pop: () => items.shift(),
+        size: () => items.length,
+      }
+    }
+  hints:
+    - 'Индексы растут бесконечно, а ячейка — `2 + (index % capacity)`. Тогда размер — просто `head - tail`.'
+    - '`push`: прочитать `head` и `tail`; если `head - tail === capacity` — полон. Иначе записать значение в ячейку и **после этого** `Atomics.store` нового `head`.'
+    - '`pop`: если `head === tail` — пуст. Иначе прочитать значение и **после этого** сдвинуть `tail`.'
+    - 'Порядок «сначала данные, потом индекс» важен: читатель увидит новый `head` только когда данные уже на месте.'
+  tests: |
+    const ring = (capacity) => createRing(new Int32Array(capacity + 2), capacity)
+    test('очередь по порядку', () => {
+      const r = ring(3)
+      expect(r.push(1)).toBe(true)
+      expect(r.push(2)).toBe(true)
+      expect(r.pop()).toBe(1)
+      expect(r.push(3)).toBe(true)
+      expect([r.pop(), r.pop(), r.pop()]).toEqual([2, 3, undefined])
+    })
+    test('переполнение', () => {
+      const r = ring(2)
+      r.push(1)
+      r.push(2)
+      expect(r.push(3)).toBe(false)
+      expect(r.size()).toBe(2)
+    })
+    test('много оборотов по кругу', () => {
+      const r = ring(3)
+      const out = []
+      for (let i = 0; i < 20; i++) {
+        r.push(i)
+        if (i % 2) out.push(r.pop(), r.pop())
+      }
+      expect(out).toEqual(Array.from({ length: 20 }, (_, i) => i))
+      expect(r.size()).toBe(0)
+    })
+    test('состояние живёт в памяти: второй объект на той же памяти видит данные', () => {
+      const memory = new Int32Array(5)
+      createRing(memory, 3).push(7)
+      expect(createRing(memory, 3).pop()).toBe(7)
+    })
+  solution: |
+    function createRing(i32, capacity) {
+      const HEAD = 0
+      const TAIL = 1
+      const slot = (index) => 2 + (index % capacity)
+      return {
+        push(value) {
+          const head = Atomics.load(i32, HEAD)
+          const tail = Atomics.load(i32, TAIL)
+          if (head - tail === capacity) return false
+          i32[slot(head)] = value
+          Atomics.store(i32, HEAD, head + 1)
+          return true
+        },
+        pop() {
+          const head = Atomics.load(i32, HEAD)
+          const tail = Atomics.load(i32, TAIL)
+          if (head === tail) return undefined
+          const value = i32[slot(tail)]
+          Atomics.store(i32, TAIL, tail + 1)
+          return value
+        },
+        size: () => Atomics.load(i32, HEAD) - Atomics.load(i32, TAIL),
+      }
+    }
+  explain: |
+    **Почему без блокировок.** У каждого индекса один владелец: `head` пишет только писатель, `tail` — только читатель. Атомарные `load` и `store` гарантируют, что изменения индексов видны другому потоку целиком и по порядку.
+
+    **«Сначала данные, потом индекс»** — главное правило. Если сдвинуть `head` раньше записи, читатель может прочитать старое значение ячейки.
+
+    **Где применяют:** звук (AudioWorklet получает отсчёты от главного потока), видео, WebAssembly-движки — везде, где сообщения `postMessage` слишком медленные. Индексы-счётчики переполнятся через 2³¹ операций — в долгоживущем коде их сбрасывают или берут `BigInt64Array`.

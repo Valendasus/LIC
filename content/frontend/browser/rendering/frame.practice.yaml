@@ -1,0 +1,444 @@
+# Практика темы «Кадр: requestAnimationFrame, порядок шагов, планирование задач».
+# Обработка списка порциями по бюджету — задача code-process-all в теме «Event loop», здесь не повторяется.
+
+- key: order-frame-steps
+  kind: order
+  prompt: Расставьте шаги одного кадра в порядке, который задаёт HTML Standard («update the rendering»).
+  steps:
+    - События resize и scroll
+    - Медиазапросы и события matchMedia
+    - CSS-анимации и Web Animations
+    - Колбэки requestAnimationFrame
+    - Стили и layout вместе с ResizeObserver
+    - IntersectionObserver
+    - Отрисовка кадра
+  explain: rAF выполняется до стилей и layout, поэтому изменения DOM в rAF попадут в этот же кадр. ResizeObserver срабатывает после layout, но до отрисовки — без мигания. IntersectionObserver — в конце кадра.
+
+- key: order-schedulers
+  kind: order
+  prompt: 'В одной задаче вызвали `setTimeout(a)`, `requestAnimationFrame(b)`, `queueMicrotask(c)`. Браузер рисует кадр сразу после текущей задачи. В каком порядке выполнятся колбэки?'
+  steps:
+    - c — микрозадача, сразу после текущей задачи
+    - b — колбэк rAF, перед отрисовкой этого кадра
+    - a — таймер, следующей задачей после кадра
+  explain: 'Микрозадачи — сразу после задачи. Отрисовка в этом сценарии идёт следующей, и перед ней — rAF. Таймер — обычная задача, она выполнится позже. Если бы кадр был не нужен, таймер мог бы сработать раньше rAF: время кадра зависит от экрана, а не от очереди.'
+
+- key: quiz-raf-why
+  kind: quiz
+  question: Почему анимацию делают на `requestAnimationFrame`, а не на `setInterval(fn, 16)`?
+  options:
+    - text: rAF вызывается перед каждым кадром с частотой экрана и останавливается в фоновой вкладке
+      correct: true
+    - text: rAF выполняется в отдельном потоке и не нагружает страницу
+      why: rAF выполняется в главном потоке, как и таймеры.
+    - text: '`setInterval` нельзя вызывать чаще раза в секунду'
+      why: Можно, но он не привязан к кадрам — кадры пропускаются или рисуются дважды.
+    - text: rAF всегда вызывается ровно раз в 16 мс
+      why: Частота зависит от экрана — на 120 Гц кадр каждые 8,3 мс.
+  explain: Таймер не знает о кадрах. На 120 Гц он даст рывки, в фоне будет зря работать. rAF синхронизирован с отрисовкой.
+
+- key: quiz-timestamp
+  kind: quiz
+  question: Анимация двигает элемент на 2 px в каждом колбэке rAF. На экране 120 Гц она идёт вдвое быстрее, чем на 60 Гц. Как исправить?
+  options:
+    - text: Считать положение по прошедшему времени из аргумента `timestamp`, а не по числу кадров
+      correct: true
+    - text: Вызывать rAF через раз
+      why: На 90 Гц или при пропусках кадров снова будет неверно.
+    - text: Заменить на `setInterval(fn, 16)`
+      why: Таймер не привязан к кадрам — будут рывки.
+    - text: Ограничить частоту экрана в CSS
+  explain: '`timestamp` — время начала кадра, одно на все колбэки кадра. Позиция = скорость × (timestamp − начало). Тогда анимация одинакова на любом экране и переживает пропущенные кадры.'
+
+- key: quiz-raf-nested
+  kind: quiz
+  question: Внутри колбэка rAF вызвали `requestAnimationFrame(next)`. Когда выполнится `next`?
+  options:
+    - text: В следующем кадре
+      correct: true
+    - text: В этом же кадре, сразу после текущего колбэка
+      why: Колбэки, добавленные во время выполнения rAF, ждут следующего кадра — иначе анимация зациклилась бы в одном кадре.
+    - text: Сразу, как микрозадача
+    - text: Никогда — вложенный rAF игнорируется
+  explain: Так и строится цикл анимации — каждый кадр планирует следующий. Двойной rAF `raf(() => raf(fn))` означает «после того, как кадр нарисован».
+
+- key: quiz-ro-error
+  kind: quiz
+  question: 'В консоли «ResizeObserver loop completed with undelivered notifications». Что это значит?'
+  options:
+    - text: Колбэк ResizeObserver менял размеры, и браузер не успел доставить все уведомления в этом кадре
+      correct: true
+    - text: Страница упала, нужно перезагрузить
+      why: Это предупреждение, страница продолжает работать.
+    - text: ResizeObserver не поддерживается браузером
+      why: ResizeObserver есть во всех браузерах с 2020 года.
+    - text: Наблюдаемый элемент удалён из DOM
+  explain: Внутри кадра браузер пересчитывает layout и снова доставляет уведомления, но только для элементов глубже в дереве. Если колбэк постоянно меняет размеры, часть уведомлений откладывается на следующий кадр. Обычно причина — колбэк, который меняет размер того же элемента.
+
+- key: quiz-io-timing
+  kind: quiz
+  question: Для чего IntersectionObserver подходит хуже всего?
+  options:
+    - text: Покадрово точная анимация, привязанная к прокрутке
+      correct: true
+    - text: Ленивая загрузка картинок и компонентов
+    - text: Аналитика «блок увидели»
+    - text: Подгрузка следующей страницы в бесконечной ленте
+  explain: Колбэки IntersectionObserver асинхронные и приходят в конце кадра. Для ленивой загрузки и аналитики этого достаточно, а анимацию по прокрутке делают scroll-driven animations в CSS.
+
+- key: quiz-frame-budget
+  kind: quiz
+  question: Сколько времени есть у кода в одном кадре на экране 120 Гц?
+  options:
+    - text: Меньше 8,3 мс — и часть уходит самому браузеру на стили, layout и отрисовку
+      correct: true
+    - text: 16,7 мс, как всегда
+      why: 16,7 мс — это кадр при 60 Гц.
+    - text: 50 мс — порог длинной задачи
+      why: 50 мс — граница длинной задачи, а не бюджет кадра.
+    - text: Сколько угодно, браузер подождёт
+  explain: 1000 / 120 ≈ 8,3 мс. Работа в rAF и обработчиках должна быть короткой. Тяжёлое — порциями между кадрами или в воркер.
+
+- key: quiz-scheduler-support
+  kind: quiz
+  question: Код вызывает `await scheduler.yield()`. Что будет в Safari на ноябрь 2026?
+  options:
+    - text: 'TypeError: `scheduler` не определён — нужен запасной путь через `setTimeout`'
+      correct: true
+    - text: Работает так же, как в Chrome
+      why: '`scheduler.yield` есть в Chrome 129+ и Firefox 142+, в Safari нет.'
+    - text: Код просто не уступит поток
+    - text: Safari автоматически заменит его на `setTimeout`
+  explain: 'Писать с проверкой: `globalThis.scheduler?.yield ? scheduler.yield() : new Promise((r) => setTimeout(r, 0))`. Так же с `requestIdleCallback` — в Safari его тоже нет.'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+# В тестах rAF и планировщики подменяются: настоящего кадра в тестовой среде нет.
+
+- key: code-yield-to-main
+  kind: code
+  level: easy
+  title: Уступить поток с запасным путём
+  prompt: |
+    Напишите `yieldToMain()`: возвращает промис, который выполнится после того, как браузер получил возможность обработать ввод и отрисовать кадр.
+    - Если есть `globalThis.scheduler?.yield` — использовать его.
+    - Иначе — новая задача через `setTimeout(…, 0)`.
+  starter: |
+    function yieldToMain() {
+      return Promise.resolve()
+    }
+  hints:
+    - 'Проверка: `typeof globalThis.scheduler?.yield === "function"`.'
+  tests: |
+    // В браузере scheduler — свойство прототипа глобального объекта: подменяем собственным свойством и потом удаляем его.
+    const withScheduler = async (value, fn) => {
+      Object.defineProperty(globalThis, 'scheduler', { value, configurable: true, writable: true })
+      try {
+        await fn()
+      } finally {
+        delete globalThis.scheduler
+      }
+    }
+    test('без scheduler — через setTimeout: таймер, поставленный раньше, успевает', async () => {
+      await withScheduler(undefined, async () => {
+        let fired = false
+        setTimeout(() => (fired = true), 0)
+        await yieldToMain()
+        expect(fired).toBe(true)
+      })
+    })
+    test('если есть scheduler.yield — используется он', async () => {
+      const fake = spy(() => Promise.resolve())
+      await withScheduler({ yield: fake }, async () => {
+        await yieldToMain()
+        expect(fake.calls.length).toBe(1)
+      })
+    })
+  solution: |
+    function yieldToMain() {
+      if (typeof globalThis.scheduler?.yield === 'function') return globalThis.scheduler.yield()
+      return new Promise((resolve) => setTimeout(resolve, 0))
+    }
+  explain: |
+    **`Promise.resolve()` — не уступка:** это микрозадача, она выполнится до отрисовки. Уступает только новая задача.
+
+    **`scheduler.yield()` лучше `setTimeout`**: браузер обработает ввод и отрисовку, а продолжение встанет **впереди** обычных задач — длинная работа не «теряет очередь». Поддержки в Safari нет, поэтому запасной путь обязателен.
+
+- key: code-animate
+  kind: code
+  level: medium
+  title: Анимация по времени
+  prompt: |
+    Напишите `animate({ duration, onFrame, raf = requestAnimationFrame })`.
+    - На каждом кадре вызывает `onFrame(progress)`, где `progress` — от 0 до 1 по **прошедшему времени**: `(timestamp − время первого кадра) / duration`, не больше 1.
+    - Последний вызов — ровно `onFrame(1)`, после него кадры не запрашиваются.
+    - Возвращает `{ finished, cancel }`: `finished` — промис, выполняется после `onFrame(1)`; `cancel()` останавливает анимацию, после неё `onFrame` не вызывается, а `finished` остаётся невыполненным.
+  starter: |
+    function animate({ duration, onFrame, raf = requestAnimationFrame }) {
+      onFrame(1)
+      return { finished: Promise.resolve(), cancel: () => {} }
+    }
+  hints:
+    - 'Время старта — `timestamp` первого кадра, а не `Date.now()`: так все расчёты в одной шкале.'
+    - 'Колбэк кадра: посчитать прогресс, вызвать `onFrame`; если меньше 1 и не отменено — `raf(tick)` снова, иначе выполнить `finished`.'
+    - '`finished` — `Promise.withResolvers()` или `deferred()`; `cancel` ставит флаг, который `tick` проверяет первым делом.'
+  tests: |
+    // Управляемый rAF: тест сам «рисует» кадры с нужным временем.
+    const fakeRaf = () => {
+      let queue = []
+      const raf = (fn) => queue.push(fn)
+      const frame = (time) => { const run = queue; queue = []; run.forEach((fn) => fn(time)) }
+      return { raf, frame, pending: () => queue.length }
+    }
+    test('прогресс по времени, а не по кадрам', () => {
+      const { raf, frame } = fakeRaf()
+      const seen = []
+      animate({ duration: 100, onFrame: (p) => seen.push(p), raf })
+      frame(1000)
+      frame(1050)
+      frame(1075)
+      expect(seen).toEqual([0, 0.5, 0.75])
+    })
+    test('заканчивается ровно на 1 и выполняет finished', async () => {
+      const { raf, frame, pending } = fakeRaf()
+      const seen = []
+      const { finished } = animate({ duration: 100, onFrame: (p) => seen.push(p), raf })
+      frame(0)
+      frame(130)
+      expect(seen.at(-1)).toBe(1)
+      expect(pending()).toBe(0)
+      await finished
+    })
+    test('cancel останавливает', async () => {
+      const { raf, frame } = fakeRaf()
+      const seen = []
+      const { cancel, finished } = animate({ duration: 100, onFrame: (p) => seen.push(p), raf })
+      let done = false
+      finished.then(() => (done = true))
+      frame(0)
+      cancel()
+      frame(50)
+      frame(200)
+      await sleep(1)
+      expect(seen).toEqual([0])
+      expect(done).toBe(false)
+    })
+  solution: |
+    function animate({ duration, onFrame, raf = requestAnimationFrame }) {
+      const finished = deferred()
+      let start = null
+      let cancelled = false
+      function tick(time) {
+        if (cancelled) return
+        if (start === null) start = time
+        const progress = Math.min(1, (time - start) / duration)
+        onFrame(progress)
+        if (progress < 1) raf(tick)
+        else finished.resolve()
+      }
+      raf(tick)
+      return { finished: finished.promise, cancel: () => (cancelled = true) }
+    }
+  explain: |
+    **Время, а не кадры.** На 60 Гц и на 120 Гц, с пропущенными кадрами или без — элемент в момент `t` окажется в одной и той же точке.
+
+    **`timestamp` из rAF** — время начала кадра, одно на все колбэки этого кадра. `performance.now()` внутри колбэка отличался бы от колбэка к колбэку.
+
+    **В реальном коде** чаще хватает CSS-переходов или Web Animations API (`element.animate()`): их ведёт браузер, и для `transform` и `opacity` — без главного потока. Своя анимация на rAF нужна для canvas, физики, сложных траекторий.
+
+- key: code-frame-batcher
+  kind: code
+  level: medium
+  title: Чтения и записи DOM по кадрам
+  prompt: |
+    Чередование чтения размеров и записи стилей вызывает принудительный layout на каждом шаге (layout thrashing). Напишите `createFrameBatcher(raf = requestAnimationFrame)` с методами `read(fn)` и `write(fn)`:
+    - колбэки копятся и выполняются в ближайшем кадре: **сначала все чтения, потом все записи**, каждые — в порядке добавления;
+    - на кадр запрашивается **один** rAF, сколько бы колбэков ни добавили;
+    - колбэк, добавленный во время выполнения кадра, ждёт следующего кадра.
+  starter: |
+    function createFrameBatcher(raf = requestAnimationFrame) {
+      return {
+        read: (fn) => fn(),
+        write: (fn) => fn(),
+      }
+    }
+  hints:
+    - 'Две очереди и флаг «кадр уже запрошен». `read` и `write` кладут в свою очередь и, если флага нет, вызывают `raf(flush)`.'
+    - 'В `flush` сначала заберите обе очереди (присвойте новые пустые массивы) и сбросьте флаг — тогда добавленное во время выполнения попадёт в следующий кадр.'
+  tests: |
+    const fakeRaf = () => {
+      let queue = []
+      const raf = spy((fn) => queue.push(fn))
+      const frame = () => { const run = queue; queue = []; run.forEach((fn) => fn(0)) }
+      return { raf, frame }
+    }
+    test('сначала чтения, потом записи', () => {
+      const { raf, frame } = fakeRaf()
+      const b = createFrameBatcher(raf)
+      const log = []
+      b.write(() => log.push('w1'))
+      b.read(() => log.push('r1'))
+      b.write(() => log.push('w2'))
+      b.read(() => log.push('r2'))
+      expect(log).toEqual([])
+      frame()
+      expect(log).toEqual(['r1', 'r2', 'w1', 'w2'])
+    })
+    test('один rAF на кадр', () => {
+      const { raf, frame } = fakeRaf()
+      const b = createFrameBatcher(raf)
+      for (let i = 0; i < 5; i++) b.read(() => {})
+      b.write(() => {})
+      expect(raf.calls.length).toBe(1)
+      frame()
+      b.read(() => {})
+      expect(raf.calls.length).toBe(2)
+    })
+    test('добавленное во время кадра — в следующий кадр', () => {
+      const { raf, frame } = fakeRaf()
+      const b = createFrameBatcher(raf)
+      const log = []
+      b.read(() => { log.push('r1'); b.write(() => log.push('позже')) })
+      frame()
+      expect(log).toEqual(['r1'])
+      frame()
+      expect(log).toEqual(['r1', 'позже'])
+    })
+  solution: |
+    function createFrameBatcher(raf = requestAnimationFrame) {
+      let reads = []
+      let writes = []
+      let scheduled = false
+      function flush() {
+        const currentReads = reads
+        const currentWrites = writes
+        reads = []
+        writes = []
+        scheduled = false
+        for (const fn of currentReads) fn()
+        for (const fn of currentWrites) fn()
+      }
+      function schedule() {
+        if (!scheduled) {
+          scheduled = true
+          raf(flush)
+        }
+      }
+      return {
+        read(fn) {
+          reads.push(fn)
+          schedule()
+        },
+        write(fn) {
+          writes.push(fn)
+          schedule()
+        },
+      }
+    }
+  explain: |
+    **Почему это работает.** Чтение `offsetHeight` после записи стиля заставляет браузер пересчитать layout прямо сейчас. Все чтения подряд — один layout, все записи потом — изменения применятся в кадре одним пересчётом.
+
+    **rAF — правильное место для записей**: он перед стилями и layout кадра, изменения попадут в этот же кадр.
+
+    **Это паттерн библиотеки fastdom.** Во фреймворках то же делает сам React: он пишет в DOM пачкой в фазе коммита, а чтения размеров кладут в `useLayoutEffect`.
+
+- key: code-idle-queue
+  kind: code
+  level: medium
+  title: Очередь несрочных задач
+  prompt: |
+    Напишите `createIdleQueue({ requestIdle })`. `requestIdle(callback)` вызывает `callback(deadline)` в простое; `deadline.timeRemaining()` — сколько миллисекунд осталось.
+    - `add(task)` кладёт синхронную функцию в очередь и при необходимости запрашивает простой.
+    - В простое выполнять задачи по порядку, **пока `timeRemaining()` больше 1**. Не успели — запросить следующий простой и продолжить там.
+    - Если `requestIdle` не передан — использовать `globalThis.requestIdleCallback`, а если его нет (Safari) — `setTimeout` с дедлайном 10 мс от момента вызова.
+  starter: |
+    function createIdleQueue({ requestIdle } = {}) {
+      return { add: (task) => task() }
+    }
+  hints:
+    - 'Очередь-массив и флаг «простой запрошен». `add` кладёт задачу и вызывает `requestIdle(run)`, если флага нет.'
+    - '`run(deadline)`: пока очередь не пуста и `deadline.timeRemaining() > 1` — `queue.shift()()`. После цикла — если что-то осталось, запросить снова.'
+    - 'Запасной путь: `(cb) => setTimeout(() => { const end = performance.now() + 10; cb({ timeRemaining: () => Math.max(0, end - performance.now()) }) }, 0)`.'
+  tests: |
+    // Управляемый простой: тест задаёт, сколько «времени» есть у каждого простоя.
+    const fakeIdle = () => {
+      const pending = []
+      const requestIdle = spy((cb) => pending.push(cb))
+      const idle = (budget) => {
+        const cb = pending.shift()
+        let left = budget
+        cb({ timeRemaining: () => left-- })
+      }
+      return { requestIdle, idle, pending }
+    }
+    test('выполняет задачи в простое по порядку', () => {
+      const { requestIdle, idle } = fakeIdle()
+      const q = createIdleQueue({ requestIdle })
+      const log = []
+      q.add(() => log.push(1))
+      q.add(() => log.push(2))
+      expect(log).toEqual([])
+      expect(requestIdle.calls.length).toBe(1)
+      idle(10)
+      expect(log).toEqual([1, 2])
+    })
+    test('не успели — продолжает в следующем простое', () => {
+      const { requestIdle, idle, pending } = fakeIdle()
+      const q = createIdleQueue({ requestIdle })
+      const log = []
+      for (let i = 1; i <= 5; i++) q.add(() => log.push(i))
+      idle(4)
+      expect(log).toEqual([1, 2, 3])
+      expect(pending.length).toBe(1)
+      idle(10)
+      expect(log).toEqual([1, 2, 3, 4, 5])
+    })
+    test('без requestIdleCallback — через setTimeout', async () => {
+      const saved = globalThis.requestIdleCallback
+      delete globalThis.requestIdleCallback
+      try {
+        const q = createIdleQueue()
+        const log = []
+        q.add(() => log.push('готово'))
+        expect(log).toEqual([])
+        await sleep(20)
+        expect(log).toEqual(['готово'])
+      } finally {
+        if (saved) globalThis.requestIdleCallback = saved
+      }
+    })
+  solution: |
+    function fallbackIdle(callback) {
+      return setTimeout(() => {
+        const end = performance.now() + 10
+        callback({ timeRemaining: () => Math.max(0, end - performance.now()) })
+      }, 0)
+    }
+
+    function createIdleQueue({ requestIdle } = {}) {
+      const request = requestIdle ?? globalThis.requestIdleCallback ?? fallbackIdle
+      const queue = []
+      let scheduled = false
+      function run(deadline) {
+        scheduled = false
+        while (queue.length && deadline.timeRemaining() > 1) queue.shift()()
+        if (queue.length) schedule()
+      }
+      function schedule() {
+        if (!scheduled) {
+          scheduled = true
+          request(run)
+        }
+      }
+      return {
+        add(task) {
+          queue.push(task)
+          schedule()
+        },
+      }
+    }
+  explain: |
+    **Простой (idle)** — время, когда у браузера нет задач и до следующего кадра есть запас. Спецификация ограничивает дедлайн 50 мс, чтобы не задерживать ввод.
+
+    **Для чего:** аналитика, прогрев кэша, предзагрузка следующего экрана, отложенная инициализация — то, что не должно мешать пользователю.
+
+    **Запасной путь обязателен:** `requestIdleCallback` нет в Safari. Альтернатива с приоритетами — `scheduler.postTask(fn, { priority: 'background' })`, но её в Safari тоже нет.
