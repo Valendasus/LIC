@@ -1,7 +1,7 @@
 import { db } from '@/shared/api/db'
 import { getItems, isTask, type CodeItem, type TaskKind, type TaskLevel } from '@/entities/practice-item/@x/review'
 import { getProgressMap } from '@/entities/progress/@x/review'
-import { findNode, getTree, leavesOf, type TreeNode } from '@/entities/topic/@x/review'
+import { findNode, getStages, getTree, leavesOf, type TreeNode } from '@/entities/topic/@x/review'
 
 /** Понедельник текущей недели, 00:00 по местному времени. */
 export function startOfWeek(now: Date) {
@@ -103,10 +103,12 @@ export async function getLastTopic(userId: string): Promise<TopicRef | null> {
 export async function getNextTopics(userId: string, specialty: string, { limit = 3, skip }: { limit?: number; skip?: string } = {}): Promise<TopicRef[]> {
   const tree = await getTree(specialty)
   if (!tree) return []
-  const [items, progress, rows] = await Promise.all([getItems(specialty), getProgressMap(userId), db.reviewItem.findMany({ where: { userId }, select: { itemId: true } })])
+  const [items, progress, rows, stages] = await Promise.all([getItems(specialty), getProgressMap(userId), db.reviewItem.findMany({ where: { userId }, select: { itemId: true } }), getStages(specialty)])
   const withPractice = new Set(items.map((item) => item.topicId))
   const started = new Set(rows.map((row) => row.itemId.split('#')[0]))
-  const next = leavesOf(tree).filter((leaf) => leaf.id !== skip && (leaf.content || withPractice.has(leaf.id)) && !started.has(leaf.id) && !(progress.get(leaf.id) ?? 0))
+  // Порядок — по траектории (этапы и блоки в них), а не по порядку блоков в дереве.
+  const path = stages.flatMap((stage) => stage.blocks).flatMap((block) => leavesOf(block))
+  const next = path.filter((leaf) => leaf.id !== skip && (leaf.content || withPractice.has(leaf.id)) && !started.has(leaf.id) && !(progress.get(leaf.id) ?? 0))
   const refs = await Promise.all(next.slice(0, limit).map((leaf) => refOf(leaf.id)))
   return refs.filter((ref) => ref !== null)
 }

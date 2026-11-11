@@ -16,7 +16,7 @@ test('отметка освоения сохраняется, считается
   await page.goto('/frontend/javascript/scope')
   await expect(page.getByRole('link', { name: /Замыкания/ })).toContainText('Понимаю')
   await page.goto('/frontend')
-  await expect(page.getByText(/1 из 231 темы начато/)).toBeVisible()
+  await expect(page.getByText(/1 из 235 тем начато/)).toBeVisible()
   // Блок JavaScript показывает долю: 2 из 4 у одной темы из многих — больше нуля; это блок, где вы сейчас.
   const block = page.getByRole('link', { name: /JavaScript.*из \d+ тем/ })
   await expect(block).toContainText('вы здесь')

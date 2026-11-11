@@ -115,13 +115,15 @@
 - slug: browser
   title: Браузер и веб-API
   group: Платформа
-  summary: Рендеринг, event loop, DOM и события, хранилища, воркеры, сеть, безопасность, DevTools.
+  summary: Процессы и потоки, рендеринг и кадр, DOM и события, хранилища, воркеры, iframe, наблюдатели, сеть, безопасность, DevTools.
   children:
+    - { slug: process-model, title: 'Процессы и потоки браузера: site isolation, главный поток, компоновщик', grade: M }
     - slug: rendering
       title: Как браузер рисует
       children:
         - { slug: pipeline, title: 'Парсинг, стили, layout, paint, composite', grade: J }
         - { slug: reflow, title: 'Reflow, repaint и layout thrashing', grade: M }
+        - { slug: frame, title: 'Кадр: requestAnimationFrame, порядок шагов, планирование задач', grade: M }
     - slug: dom-events
       title: DOM и события
       children:
@@ -139,6 +141,7 @@
         - { slug: web-workers, title: 'Web Workers и transferable', grade: M }
         - { slug: cross-tab, title: 'BroadcastChannel и postMessage', grade: M }
         - { slug: service-worker, title: 'Service Worker и PWA', grade: M }
+        - { slug: shared-memory, title: 'SharedArrayBuffer, Atomics и cross-origin isolation', grade: S }
     - slug: observers-navigation
       title: Наблюдатели и навигация
       children:
@@ -149,6 +152,7 @@
       children:
         - { slug: fetch, title: 'Fetch API, AbortController, таймауты', grade: J }
         - { slug: realtime, title: 'WebSocket и Server-Sent Events', grade: M }
+    - { slug: iframes, title: 'iframe: изоляция, sandbox и общение с окном', grade: M }
     - { slug: web-components, title: 'Web Components и Shadow DOM', grade: M }
     - { slug: security, title: 'Same-origin, CORS, CSP, Trusted Types', grade: M }
     - { slug: devtools, title: 'DevTools как рабочий инструмент', grade: J }

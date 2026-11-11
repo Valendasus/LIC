@@ -1,6 +1,6 @@
 - slug: frontend
   title: Frontend
-  summary: HTML, CSS, браузер, JavaScript, TypeScript, React, Next.js, архитектура, производительность, тестирование.
+  summary: JavaScript и браузер изнутри, TypeScript, React, Next.js, архитектура, производительность, тестирование, вёрстка и стили.
   status: active
 - slug: fullstack
   title: Fullstack

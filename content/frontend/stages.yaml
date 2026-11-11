@@ -2,8 +2,8 @@
 # Каждый блок дерева входит ровно в один этап — это проверяет npm run content:check.
 
 - title: Фундамент
-  summary: Вёрстка, браузер и язык — то, на чём держится всё остальное
-  blocks: [html, css, styling, tailwind, browser, javascript]
+  summary: Язык, асинхронность и браузер изнутри — то, на чём держится всё остальное
+  blocks: [javascript, browser]
 
 - title: Типы и React
   summary: TypeScript, компоненты, внутреннее устройство React, хуки и паттерны
@@ -16,6 +16,10 @@
 - title: Инженерия
   summary: Архитектура, доступность, производительность, тесты и сборка
   blocks: [architecture, ui-a11y, performance, testing, tooling]
+
+- title: Вёрстка и стили
+  summary: Базовая вёрстка, подходы к стилям, CSS-библиотеки и Tailwind
+  blocks: [html, css, styling, tailwind]
 
 - title: Специализация и собеседования
   summary: Анимация, сложные интерфейсы, system design и подготовка к интервью

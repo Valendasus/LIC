@@ -72,11 +72,13 @@ describe('«Сегодня»', () => {
     expect(text).toContain('Начните с первой темы')
     expect(text).not.toContain('Продолжить')
     expect(text).toContain('На этой неделе 0 из 7 дней')
-    expect(links).toContain('/frontend/css/cascade/specificity')
+    // Первая тема по траектории — первый блок первого этапа (JavaScript), а не первый блок дерева.
+    expect(links).toContain('/frontend/javascript/scope/closures')
+    expect(links).not.toContain('/frontend/css/cascade/specificity')
     // Специальности: активная — ссылка с прогрессом, запланированные — без ссылки.
     expect(links).toContain('/frontend')
     expect(text).toContain('в планах')
-    expect(text).toMatch(/Начато 0 из 231 темы/)
+    expect(text).toMatch(/Начато 0 из 235 тем/)
   })
 
   it('есть что повторить: число, состав, кнопка; продолжить последнюю тему; неделя', async () => {
@@ -125,11 +127,11 @@ describe('«Сегодня»', () => {
 describe('страница специальности', () => {
   it('первый вход: путь по этапам, первый этап текущий, «Начать» с первой темы по пути', async () => {
     const { text, hrefs: links } = rendered(await SpecialtyPage(params({ specialty: 'frontend' })))
-    for (const stage of ['Фундамент', 'Типы и React', 'Данные и Next.js', 'Инженерия', 'Специализация и собеседования']) expect(text).toContain(stage)
+    for (const stage of ['Фундамент', 'Типы и React', 'Данные и Next.js', 'Инженерия', 'Вёрстка и стили', 'Специализация и собеседования']) expect(text).toContain(stage)
     expect(text).toMatch(/Фундамент\s*текущий этап/)
-    expect(text).toContain('Начать: Каскад, специфичность и наследование')
-    expect(text).toMatch(/0 из 231 темы начато/)
-    expect(text).toContain('5 этапов')
+    expect(text).toContain('Начать: Замыкания')
+    expect(text).toMatch(/0 из 235 тем начато/)
+    expect(text).toContain('6 этапов')
     expect(links).toContain('/frontend/javascript')
     expect(links.filter((href) => /^\/frontend\/[\w-]+$/.test(href))).toHaveLength(25)
     expect(text).toContain('готовится')

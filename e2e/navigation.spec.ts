@@ -3,7 +3,7 @@ import { expect, test } from './fixtures'
 test('«Сегодня»: специальности, открытые и запланированные', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1, name: /^(Доброе утро|Добрый день|Добрый вечер|Доброй ночи)$/ })).toBeVisible()
-  await expect(page.getByRole('link', { name: /Frontend.*HTML, CSS/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Frontend.*JavaScript и браузер/ })).toBeVisible()
   // Запланированная специальность видна, но не кликабельна.
   await expect(page.getByText('Backend на Node.js')).toBeVisible()
   await expect(page.getByRole('link', { name: /Backend на Node\.js/ })).toHaveCount(0)
@@ -15,7 +15,7 @@ test('дерево: специальность → блок → модуль →
   await expect(page.getByRole('heading', { level: 1, name: 'Frontend' })).toBeVisible()
   // Курс — путь по этапам, первый этап текущий.
   const path = page.getByRole('list', { name: 'Путь по этапам' })
-  for (const stage of ['Фундамент', 'Типы и React', 'Данные и Next.js', 'Инженерия', 'Специализация и собеседования']) {
+  for (const stage of ['Фундамент', 'Типы и React', 'Данные и Next.js', 'Инженерия', 'Вёрстка и стили', 'Специализация и собеседования']) {
     await expect(path.getByRole('heading', { level: 2, name: new RegExp(stage) })).toBeVisible()
   }
   await expect(path.getByRole('heading', { level: 2, name: /Фундамент/ })).toContainText('текущий этап')

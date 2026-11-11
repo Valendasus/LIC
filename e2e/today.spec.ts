@@ -5,8 +5,8 @@ test('первый вход: «Начните с первой темы» вед�
   await expect(page.getByText('Начните с первой темы')).toBeVisible()
   await expect(page.getByText('На этой неделе 0 из 7 дней')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Продолжить' })).toHaveCount(0)
-  await page.getByRole('link', { name: 'Каскад, специфичность и наследование' }).first().click()
-  await expect(page).toHaveURL(/\/frontend\/css\/cascade\/specificity$/)
+  await page.getByRole('link', { name: 'Замыкания' }).first().click()
+  await expect(page).toHaveURL(/\/frontend\/javascript\/scope\/closures$/)
 })
 
 test('после ответа: повторение одной кнопкой, «Продолжить» последнюю тему, неделя', async ({ page }) => {
