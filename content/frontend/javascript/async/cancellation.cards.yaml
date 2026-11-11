@@ -1,0 +1,71 @@
+# Карточки темы «Отмена и гонки запросов». Ключи не переименовывать.
+
+- key: abort-controller
+  type: term
+  front: '`AbortController`'
+  back: Объект, который управляет отменой. `controller.signal` передают операции, `controller.abort(reason)` отменяет её. Стандарт DOM, не часть ECMAScript.
+  reverse: true
+
+- key: abort-signal
+  type: term
+  front: '`AbortSignal`'
+  back: Сигнал отмены. Есть `aborted`, `reason`, событие `abort` и `throwIfAborted()`. Его понимают `fetch`, `addEventListener`, потоки и многие библиотеки.
+  reverse: true
+
+- key: abort-reason
+  type: qa
+  front: С какой ошибкой отклоняется отменённый `fetch`?
+  back: 'С `signal.reason`. По умолчанию — `DOMException` с именем `AbortError`, у `AbortSignal.timeout` — `TimeoutError`, при `abort(причина)` — сама причина.'
+
+- key: signal-timeout
+  type: term
+  front: '`AbortSignal.timeout(ms)`'
+  back: Сигнал, который сам отменяется через `ms` с причиной `TimeoutError`. Таймаут для `fetch` без своих таймеров.
+
+- key: signal-any
+  type: term
+  front: '`AbortSignal.any([a, b])`'
+  back: Сигнал, который отменяется вместе с первым из переданных и берёт его причину. Объединяет «отменил пользователь» и «истёк таймаут».
+
+- key: race-condition
+  type: term
+  front: Гонка ответов
+  back: Два запроса отправлены по очереди, но ответили в обратном порядке, и устаревший ответ перезаписал свежий. Типично для поиска, фильтров и смены страниц.
+  reverse: true
+
+- key: race-fixes
+  type: qa
+  front: Три способа победить гонку ответов?
+  back: |
+    - отменять предыдущий запрос через `AbortController` — экономит сеть
+    - игнорировать устаревший ответ: номер запроса или флаг `ignore`
+    - библиотека, которая хранит ответы по ключу: TanStack Query, SWR
+
+- key: debounce-not-fix
+  type: qa
+  front: Решает ли `debounce` гонку ответов?
+  back: Нет. Запросов становится меньше, но два отправленных запроса всё равно могут ответить в обратном порядке. Нужна отмена или проверка, что ответ последний.
+
+- key: effect-cleanup-abort
+  type: qa
+  front: Где отменять запрос в React-компоненте?
+  back: В очистке `useEffect`. Она срабатывает перед следующим запуском эффекта и при размонтировании. В StrictMode эффект в разработке запускается дважды — без очистки это сразу видно.
+
+- key: server-not-cancelled
+  type: qa
+  front: Отменяет ли `abort()` действие на сервере?
+  back: Нет. Отменяется ожидание и передача данных, но сервер мог уже выполнить запрос. Для изменений нужна идемпотентность — ключ запроса и проверка статуса.
+
+- key: listener-signal
+  type: code
+  front: |
+    Что делает `signal` здесь?
+    ```js
+    window.addEventListener('resize', onResize, { signal })
+    ```
+  back: Обработчик снимется сам, когда сигнал отменят. Один `abort()` снимает все обработчики, подписанные с этим сигналом, — удобно для очистки компонента.
+
+- key: throw-if-aborted
+  type: term
+  front: '`signal.throwIfAborted()`'
+  back: Бросает `signal.reason`, если сигнал отменён. Вызывают между шагами долгой функции, чтобы не продолжать ненужную работу.

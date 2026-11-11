@@ -105,7 +105,7 @@ test('все React-задачи решаются эталоном в брауз�
   const topics = topicsWithTasks('react')
   expect(topics.length).toBeGreaterThan(4)
   for (const topic of topics) {
-    await page.goto(`/practice?scope=frontend/${topic}&mode=free`)
+    await page.goto(`/practice?scope=frontend/${topic}&kinds=react&mode=free`)
     const task = await currentTask(page, topic)
     await setCode(page, task.solution!)
     await run(page)

@@ -1,0 +1,446 @@
+# Практика темы «Итераторы, генераторы, асинхронные итераторы». Ответы в output проверяются запуском кода (npm run content:run).
+
+- key: out-lazy-body
+  kind: output
+  code: |
+    function* gen() { console.log('старт'); yield 1; console.log('после 1'); yield 2 }
+    const it = gen()
+    console.log('создан')
+    console.log(it.next().value)
+    console.log(it.next().value)
+    console.log(it.next().done)
+  answer:
+    - создан
+    - старт
+    - '1'
+    - после 1
+    - '2'
+    - 'true'
+  explain: 'Вызов генератора не выполняет тело — он только создаёт объект. Тело идёт кусками до очередного `yield` при каждом `next()`. Когда `yield` кончились — `done: true`.'
+
+- key: out-next-arg
+  kind: output
+  code: |
+    function* ask() { const name = yield 'Как зовут?'; console.log('Привет,', name) }
+    const it = ask()
+    console.log(it.next('потеряется').value)
+    it.next('Аня')
+  answer:
+    - Как зовут?
+    - Привет, Аня
+  explain: '`next(x)` делает `x` результатом того `yield`, на котором генератор стоит. Первый `next` запускает тело до первого `yield` — принимать значение ещё некому, его аргумент теряется.'
+
+- key: out-finally-break
+  kind: output
+  code: |
+    function* g() { try { yield 1; yield 2 } finally { console.log('уборка') } }
+    for (const x of g()) { console.log(x); break }
+  answer:
+    - '1'
+    - уборка
+  explain: '`break` в `for…of` вызывает у итератора `return()`. Генератор завершается, и его `finally` выполняется — так генератор закрывает ресурс при досрочном выходе.'
+
+- key: out-return-value
+  kind: output
+  code: |
+    function* g() { yield 1; return 2 }
+    console.log([...g()].join(','))
+    const it = g(); it.next(); console.log(JSON.stringify(it.next()))
+  answer:
+    - '1'
+    - '{"value":2,"done":true}'
+  explain: '`return` в генераторе даёт значение вместе с `done: true`. Spread и `for…of` такое значение не берут — они останавливаются на `done`.'
+
+- key: out-yield-star
+  kind: output
+  code: |
+    function* inner() { yield 'a'; yield 'b' }
+    function* outer() { yield 1; yield* inner(); yield 2 }
+    console.log([...outer()].join(' '))
+  answer:
+    - 1 a b 2
+  explain: '`yield*` передаёт работу другому итерируемому: все его значения идут наружу как свои. Так удобно рекурсивно обходить деревья.'
+
+- key: out-iterator-helpers
+  kind: output
+  code: |
+    function* naturals() { let n = 1; while (true) yield n++ }
+    console.log(naturals().filter((x) => x % 2).map((x) => x * x).take(3).toArray().join(' '))
+  answer:
+    - 1 9 25
+  explain: 'Методы итераторов (ES2025) ленивые: `filter` и `map` обрабатывают ровно столько элементов, сколько попросит `take(3)`. Поэтому бесконечный генератор не зависает. Методы массива на нём бы не сработали — массив пришлось бы построить целиком.'
+
+- key: out-one-shot
+  kind: output
+  code: |
+    const it = [1, 2, 3][Symbol.iterator]()
+    console.log([...it].length, [...it].length)
+    function* g() { yield 1 }
+    const gi = g()
+    console.log(gi[Symbol.iterator]() === gi)
+  answer:
+    - 3 0
+    - 'true'
+  explain: 'Итератор одноразовый: второй проход ничего не даст. Массив же итерируемый — каждый `for…of` по массиву создаёт новый итератор. Генератор — итератор, который возвращает себя как итерируемый.'
+
+- key: out-async-gen
+  kind: output
+  code: |
+    async function* ticks() { for (let i = 1; i <= 3; i++) { await null; yield i } }
+    async function main() { for await (const t of ticks()) console.log('тик', t); console.log('конец') }
+    main()
+    console.log('синхронно')
+  answer:
+    - синхронно
+    - тик 1
+    - тик 2
+    - тик 3
+    - конец
+  explain: 'Асинхронный генератор сочетает `await` и `yield`, его перебирают через `for await…of`. Каждая итерация ждёт следующего значения, а вызывающий код не блокируется.'
+
+- key: out-throw-into
+  kind: output
+  code: |
+    function* g() { try { yield 1 } catch (e) { console.log('внутри:', e.message); yield 'восстановился' } }
+    const it = g()
+    it.next()
+    console.log(it.throw(new Error('бах')).value)
+  answer:
+    - 'внутри: бах'
+    - восстановился
+  explain: '`it.throw(error)` бросает ошибку в место, где генератор стоит. Внутри её можно поймать и продолжить. На этом механизме раньше строили `async/await`: исполнитель передавал ошибку промиса в генератор.'
+
+- key: quiz-generator-use
+  kind: quiz
+  question: Где генератор действительно удобнее массива? Отметьте все.
+  options:
+    - text: Бесконечная или очень длинная последовательность, из которой нужна часть
+      correct: true
+    - text: Обход дерева, когда нужен первый подходящий узел и обход должен остановиться
+      correct: true
+    - text: Постраничная выдача API, которую обрабатывают по мере загрузки
+      correct: true
+      why: Это асинхронный генератор и `for await…of`.
+    - text: Небольшой список, который нужно отсортировать
+      why: Сортировке нужны все элементы сразу — тут нужен массив.
+  explain: 'Генератор — это **ленивость**: значения вычисляются по одному и только когда их просят. Выигрыш — когда нужна часть последовательности, или она огромная, или приходит постепенно.'
+
+- key: quiz-iterable-iterator
+  kind: quiz
+  question: Что нужно объекту, чтобы по нему работал `for…of`?
+  options:
+    - text: Метод `[Symbol.iterator]()`, возвращающий объект с методом `next()`
+      correct: true
+    - text: Свойство `length` и числовые ключи
+      why: Так устроены массивоподобные объекты — `for…of` по ним не работает без `Symbol.iterator`.
+    - text: Метод `next()` у самого объекта
+      why: Это итератор. `for…of` сначала вызывает `[Symbol.iterator]()` — нужен итерируемый объект.
+    - text: Наследование от `Array`
+  explain: 'Итерируемый объект умеет выдать итератор. Итератор — объект с `next()`, который возвращает `{ value, done }`. Самый короткий способ сделать свой итерируемый — `*[Symbol.iterator]() { yield … }`.'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+# Тесты видят функции решения напрямую. Доступны test, expect, spy, sleep и помощники из docs/TRAINERS.md.
+
+- key: code-range
+  kind: code
+  level: easy
+  title: Свой range
+  prompt: |
+    Напишите `range(start, end, step = 1)` — **итерируемый объект** с числами от `start` до `end` (не включая) с шагом `step`.
+    - Работает в `for…of` и spread, и его можно перебирать **много раз**.
+    - Отрицательный шаг идёт вниз: `range(5, 0, -2)` → 5, 3, 1.
+    - `step = 0` — `RangeError`.
+  starter: |
+    function range(start, end, step = 1) {
+      const result = []
+      for (let i = start; i < end; i += step) result.push(i)
+      return result.values()
+    }
+  hints:
+    - 'Объект с методом-генератором `*[Symbol.iterator]() { … }`: каждый `for…of` вызовет его заново — так получается многоразовость.'
+  tests: |
+    test('числа с шагом', () => {
+      expect([...range(0, 5)]).toEqual([0, 1, 2, 3, 4])
+      expect([...range(1, 10, 3)]).toEqual([1, 4, 7])
+    })
+    test('многоразовый', () => {
+      const r = range(0, 3)
+      expect([...r]).toEqual([0, 1, 2])
+      expect([...r]).toEqual([0, 1, 2])
+    })
+    test('отрицательный шаг', () => {
+      expect([...range(5, 0, -2)]).toEqual([5, 3, 1])
+    })
+    test('шаг 0 — RangeError', () => {
+      expect(() => range(0, 1, 0)).toThrow()
+      let error
+      try { range(0, 1, 0) } catch (e) { error = e }
+      expect(error).toBeInstanceOf(RangeError)
+    })
+  solution: |
+    function range(start, end, step = 1) {
+      if (step === 0) throw new RangeError('step не может быть 0')
+      return {
+        *[Symbol.iterator]() {
+          for (let i = start; step > 0 ? i < end : i > end; i += step) yield i
+        },
+      }
+    }
+  explain: |
+    **Итерируемый, а не итератор.** Объект хранит только параметры, а генератор создаётся заново на каждый `for…of`. Заготовка возвращала итератор массива — он одноразовый, второй spread давал пустоту.
+
+    **Ленивость:** `range(0, 1e9)` не создаёт миллиард чисел — они появляются по одному. С методами итераторов: `Iterator.from(range(0, 1e9)).filter(isPrime).take(10)`.
+
+- key: code-take-chunk
+  kind: code
+  level: easy
+  title: take и chunk
+  prompt: |
+    Напишите два генератора, которые работают с **любым** итерируемым, в том числе бесконечным:
+    - `take(iterable, n)` — первые `n` значений;
+    - `chunk(iterable, size)` — массивы по `size` значений, последний может быть короче.
+
+    Оба ленивые: не читают из источника больше, чем нужно.
+  starter: |
+    function* take(iterable, n) {
+      // ваш код
+    }
+    function* chunk(iterable, size) {
+      // ваш код
+    }
+  hints:
+    - '`[...iterable]` на бесконечном источнике зависнет. Идите `for…of` по источнику и выходите `return` или `break`, когда хватит.'
+    - 'Для `chunk` копите текущий массив и отдавайте его, когда набралось `size`; после цикла — остаток, если он не пуст.'
+  tests: |
+    function* naturals() { let n = 1; while (true) yield n++ }
+    function* counted(values, seen) { for (const v of values) { seen.push(v); yield v } }
+    test('take из бесконечного', () => {
+      expect([...take(naturals(), 3)]).toEqual([1, 2, 3])
+    })
+    test('take не читает лишнего', () => {
+      const seen = []
+      expect([...take(counted([1, 2, 3, 4, 5], seen), 2)]).toEqual([1, 2])
+      expect(seen).toEqual([1, 2])
+    })
+    test('chunk с остатком', () => {
+      expect([...chunk([1, 2, 3, 4, 5], 2)]).toEqual([[1, 2], [3, 4], [5]])
+      expect([...chunk([], 3)]).toEqual([])
+    })
+    test('chunk из бесконечного — по требованию', () => {
+      expect([...take(chunk(naturals(), 3), 2)]).toEqual([[1, 2, 3], [4, 5, 6]])
+    })
+  solution: |
+    function* take(iterable, n) {
+      if (n <= 0) return
+      let i = 0
+      for (const value of iterable) {
+        yield value
+        if (++i >= n) return
+      }
+    }
+
+    function* chunk(iterable, size) {
+      let current = []
+      for (const value of iterable) {
+        current.push(value)
+        if (current.length === size) {
+          yield current
+          current = []
+        }
+      }
+      if (current.length) yield current
+    }
+  explain: |
+    **Ленивость = не трогать то, что не просили.** `return` после `n`-го значения закрывает генератор, а `for…of` внутри вызывает `return()` у источника — источник тоже закроется.
+
+    **`if (++i >= n) return` после `yield`,** а не до следующего чтения: иначе `take` прочитал бы из источника лишний элемент.
+
+    **В языке уже есть:** `iterator.take(n)` — ES2025, во всех браузерах. Разбиение на части `chunks(size)` — ES2027, пока только Chrome и Firefox.
+
+- key: code-tree-walk
+  kind: code
+  level: medium
+  title: Обход дерева генератором
+  prompt: |
+    Дерево — узлы `{ name, children? }`. Напишите:
+    - генератор `walk(node)` — все узлы в порядке «сначала узел, потом его дети по порядку» (обход в глубину);
+    - `findFirst(node, predicate)` — первый узел, для которого `predicate` вернул `true`, или `null`. Обход должен **остановиться** на найденном.
+  starter: |
+    function* walk(node) {
+      yield node
+    }
+    function findFirst(node, predicate) {
+      return [...walk(node)].find(predicate) ?? null
+    }
+  hints:
+    - '`yield node`, потом для каждого ребёнка — `yield* walk(child)`. Рекурсия на генераторах выглядит как рекурсия на обычных функциях.'
+    - '`findFirst` — `for…of` по `walk` и `return` на первом совпадении: генератор дальше не пойдёт.'
+  tests: |
+    const tree = { name: 'root', children: [
+      { name: 'a', children: [{ name: 'a1' }, { name: 'a2' }] },
+      { name: 'b', children: [{ name: 'b1' }] },
+    ] }
+    test('порядок обхода', () => {
+      expect([...walk(tree)].map((n) => n.name)).toEqual(['root', 'a', 'a1', 'a2', 'b', 'b1'])
+    })
+    test('findFirst находит', () => {
+      expect(findFirst(tree, (n) => n.name.startsWith('b')).name).toBe('b')
+      expect(findFirst(tree, (n) => n.name === 'нет')).toBeNull()
+    })
+    test('обход останавливается на найденном', () => {
+      const checked = []
+      findFirst(tree, (n) => { checked.push(n.name); return n.name === 'a1' })
+      expect(checked).toEqual(['root', 'a', 'a1'])
+    })
+  solution: |
+    function* walk(node) {
+      yield node
+      for (const child of node.children ?? []) yield* walk(child)
+    }
+
+    function findFirst(node, predicate) {
+      for (const current of walk(node)) {
+        if (predicate(current)) return current
+      }
+      return null
+    }
+  explain: |
+    **Генератор отделяет «как обойти» от «что делать».** Один `walk` используется для поиска, подсчёта, вывода — и везде обход ленивый.
+
+    **Остановка бесплатно.** `return` из `for…of` закрывает генератор, рекурсивные `yield*` тоже закрываются. Версия через `[...walk(node)].find` обходит всё дерево, даже если ответ — второй узел.
+
+    **Глубина.** Каждый уровень `yield*` — это вложенный генератор. На дереве глубиной в десятки тысяч узлов (редкость во фронтенде) лучше итеративный обход со своим стеком.
+
+- key: code-paginate
+  kind: code
+  level: medium
+  title: Ленивая постраничная выдача
+  prompt: |
+    `fetchPage(cursor)` возвращает `{ items, next }`, первая страница — `fetchPage(null)`, последняя — `next: null`.
+
+    Напишите **асинхронный генератор** `items(fetchPage)`, который отдаёт элементы по одному через все страницы. Страница запрашивается, только когда кончились элементы предыдущей: если потребитель вышел из `for await` раньше, лишние страницы не загружаются.
+  starter: |
+    async function* items(fetchPage) {
+      const first = await fetchPage(null)
+      yield* first.items
+    }
+  hints:
+    - 'Цикл по курсору, как в обычной загрузке страниц, но вместо накопления — `yield* page.items`.'
+    - 'Ленивость даёт сам асинхронный генератор: пока потребитель не попросил следующий элемент, тело стоит на `yield` и не запрашивает страницу.'
+  tests: |
+    const api = (pages) => spy(async (cursor) => {
+      await sleep(1)
+      const i = cursor ?? 0
+      return { items: pages[i], next: i + 1 < pages.length ? i + 1 : null }
+    })
+    test('все элементы по порядку', async () => {
+      const fetchPage = api([[1, 2], [3], [4, 5]])
+      const all = []
+      for await (const item of items(fetchPage)) all.push(item)
+      expect(all).toEqual([1, 2, 3, 4, 5])
+    })
+    test('досрочный выход — без лишних страниц', async () => {
+      const fetchPage = api([[1, 2], [3, 4], [5, 6]])
+      for await (const item of items(fetchPage)) if (item === 3) break
+      expect(fetchPage.calls.length).toBe(2)
+    })
+    test('пустые страницы не мешают', async () => {
+      const all = []
+      for await (const item of items(api([[], [1], []]))) all.push(item)
+      expect(all).toEqual([1])
+    })
+  solution: |
+    async function* items(fetchPage) {
+      let cursor = null
+      do {
+        const page = await fetchPage(cursor)
+        yield* page.items
+        cursor = page.next
+      } while (cursor !== null)
+    }
+  explain: |
+    **Разница с «загрузить всё».** Функция, собирающая все страницы в массив, грузит их до конца, даже если нужна первая сотня. Асинхронный генератор отдаёт элементы по мере загрузки и останавливается вместе с потребителем.
+
+    **Собрать всё, если нужно:** `await Array.fromAsync(items(fetchPage))` (ES2026).
+
+    **Где это в жизни:** бесконечная лента, экспорт больших таблиц, чтение потока `ReadableStream` — он тоже асинхронно итерируем.
+
+- key: code-run-generator
+  kind: code
+  level: boss
+  title: async/await на генераторах
+  prompt: |
+    До ES2017 `async/await` писали на генераторах. Напишите `run(genFn, ...args)` — исполнитель:
+    - вызывает `genFn(...args)` и получает генератор;
+    - когда генератор делает `yield value`, ждёт `value` как промис (не-промис — сразу) и продолжает генератор результатом;
+    - если промис отклонился — бросает ошибку **внутрь** генератора через `throw`, чтобы её можно было поймать `try/catch`;
+    - возвращает промис итогового `return` генератора; необработанная ошибка генератора отклоняет этот промис.
+
+    Пример: `run(function* () { const user = yield getUser(); return user.name })`.
+  starter: |
+    function run(genFn, ...args) {
+      const it = genFn(...args)
+      return Promise.resolve(it.next().value)
+    }
+  hints:
+    - 'Функция шага `step(method, arg)`: вызывает `it[method](arg)` — `next` или `throw` — и смотрит на `{ value, done }`.'
+    - 'Если `done` — выполнить итоговый промис значением `value`. Иначе — `Promise.resolve(value).then((v) => step("next", v), (e) => step("throw", e))`.'
+    - 'Исключение из `it.next` или `it.throw` (генератор не поймал ошибку) должно отклонить итоговый промис — оберните вызов в `try/catch`.'
+    - 'Всё внутри `new Promise((resolve, reject) => { … step("next", undefined) })`.'
+  tests: |
+    test('ждёт промисы и возвращает результат', async () => {
+      const result = await run(function* (id) {
+        const user = yield sleep(5).then(() => ({ id, name: 'Аня' }))
+        const n = yield 2
+        return `${user.name} ${user.id} ${n}`
+      }, 7)
+      expect(result).toBe('Аня 7 2')
+    })
+    test('ошибка промиса ловится try внутри генератора', async () => {
+      const result = await run(function* () {
+        try {
+          yield Promise.reject(new Error('сеть'))
+        } catch (e) {
+          return `поймали ${e.message}`
+        }
+      })
+      expect(result).toBe('поймали сеть')
+    })
+    test('непойманная ошибка отклоняет результат', async () => {
+      await expect(run(function* () { yield Promise.reject(new Error('мимо')) })).rejects.toThrow('мимо')
+      await expect(run(function* () { throw new Error('сразу') })).rejects.toThrow('сразу')
+    })
+    test('последовательность шагов', async () => {
+      const log = []
+      await run(function* () {
+        log.push(yield sleep(5).then(() => 'a'))
+        log.push(yield 'b')
+      })
+      expect(log).toEqual(['a', 'b'])
+    })
+  solution: |
+    function run(genFn, ...args) {
+      return new Promise((resolve, reject) => {
+        const it = genFn(...args)
+        function step(method, arg) {
+          let result
+          try {
+            result = it[method](arg)
+          } catch (error) {
+            return reject(error)
+          }
+          if (result.done) return resolve(result.value)
+          Promise.resolve(result.value).then(
+            (value) => step('next', value),
+            (error) => step('throw', error),
+          )
+        }
+        step('next', undefined)
+      })
+    }
+  explain: |
+    **Это и есть `async/await`:** `yield` играет роль `await`, `run` — роль движка. Генератор «ставит на паузу» функцию, а исполнитель продолжает её, когда промис выполнился.
+
+    **`it.throw(error)`** бросает ошибку в место `yield` — поэтому `try/catch` внутри генератора работает как с `await`.
+
+    **Так работали `co` и транспилированный Babel код** до нативной поддержки. На собеседовании задачу дают, чтобы проверить понимание и генераторов, и промисов сразу. Тот же подход до сих пор живёт в Redux-Saga: эффекты — это то, что генератор отдаёт через `yield`.

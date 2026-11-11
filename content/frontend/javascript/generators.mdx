@@ -1,0 +1,308 @@
+export const meta = {
+  verified: '11.11.2026',
+  versions: 'ECMAScript 2026, Chrome, Firefox, Safari',
+}
+
+## Learn
+
+### Суть за минуту
+
+Генератор — функция, которая умеет **останавливаться и продолжаться**. Она выдаёт значения по одному через `yield`, а вызывающий код сам решает, когда попросить следующее.
+
+```js
+function* ids() {
+  let id = 1
+  while (true) yield id++
+}
+const next = ids()
+next.next().value // 1
+next.next().value // 2 — бесконечный цикл не завис: тело идёт только по запросу
+```
+
+Это даёт **ленивость**: значения вычисляются, только когда нужны. Генераторы и протокол итерации лежат в основе `for…of`, spread, деструктуризации, асинхронных потоков, а исторически — и `async/await`.
+
+### Протокол итерации
+
+Два понятия, которые часто путают:
+
+| | Что это | Пример |
+|---|---|---|
+| **Итерируемый** | объект с методом `[Symbol.iterator]()`, который возвращает итератор | массив, строка, `Map`, `Set`, `NodeList` |
+| **Итератор** | объект с методом `next()`, который возвращает `{ value, done }` | то, что вернул `arr[Symbol.iterator]()` |
+
+`for…of`, spread `[...x]`, деструктуризация массива, `Array.from`, `new Map(x)`, `Promise.all(x)` — все работают с **итерируемым**: сначала вызывают `[Symbol.iterator]()`, потом `next()`, пока не придёт `done: true`.
+
+**Итератор одноразовый.** Массив итерируемый — каждый `for…of` создаёт новый итератор. А сам итератор после прохода исчерпан:
+
+```js
+const it = [1, 2, 3][Symbol.iterator]()
+;[...it] // [1, 2, 3]
+;[...it] // [] — уже пройден
+```
+
+У итератора есть необязательный метод `return()`: его вызывают при досрочном выходе — `break`, `return`, исключение в цикле, деструктуризация `const [first] = iterable`. Так итератор может освободить ресурсы.
+
+### Генератор: function* и yield
+
+Вызов `function*` **не выполняет тело**. Он возвращает объект-генератор — одновременно итератор и итерируемый. Тело идёт кусками: каждый `next()` выполняет код до следующего `yield`.
+
+```js
+function* steps() {
+  console.log('старт')
+  yield 1
+  console.log('после 1')
+  yield 2
+}
+const it = steps() // ничего не выведено
+it.next() // «старт», { value: 1, done: false }
+it.next() // «после 1», { value: 2, done: false }
+it.next() // { value: undefined, done: true }
+```
+
+Методы генератора:
+
+| Метод | Что делает |
+|---|---|
+| `next(x)` | продолжить до следующего `yield`; `x` станет результатом текущего `yield` |
+| `return(v)` | завершить генератор, выполнив его `finally`; вернуть `{ value: v, done: true }` |
+| `throw(e)` | бросить `e` в место паузы — внутри его можно поймать `try/catch` |
+
+**Аргумент первого `next(x)` теряется:** до первого вызова генератор не стоит ни на одном `yield`, принимать значение некому.
+
+**`return` внутри генератора** даёт значение вместе с `done: true`, но `for…of` и spread его не видят — они останавливаются на `done`.
+
+Стрелочных генераторов нет. Метод-генератор в объекте или классе пишется как `*name() {}`.
+
+### Свой итерируемый объект
+
+Самый короткий способ — метод-генератор `[Symbol.iterator]`:
+
+```js
+class Playlist {
+  #tracks = []
+  add(track) {
+    this.#tracks.push(track)
+  }
+  *[Symbol.iterator]() {
+    yield* this.#tracks
+  }
+}
+
+const list = new Playlist()
+list.add('Intro')
+list.add('Outro')
+for (const track of list) console.log(track)
+console.log([...list]) // можно перебирать сколько угодно раз
+```
+
+Генератор создаётся заново на каждый `for…of`, поэтому такой объект многоразовый.
+
+### yield* и рекурсия
+
+`yield*` передаёт работу другому итерируемому: его значения идут наружу как свои. Это делает рекурсивный обход естественным:
+
+```js
+function* walk(node) {
+  yield node
+  for (const child of node.children ?? []) yield* walk(child)
+}
+
+for (const node of walk(menu)) {
+  if (node.id === activeId) {
+    highlight(node)
+    break // обход остановится, остальное дерево не тронуто
+  }
+}
+```
+
+Обход отделён от того, что с узлами делают. Один `walk` служит для поиска, подсчёта и вывода — и везде ленивый.
+
+### Ленивость и методы итераторов
+
+Цепочка `filter().map().slice()` на массиве создаёт промежуточные массивы и обрабатывает **все** элементы. На генераторе с **методами итераторов** (ES2025, во всех браузерах) обрабатывается ровно столько, сколько нужно:
+
+```js
+function* naturals() {
+  let n = 1
+  while (true) yield n++
+}
+
+naturals()
+  .filter((n) => n % 2)
+  .map((n) => n * n)
+  .take(3)
+  .toArray() // [1, 9, 25]
+```
+
+Доступные методы: `map`, `filter`, `take`, `drop`, `flatMap`, `reduce`, `toArray`, `forEach`, `some`, `every`, `find`. Они есть у **любого** итератора: `map.keys()`, `set.values()`, `str[Symbol.iterator]()`. `Iterator.from(x)` превращает итерируемое или «похожее на итератор» в настоящий итератор с этими методами. В ES2026 добавился `Iterator.concat(a, b)`, а в ES2027 — `Iterator.zip`, `chunks`, `windows` (пока только Chrome и Firefox).
+
+**Когда ленивость выигрывает:** нужна часть длинной или бесконечной последовательности, данные приходят постепенно, промежуточные массивы дорогие. **Когда нет:** сортировка, группировка и всё, чему нужны все элементы сразу, — тут массив.
+
+### Досрочный выход и finally
+
+`break`, `return` или исключение в `for…of` вызывают `return()` у генератора. Он завершается, и его `finally` выполняется:
+
+```js
+function* lines(file) {
+  const handle = open(file)
+  try {
+    while (!handle.eof) yield handle.readLine()
+  } finally {
+    handle.close() // и при break снаружи
+  }
+}
+```
+
+Это аналог деструктора: ресурс закрывается, даже если потребитель не дочитал. В ES2027 для этого есть и `using` с `Symbol.dispose` (в Safari пока нет).
+
+### Асинхронные генераторы
+
+`async function*` сочетает `await` и `yield`. Перебирают такие генераторы через `for await…of`: каждая итерация ждёт следующего значения.
+
+```js
+async function* items(fetchPage) {
+  let cursor = null
+  do {
+    const page = await fetchPage(cursor)
+    yield* page.items
+    cursor = page.next
+  } while (cursor !== null)
+}
+
+for await (const order of items(fetchOrders)) {
+  render(order)
+  if (enough()) break // следующие страницы не загрузятся
+}
+```
+
+Пока потребитель не попросил следующий элемент, тело стоит на `yield` и страницу не запрашивает. Собрать всё в массив — `await Array.fromAsync(items(fetchOrders))` (ES2026).
+
+Асинхронно итерируемы и потоки: `for await (const chunk of response.body)` — во всех основных браузерах с Safari 27.
+
+### Генераторы и async/await
+
+До ES2017 `async/await` писали на генераторах. Генератор отдавал промис через `yield`, а исполнитель ждал его и продолжал генератор результатом — или бросал ошибку внутрь через `throw()`:
+
+```js
+run(function* () {
+  try {
+    const user = yield getUser(id) // как await
+    const posts = yield getPosts(user.id)
+    return { user, posts }
+  } catch (error) {
+    report(error)
+  }
+})
+```
+
+Так работали библиотека `co` и код после Babel. Написать `run` самому — задача уровня «босс» в практике. Тот же подход живёт в **Redux-Saga**: эффекты отдаются через `yield`, а исполнитель библиотеки их выполняет. В новых проектах саги вытеснили RTK Query и TanStack Query, но в существующем коде они встречаются.
+
+<Example file="src/shared/lib/tree.ts" verdict="good">
+
+Дерево разделов меню обходится одним генератором `walk`. На нём построены поиск активного пункта (с остановкой на найденном), подсчёт непрочитанных и плоский список для поиска по ⌘K. Раньше было три рекурсивных функции с разной логикой обхода, и одна из них пропускала вложенные разделы.
+
+</Example>
+
+<Example file="src/features/export/export-csv.ts" verdict="review">
+
+```js
+async function exportCsv() {
+  const all = []
+  let cursor = null
+  do {
+    const page = await api.orders(cursor)
+    all.push(...page.items)
+    cursor = page.next
+  } while (cursor)
+  download(toCsv(all))
+}
+```
+
+На 200 тысячах заказов вкладка держит в памяти все объекты сразу и долго молчит. Асинхронный генератор страниц и запись CSV по частям в поток (`WritableStream` или File System Access API) держат в памяти одну страницу и позволяют показывать прогресс и отменить экспорт.
+
+</Example>
+
+<Callout type="deep">
+- **Генератор — это сохранённый кадр стека.** При `yield` движок запоминает локальные переменные и место остановки, а при `next()` восстанавливает их. Поэтому генератор дешевле, чем кажется, но каждый уровень `yield*` — это ещё один такой кадр.
+- **Методы итераторов и `return()`.** `take(n)` после n-го значения вызывает `return()` у источника — исходный генератор закрывается, его `finally` выполняется.
+- **`function.sent`, `Iterator.range`, асинхронные методы итераторов** — предложения на стадии 2. Пока их нет.
+</Callout>
+
+### Частые ошибки
+
+| Ошибка | Признак | Исправление |
+|---|---|---|
+| ожидают, что вызов генератора выполнит тело | ничего не происходит | вызвать `next()` или перебрать |
+| возвращают итератор вместо итерируемого | второй `for…of` пустой | метод `*[Symbol.iterator]()` |
+| `[...gen()]` на бесконечном генераторе | вкладка зависла | `take(n)` или `break` |
+| аргумент первого `next(x)` | значение «пропало» | первый `next()` без аргумента |
+| ресурс без `finally` | соединение не закрывается при `break` | `try/finally` в генераторе |
+| ленивость там, где нужны все элементы | лишняя сложность | обычный массив |
+
+<Callout type="interview">
+Чаще спрашивают: что такое итератор и итерируемый, как сделать свой объект итерируемым, что делает `yield` и что передаётся в `next(x)`. Сильный ответ показывает ленивость на примере (бесконечная последовательность, остановка обхода), упоминает `finally` при `break`, асинхронные генераторы и связь с `async/await`. Плюс за методы итераторов ES2025.
+</Callout>
+
+## Implement
+
+Предсказания:
+
+<Practice id="out-lazy-body" />
+
+<Practice id="out-next-arg" />
+
+<Practice id="out-finally-break" />
+
+<Practice id="out-iterator-helpers" />
+
+Код:
+
+<Practice id="code-range" />
+
+<Practice id="code-take-chunk" />
+
+<Practice id="code-tree-walk" />
+
+<Practice id="code-paginate" />
+
+<Practice id="code-run-generator" />
+
+## Confirm
+
+<Question q="Чем итерируемый объект отличается от итератора?">
+Итерируемый — у кого есть `[Symbol.iterator]()`, возвращающий итератор; его можно перебирать много раз. Итератор — объект с `next()`, возвращающим `{ value, done }`; он одноразовый.
+</Question>
+
+<Question q="Что происходит при вызове генератора и при каждом next()?">
+Вызов не выполняет тело, а возвращает объект-генератор. Каждый `next()` выполняет тело до следующего `yield` и возвращает `{ value, done }`. Аргумент `next(x)` становится результатом текущего `yield`; у первого вызова он теряется.
+</Question>
+
+<Question q="Зачем нужен yield* и как обойти дерево генератором?">
+`yield*` передаёт работу другому итерируемому, его значения идут наружу как свои. Обход: `yield node`, затем для каждого ребёнка `yield* walk(child)`. Выход из `for…of` останавливает весь обход.
+</Question>
+
+<Question q="Что такое ленивость и когда она выигрывает у массива?">
+Значения вычисляются по одному и только по запросу. Выигрыш — бесконечные и очень длинные последовательности, поиск с остановкой, данные, приходящие постепенно. Методы итераторов (`map`, `filter`, `take`) работают лениво, методы массива — нет.
+</Question>
+
+<Question q="Что делает асинхронный генератор и как его перебирают?">
+`async function*` сочетает `await` и `yield` и отдаёт значения по мере готовности. Перебирают через `for await…of`; `break` останавливает генератор, и следующие порции не загружаются. Собрать всё — `Array.fromAsync`.
+</Question>
+
+<Question q="Как async/await связан с генераторами?">
+До ES2017 его делали на генераторах: `yield promise` отдавал промис исполнителю, тот ждал его и продолжал генератор через `next(value)` или бросал ошибку через `throw(error)`. Так работали `co` и транспилированный код; тот же подход — в Redux-Saga.
+</Question>
+
+## Источники
+
+<Sources>
+
+- [ECMA-262, §27.1 Iteration](https://tc39.es/ecma262/#sec-iteration)
+- [ECMA-262, §27.5 Generator Objects, §27.6 AsyncGenerator Objects](https://tc39.es/ecma262/#sec-generator-objects)
+- [MDN, Iterators and generators](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Iterators_and_generators)
+- [MDN, `function*`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/function*)
+- [MDN, `async function*`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function*)
+- [MDN, Iterator — методы](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Iterator)
+- [MDN, `Array.fromAsync`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/fromAsync)
+
+</Sources>

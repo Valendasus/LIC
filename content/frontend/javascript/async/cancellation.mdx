@@ -1,0 +1,270 @@
+export const meta = {
+  verified: '11.11.2026',
+  versions: 'DOM Living Standard, ECMAScript 2026, Chrome, Firefox, Safari, React 19.3',
+}
+
+## Learn
+
+### Суть за минуту
+
+Промис нельзя отменить — он только представляет результат. Отменяют саму **операцию**: запрос, таймер, подписку. Для этого в вебе есть стандартный механизм — `AbortController` и `AbortSignal`.
+
+```js
+const controller = new AbortController()
+fetch('/api/report', { signal: controller.signal })
+  .then((response) => response.json())
+  .then(showReport)
+  .catch((error) => {
+    if (error.name !== 'AbortError') showError(error)
+  })
+
+// Пользователь закрыл окно отчёта:
+controller.abort()
+```
+
+Отмена решает две задачи: не тратить сеть и ресурсы на ненужное и не дать **устаревшему ответу** перезаписать свежий. Вторая задача называется гонкой ответов, и это одна из самых частых ошибок во фронтенде.
+
+### AbortController и AbortSignal
+
+- `controller.signal` — сигнал, который передают операции.
+- `controller.abort(reason)` — отменить. Сигнал получает `aborted = true`, запоминает `reason` и вызывает событие `abort` — **синхронно**, сразу в момент вызова.
+- Сигнал отменяется **один раз**. Повторный `abort()` ничего не делает, переиспользовать отменённый контроллер нельзя — нужен новый.
+- `signal.reason` — причина. Без аргумента это `DOMException` с именем `AbortError`.
+- `signal.throwIfAborted()` бросает `reason`, если сигнал уже отменён.
+
+Это стандарт DOM, а не часть ECMAScript: механизм работает в браузере, воркерах, Node и Deno.
+
+### Кто понимает сигнал
+
+| API | Что происходит при отмене |
+|---|---|
+| `fetch(url, { signal })` | запрос прерывается, промис отклоняется с `signal.reason` |
+| `addEventListener(type, fn, { signal })` | обработчик снимается |
+| `ReadableStream`, `pipeTo(dest, { signal })` | поток отменяется |
+| `navigator.locks.request(name, { signal }, fn)` | ожидание блокировки прекращается |
+| `scheduler.postTask(fn, { signal })` | задача не выполнится |
+| TanStack Query, React Router, axios и другие | библиотека передаёт `signal` в ваш код или отменяет сама |
+
+Один сигнал можно передать в несколько операций. Тогда один `abort()` отменит всё сразу: запросы, обработчики, потоки. Удобно для компонента или экрана: создали контроллер при открытии, вызвали `abort()` при закрытии.
+
+```js
+const controller = new AbortController()
+const { signal } = controller
+window.addEventListener('resize', onResize, { signal })
+window.addEventListener('keydown', onKeyDown, { signal })
+fetch('/api/data', { signal }).then(render)
+
+// Уходим с экрана — снимается всё разом:
+controller.abort()
+```
+
+### Готовые сигналы
+
+- **`AbortSignal.timeout(ms)`** отменяется сам через `ms` с причиной `TimeoutError`. Это таймаут для `fetch` без своих таймеров. Время считается активное: пока страница в bfcache или воркер приостановлен, таймер стоит.
+- **`AbortSignal.any([a, b])`** отменяется вместе с первым из сигналов и берёт его причину. Так объединяют «отменил пользователь» и «истёк таймаут».
+- **`AbortSignal.abort(reason)`** — сразу отменённый сигнал, удобен в тестах.
+
+```js
+async function loadReport(signal) {
+  const response = await fetch('/api/report', {
+    signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+  })
+  return response.json()
+}
+```
+
+Все три есть во всех основных браузерах с 2024 года.
+
+### Отличить отмену от ошибки
+
+Отмена — не ошибка для пользователя. Показывать «Что-то пошло не так», когда он сам ушёл со страницы, — плохой UX. Различаем по имени причины:
+
+```js
+try {
+  return await loadReport(signal)
+} catch (error) {
+  if (error.name === 'AbortError') return // отменили сами — молча
+  if (error.name === 'TimeoutError') showError('Сервер не ответил')
+  else showError('Не удалось загрузить отчёт')
+}
+```
+
+Если в `abort(reason)` передана своя причина, отклонение будет именно с ней. Проверка `signal.aborted` надёжнее имени, когда причины бывают разные.
+
+### Своя отменяемая функция
+
+Любую долгую операцию можно сделать отменяемой по тому же шаблону, что `fetch`:
+
+1. если сигнал уже отменён — сразу отклонить с `signal.reason`;
+2. подписаться на `abort` и при отмене освободить ресурсы (таймер, соединение);
+3. при обычном завершении — **отписаться**: долгоживущий сигнал не должен копить обработчики;
+4. пробрасывать `signal` дальше во все вложенные операции; между шагами — `signal.throwIfAborted()`.
+
+```js
+async function importRows(rows, { signal } = {}) {
+  for (const chunk of chunks(rows, 500)) {
+    signal?.throwIfAborted()
+    await api.import(chunk, { signal })
+  }
+}
+```
+
+Пауза, которую можно отменить, — задача в практике.
+
+### Гонка ответов
+
+Поиск по мере ввода: пользователь набирает «re», потом «react». Запрос «react» отправлен позже, но ответил быстрее. Ответ на «re» пришёл последним — и на экране выдача не для того, что введено.
+
+```js
+// Ошибка: последним записывается тот, кто ответил последним
+async function onInput(query) {
+  results = await search(query)
+}
+```
+
+Три способа это исправить:
+
+| Способ | Как | Сеть экономит |
+|---|---|---|
+| Отмена предыдущего | новый запрос вызывает `abort()` старого | да |
+| Игнорировать устаревший | номер запроса или флаг `ignore`: записываем, только если ответ последний | нет |
+| Ответы по ключу | TanStack Query, SWR, React Router хранят результат по ключу запроса и сами отбрасывают устаревшие | да |
+
+Надёжнее всего — первые два вместе: отмена освобождает сеть, а проверка спасает, если API отмену не поддерживает и всё равно ответил.
+
+<Callout type="mistake" title="debounce вместо защиты от гонки">
+`debounce` отправляет запрос после паузы в наборе, и запросов становится меньше. Но два отправленных запроса всё равно могут ответить в обратном порядке: пауза 300 мс не гарантирует, что предыдущий ответ уже пришёл. `debounce` экономит нагрузку, а гонку решают отмена и проверка «ответ последний».
+</Callout>
+
+### Отмена в React
+
+Очистка `useEffect` вызывается перед следующим запуском эффекта и при размонтировании. Это ровно те моменты, когда запрос становится не нужен:
+
+```jsx
+useEffect(() => {
+  const controller = new AbortController()
+  fetch(`/api/users/${id}`, { signal: controller.signal })
+    .then((response) => response.json())
+    .then((user) => {
+      if (!controller.signal.aborted) setUser(user)
+    })
+    .catch((error) => {
+      if (error.name !== 'AbortError') setError(error)
+    })
+  return () => controller.abort()
+}, [id])
+```
+
+- В **StrictMode** эффект в разработке запускается дважды: первый запрос сразу отменяется. Без очистки вы увидите два запроса — StrictMode специально показывает такие ошибки.
+- В реальном проекте данные с сервера обычно грузят библиотекой: TanStack Query передаёт `signal` в `queryFn`, React Router — в `loader`. В React 19 переходы и Actions сами отбрасывают устаревшие результаты.
+
+### Что отмена не делает
+
+- **Не откатывает действие на сервере.** Запрос мог дойти и выполниться — `abort()` отменяет только ожидание. Для изменений (оплата, заказ, отправка формы) нужна **идемпотентность**: ключ запроса, по которому сервер узнаёт повтор, и проверка статуса операции. Подробно — в теме «Ошибки и устойчивость».
+- **Не останавливает синхронный код.** Цикл на секунду сигнал не прервёт — его нужно дробить и проверять `throwIfAborted()` между частями.
+- **Не отменяет промисы-комбинаторы.** `Promise.race` и `Promise.any` только перестают ждать — отменять проигравших нужно самим (тема «Promise.all, allSettled, race, any»).
+
+<Example file="src/features/search/use-search.ts" verdict="good">
+
+Хук поиска: каждое изменение строки создаёт новый `AbortController`, очистка эффекта отменяет предыдущий запрос. Перед записью результата — проверка `signal.aborted`, на случай если API ответил, несмотря на отмену. Пустая строка запрос не отправляет. Отмена не показывается как ошибка, таймаут показывается как «Сервер не ответил». Тот же компонент — React-задача в практике.
+
+</Example>
+
+<Example file="src/pages/orders/filters.ts" verdict="review">
+
+```js
+const onFilterChange = debounce(async (filters) => {
+  setLoading(true)
+  setOrders(await api.getOrders(filters))
+  setLoading(false)
+}, 300)
+```
+
+Две проблемы. `debounce` не защищает от гонки: медленный ответ на старые фильтры перезапишет новые. И при ошибке `loading` навсегда остаётся `true`. Нужны отмена предыдущего запроса через сигнал, проверка «ответ последний», `try/finally` для `loading` — или запрос через TanStack Query с ключом `['orders', filters]`.
+
+</Example>
+
+<Callout type="deep">
+- **Синхронное событие.** `abort()` вызывает обработчики `abort` сразу, внутри своего вызова. Код после `abort()` выполнится уже после них.
+- **Сигналы-потомки.** `AbortSignal.any` создаёт зависимый сигнал. Браузер держит его, пока жив хоть один исходный сигнал и на зависимый кто-то подписан, — поэтому долгоживущие исходные сигналы с тысячами производных лучше не создавать в цикле.
+- **Отмена в языке.** Предложение TC39 о встроенной отмене промисов не развивается. Стандартом де-факто остаётся `AbortSignal`, его принимают и библиотеки, и Node.
+</Callout>
+
+### Частые ошибки
+
+| Ошибка | Признак | Исправление |
+|---|---|---|
+| нет очистки в эффекте | в StrictMode два запроса, устаревший ответ на экране | `return () => controller.abort()` |
+| отмена показана как ошибка | «Что-то пошло не так» при уходе со страницы | пропускать `AbortError` |
+| `debounce` вместо защиты от гонки | изредка неверная выдача | отмена и проверка «ответ последний» |
+| отменённый контроллер переиспользуется | новые запросы сразу отклоняются | новый контроллер на каждую операцию |
+| обработчик `abort` не снят | память растёт на долгоживущем сигнале | `removeEventListener` или `{ once: true }` |
+| отмена POST считается откатом | дубли или потерянные заказы | идемпотентность на сервере |
+
+<Callout type="interview">
+Типичный вопрос — «как возникает гонка при быстрых повторных запросах и как её решить». Сильный ответ называет три способа и разницу между ними (кто экономит сеть), объясняет, почему `debounce` не решает гонку, и показывает отмену в очистке `useEffect`. Плюс за `AbortSignal.timeout`, `AbortSignal.any` и за то, что отмена не откатывает действие на сервере.
+</Callout>
+
+## Implement
+
+Предсказания:
+
+<Practice id="out-abort-event" />
+
+<Practice id="out-race-stale" />
+
+<Practice id="out-signal-any" />
+
+<Practice id="quiz-debounce-race" />
+
+Код:
+
+<Practice id="code-abortable-delay" />
+
+<Practice id="code-abortable" />
+
+<Practice id="code-fetch-json" />
+
+<Practice id="code-latest-only" />
+
+<Practice id="react-search-box" />
+
+## Confirm
+
+<Question q="Как отменить fetch-запрос и с какой ошибкой он отклонится?">
+Создать `AbortController`, передать `signal` в `fetch` и вызвать `controller.abort()`. Промис отклонится с `signal.reason`: по умолчанию `DOMException` с именем `AbortError`, у `AbortSignal.timeout` — `TimeoutError`, при `abort(причина)` — сама причина.
+</Question>
+
+<Question q="Что такое гонка ответов и как её решить?">
+Два запроса отправлены по очереди, но ответили в обратном порядке, и устаревший ответ перезаписал свежий. Решения: отменять предыдущий запрос (экономит сеть), игнорировать устаревший ответ по номеру запроса или флагу, хранить ответы по ключу через библиотеку — TanStack Query, SWR.
+</Question>
+
+<Question q="Почему debounce не решает гонку?">
+Он уменьшает число запросов, но не гарантирует, что предыдущий ответ пришёл до отправки следующего. Два отправленных запроса всё равно могут ответить в обратном порядке.
+</Question>
+
+<Question q="Как сделать таймаут запроса и как объединить его с отменой пользователем?">
+`AbortSignal.timeout(ms)` — сигнал, который отменяется сам. Объединить с сигналом пользователя — `AbortSignal.any([userSignal, AbortSignal.timeout(ms)])`. По имени причины (`TimeoutError` или `AbortError`) понятно, что произошло.
+</Question>
+
+<Question q="Где отменять запрос в React и почему это важно в StrictMode?">
+В очистке `useEffect`: она срабатывает перед следующим запуском и при размонтировании. StrictMode в разработке запускает эффект дважды — без очистки появятся два запроса и возможная гонка, и это сразу видно.
+</Question>
+
+<Question q="Отменяет ли abort() действие на сервере?">
+Нет. Отменяются ожидание и передача, но сервер мог уже выполнить запрос. Для изменений нужна идемпотентность — ключ запроса и проверка статуса операции.
+</Question>
+
+## Источники
+
+<Sources>
+
+- [DOM Standard, Aborting ongoing activities](https://dom.spec.whatwg.org/#aborting-ongoing-activities)
+- [MDN, `AbortController`](https://developer.mozilla.org/en-US/docs/Web/API/AbortController)
+- [MDN, `AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal)
+- [MDN, `AbortSignal.any()`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/any_static)
+- [MDN, `AbortSignal.timeout()`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/timeout_static)
+- [react.dev, You Might Not Need an Effect — Fetching data](https://react.dev/learn/you-might-not-need-an-effect#fetching-data)
+- [TanStack Query, Query cancellation](https://tanstack.com/query/latest/docs/framework/react/guides/query-cancellation)
+
+</Sources>

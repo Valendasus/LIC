@@ -1,0 +1,562 @@
+# Практика темы «Отмена и гонки запросов». Ответы в output проверяются запуском кода (npm run content:run).
+# Таймаут через race (event-loop), опрос с отменой (async-await), подстраховочный запрос (combinators) — не повторяются.
+
+- key: out-abort-event
+  kind: output
+  code: |
+    const c = new AbortController()
+    c.signal.addEventListener('abort', () => console.log('событие abort'))
+    console.log(c.signal.aborted)
+    c.abort()
+    console.log(c.signal.aborted, c.signal.reason.name)
+    c.abort()
+  answer:
+    - 'false'
+    - событие abort
+    - true AbortError
+  explain: '`abort()` вызывает событие сразу, синхронно. Без своей причины `reason` — `DOMException` с именем `AbortError`. Повторный `abort()` ничего не делает: сигнал отменяется один раз.'
+
+- key: out-throw-if-aborted
+  kind: output
+  code: |
+    const signal = AbortSignal.abort(new Error('ушли со страницы'))
+    try { signal.throwIfAborted() } catch (e) { console.log('поймали:', e.message) }
+    console.log(signal.aborted)
+  answer:
+    - 'поймали: ушли со страницы'
+    - 'true'
+  explain: '`throwIfAborted()` бросает `signal.reason`, если сигнал отменён. Удобно вызывать между шагами долгой функции. `AbortSignal.abort(reason)` создаёт уже отменённый сигнал — для тестов и ранних выходов.'
+
+- key: out-race-stale
+  kind: output
+  code: |
+    let shown
+    const search = (q, ms) => new Promise((r) => setTimeout(() => r(q), ms))
+    async function onInput(q, ms) { shown = await search(q, ms) }
+    onInput('re', 30)
+    onInput('react', 10)
+    setTimeout(() => console.log('на экране:', shown), 50)
+  answer:
+    - 'на экране: re'
+  explain: 'Гонка: запрос «react» отправлен позже, но ответил раньше. Ответ на «re» пришёл последним и перезаписал свежий результат. Пользователь видит выдачу не для того, что ввёл.'
+
+- key: out-race-id
+  kind: output
+  code: |
+    let shown
+    let last = 0
+    const search = (q, ms) => new Promise((r) => setTimeout(() => r(q), ms))
+    async function onInput(q, ms) {
+      const id = ++last
+      const result = await search(q, ms)
+      if (id === last) shown = result
+    }
+    onInput('re', 30)
+    onInput('react', 10)
+    setTimeout(() => console.log('на экране:', shown), 50)
+  answer:
+    - 'на экране: react'
+  explain: 'Номер запроса отсекает устаревший ответ: «re» пришёл, но его номер уже не последний. Сеть он не экономит — запрос всё равно выполнился. Отмена через `AbortController` экономит и сеть.'
+
+- key: out-signal-any
+  kind: output
+  code: |
+    const user = new AbortController()
+    const timer = new AbortController()
+    const signal = AbortSignal.any([user.signal, timer.signal])
+    timer.abort(new Error('таймаут'))
+    console.log(signal.aborted, signal.reason.message)
+    user.abort(new Error('пользователь'))
+    console.log(signal.reason.message)
+  answer:
+    - true таймаут
+    - таймаут
+  explain: '`AbortSignal.any` отменяется вместе с первым из сигналов и берёт его причину. Дальше причина не меняется. Так объединяют «отменил пользователь» и «истёк таймаут».'
+
+- key: out-signal-timeout
+  kind: output
+  code: |
+    const t = AbortSignal.timeout(10)
+    t.addEventListener('abort', () => console.log(t.reason.name))
+    console.log('ждём')
+  answer:
+    - ждём
+    - TimeoutError
+  explain: '`AbortSignal.timeout(ms)` отменяется сам через `ms` с причиной `TimeoutError`, а не `AbortError`. По имени причины таймаут легко отличить от отмены пользователем.'
+
+- key: order-effect-abort
+  kind: order
+  prompt: 'Компонент загружает пользователя по `id` в `useEffect` с `AbortController`, очистка вызывает `abort()`. `id` сменился с 1 на 2, пока первый запрос шёл. Расставьте события по порядку.'
+  steps:
+    - Эффект для id 1 запускает запрос с первым signal
+    - id меняется — React вызывает очистку прошлого эффекта
+    - Очистка вызывает abort() — первый запрос отклоняется с AbortError
+    - Эффект для id 2 запускает запрос со вторым signal
+    - Ответ для id 2 записывается в состояние
+  explain: 'Очистка эффекта выполняется перед следующим запуском и при размонтировании — это место для отмены. Ошибку `AbortError` обработчик игнорирует, поэтому пользователь её не видит.'
+
+- key: quiz-debounce-race
+  kind: quiz
+  question: 'Поиск отправляет запрос через 300 мс после последнего нажатия (debounce). Решает ли это гонку ответов?'
+  options:
+    - text: Нет — запросов меньше, но два отправленных запроса всё равно могут ответить в обратном порядке
+      correct: true
+    - text: Да — при debounce запросы не перекрываются
+      why: 'Пауза в 300 мс не гарантирует, что предыдущий ответ пришёл: сервер может отвечать секунду.'
+    - text: Да, если поставить задержку побольше
+      why: Любая задержка проиграет медленному ответу. Нужна отмена или проверка, что ответ последний.
+    - text: Гонки не бывает, если запросы идут к одному серверу
+  explain: '`debounce` уменьшает число запросов, а гонку решают отмена предыдущего запроса, проверка номера ответа или библиотека, которая хранит ответы по ключу (TanStack Query, SWR).'
+
+- key: quiz-abort-mutation
+  kind: quiz
+  question: Пользователь нажал «Оплатить», через секунду — «Отмена», и клиент вызвал `abort()` для POST-запроса. Что известно про оплату?
+  options:
+    - text: Ничего определённого — сервер мог уже провести платёж; отмена на клиенте не откатывает действие
+      correct: true
+    - text: Оплата точно не прошла — запрос отменён
+      why: Отменяется ожидание ответа и передача данных, но запрос мог уже дойти до сервера и выполниться.
+    - text: Браузер отправит серверу команду отменить платёж
+      why: Такой команды нет. Сервер узнает разве что о разрыве соединения, и то не всегда.
+    - text: Платёж пройдёт дважды
+  explain: 'Для изменений нужна идемпотентность: ключ запроса, по которому сервер узнаёт повтор, и запрос статуса операции. Отмену на клиенте используют для чтения и для того, чтобы не обновлять интерфейс устаревшим ответом.'
+
+- key: quiz-detect-abort
+  kind: quiz
+  question: '`fetch` отклонился. Как отличить «отменили мы сами» от настоящей ошибки сети?'
+  options:
+    - text: 'Проверить `error.name === "AbortError"` (или `signal.aborted`); для `AbortSignal.timeout` — `"TimeoutError"`'
+      correct: true
+    - text: По тексту `error.message`
+      why: Текст сообщения разный в разных браузерах и может меняться. Имя ошибки — стабильный признак.
+    - text: Отменённый fetch не отклоняется, а выполняется с `undefined`
+      why: Отменённый `fetch` отклоняется с причиной отмены.
+    - text: По `response.status === 0`
+      why: При отмене ответа нет, поэтому и статуса нет.
+  explain: 'Отмену не показывают пользователю как ошибку. Таймаут — показывают: «Сервер не ответил». Если в `abort(reason)` передана своя причина, отклонение будет именно с ней.'
+
+# ── Задачи на код ─────────────────────────────────────────────────────────
+# Тесты видят функции решения напрямую. Доступны test, expect, spy, sleep и помощники из docs/TRAINERS.md.
+
+- key: code-abortable-delay
+  kind: code
+  level: easy
+  title: Пауза, которую можно отменить
+  prompt: |
+    Напишите `delay(ms, { signal } = {})`: промис, который выполняется через `ms` мс.
+    - Если `signal` отменён во время ожидания — отклонить сразу с `signal.reason` и очистить таймер.
+    - Если отменён заранее — отклонить сразу, не ставя таймер.
+    - После обычного завершения обработчик `abort` нужно снять: долгоживущий сигнал не должен копить обработчики.
+  starter: |
+    function delay(ms, { signal } = {}) {
+      return new Promise((resolve) => setTimeout(resolve, ms))
+    }
+  hints:
+    - 'Сначала `if (signal?.aborted) return Promise.reject(signal.reason)`. Потом — `new Promise` с таймером и обработчиком `abort`.'
+    - 'Обработчик `abort` очищает таймер и отклоняет; таймер снимает обработчик и выполняет.'
+  tests: |
+    test('ждёт ms', async () => {
+      const start = Date.now()
+      await delay(30)
+      expect(Date.now() - start).toBeGreaterThan(20)
+    })
+    test('отмена во время ожидания — сразу и с причиной', async () => {
+      const controller = new AbortController()
+      const start = Date.now()
+      const waiting = delay(1000, { signal: controller.signal })
+      setTimeout(() => controller.abort(new Error('ушли')), 10)
+      await expect(waiting).rejects.toThrow('ушли')
+      expect(Date.now() - start).toBeLessThan(500)
+    })
+    test('заранее отменённый — сразу', async () => {
+      await expect(delay(1000, { signal: AbortSignal.abort(new Error('уже')) })).rejects.toThrow('уже')
+    })
+    test('после завершения обработчик снят', async () => {
+      const controller = new AbortController()
+      const added = spy()
+      const removed = spy()
+      const signal = controller.signal
+      const add = signal.addEventListener.bind(signal)
+      const remove = signal.removeEventListener.bind(signal)
+      signal.addEventListener = (...args) => { added(...args); return add(...args) }
+      signal.removeEventListener = (...args) => { removed(...args); return remove(...args) }
+      await delay(5, { signal })
+      expect(added.calls.length).toBe(1)
+      expect(removed.calls.length).toBe(1)
+    })
+  solution: |
+    function delay(ms, { signal } = {}) {
+      if (signal?.aborted) return Promise.reject(signal.reason)
+      return new Promise((resolve, reject) => {
+        const onAbort = () => {
+          clearTimeout(timer)
+          reject(signal.reason)
+        }
+        const timer = setTimeout(() => {
+          signal?.removeEventListener('abort', onAbort)
+          resolve()
+        }, ms)
+        signal?.addEventListener('abort', onAbort, { once: true })
+      })
+    }
+  explain: |
+    **Шаблон «отменяемая операция»** — так устроен и `fetch`: проверить сигнал заранее, подписаться на `abort`, при отмене освободить ресурсы и отклонить с `signal.reason`, при обычном завершении — отписаться.
+
+    **Почему отписка важна.** Сигнал может жить долго — например, сигнал всей страницы. Без `removeEventListener` каждая пауза оставит обработчик, который держит замыкание с таймером: медленная утечка памяти. `{ once: true }` снимает обработчик только после срабатывания.
+
+- key: code-abortable
+  kind: code
+  level: easy
+  title: Перестать ждать по сигналу
+  prompt: |
+    Не каждую операцию можно отменить — у некоторых API нет `signal`. Но можно перестать ждать. Напишите `abortable(promise, signal)`:
+    - результат — тот же, что у `promise`;
+    - если `signal` отменён раньше — отклонить с `signal.reason`; заранее отменённый — сразу.
+    - Обработчик `abort` после завершения `promise` снимается.
+  starter: |
+    function abortable(promise, signal) {
+      return promise
+    }
+  hints:
+    - '`new Promise`: подписаться на `abort`, а `promise.then(resolve, reject)` — и в обоих исходах снять обработчик.'
+  tests: |
+    test('результат промиса', async () => {
+      await expect(abortable(sleep(5).then(() => 'да'), new AbortController().signal)).resolves.toBe('да')
+      await expect(abortable(Promise.reject(new Error('нет')), new AbortController().signal)).rejects.toThrow('нет')
+    })
+    test('отмена раньше — причина отмены', async () => {
+      const controller = new AbortController()
+      const waiting = abortable(sleep(1000), controller.signal)
+      controller.abort(new Error('хватит'))
+      await expect(waiting).rejects.toThrow('хватит')
+    })
+    test('заранее отменённый сигнал', async () => {
+      await expect(abortable(sleep(1000), AbortSignal.abort(new Error('уже')))).rejects.toThrow('уже')
+    })
+    test('отмена после завершения ничего не меняет', async () => {
+      const controller = new AbortController()
+      const result = await abortable(Promise.resolve('готово'), controller.signal)
+      controller.abort()
+      expect(result).toBe('готово')
+    })
+  solution: |
+    function abortable(promise, signal) {
+      if (signal.aborted) return Promise.reject(signal.reason)
+      return new Promise((resolve, reject) => {
+        const onAbort = () => reject(signal.reason)
+        signal.addEventListener('abort', onAbort, { once: true })
+        promise.then(
+          (value) => {
+            signal.removeEventListener('abort', onAbort)
+            resolve(value)
+          },
+          (error) => {
+            signal.removeEventListener('abort', onAbort)
+            reject(error)
+          },
+        )
+      })
+    }
+  explain: |
+    **Это не настоящая отмена.** Сама операция продолжит работать — мы лишь перестаём ждать её результата. Для компонента, который ушёл со страницы, этого часто достаточно: устаревший результат не попадёт в состояние.
+
+    **Когда возможно — отменяйте по-настоящему:** передавайте `signal` в `fetch`, `addEventListener`, `ReadableStream`, библиотеки. Тогда освобождаются сеть и ресурсы.
+
+- key: code-fetch-json
+  kind: code
+  level: medium
+  title: Запрос с таймаутом и отменой
+  prompt: |
+    Напишите `fetchJson(fetcher, url, { timeout = 5000, signal } = {})`. `fetcher(url, { signal })` ведёт себя как `fetch`: возвращает `{ ok, status, json() }` и отклоняется с `signal.reason`, если сигнал отменили.
+    - Запрос отменяется и по `signal` вызывающего, и по таймауту — передайте в `fetcher` один объединённый сигнал.
+    - Таймаут — отклонение `new Error('Сервер не ответил за N мс')`.
+    - Отмена вызывающим — отклонение с его `signal.reason` как есть.
+    - Ответ не `ok` — `new Error('HTTP <status>')`. Иначе — результат `json()`.
+  starter: |
+    async function fetchJson(fetcher, url, { timeout = 5000, signal } = {}) {
+      const response = await fetcher(url, { signal })
+      return response.json()
+    }
+  hints:
+    - '`AbortSignal.timeout(ms)` — сигнал таймаута, `AbortSignal.any([...])` — объединение. Пустой `signal` в массив не кладите.'
+    - 'Отличить таймаут от отмены можно по причине: `error.name === "TimeoutError"`.'
+    - 'Каркас: `try { const response = await fetcher(url, { signal: combined }) … } catch (error) { if (error?.name === "TimeoutError") throw new Error(…); throw error }`'
+  tests: |
+    const fakeFetch = (ms, response = { ok: true, status: 200, json: async () => ({ ok: 1 }) }) =>
+      spy((url, { signal }) => new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve(response), ms)
+        signal.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason) })
+      }))
+    test('успешный ответ — json', async () => {
+      await expect(fetchJson(fakeFetch(5), '/a')).resolves.toEqual({ ok: 1 })
+    })
+    test('таймаут — понятная ошибка, запрос отменён', async () => {
+      const fetcher = fakeFetch(500)
+      await expect(fetchJson(fetcher, '/a', { timeout: 20 })).rejects.toThrow('Сервер не ответил за 20 мс')
+      expect(fetcher.calls[0][1].signal.aborted).toBe(true)
+    })
+    test('отмена вызывающим — его причина', async () => {
+      const controller = new AbortController()
+      const waiting = fetchJson(fakeFetch(500), '/a', { signal: controller.signal })
+      setTimeout(() => controller.abort(new Error('ушли со страницы')), 10)
+      await expect(waiting).rejects.toThrow('ушли со страницы')
+    })
+    test('ответ не ok — HTTP статус', async () => {
+      await expect(fetchJson(fakeFetch(1, { ok: false, status: 503, json: async () => ({}) }), '/a')).rejects.toThrow('HTTP 503')
+    })
+    test('в fetcher уходит сигнал, а не undefined', async () => {
+      const fetcher = fakeFetch(1)
+      await fetchJson(fetcher, '/a')
+      expect(fetcher.calls[0][1].signal).toBeInstanceOf(AbortSignal)
+    })
+  solution: |
+    async function fetchJson(fetcher, url, { timeout = 5000, signal } = {}) {
+      const signals = [AbortSignal.timeout(timeout)]
+      if (signal) signals.push(signal)
+      try {
+        const response = await fetcher(url, { signal: AbortSignal.any(signals) })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return await response.json()
+      } catch (error) {
+        if (error?.name === 'TimeoutError') throw new Error(`Сервер не ответил за ${timeout} мс`)
+        throw error
+      }
+    }
+  explain: |
+    **Один сигнал на запрос.** `AbortSignal.any` объединяет «отменил пользователь» и «истёк таймаут». `fetch` отменится в обоих случаях, а причина подскажет, какой именно.
+
+    **Таймаут — для человека, отмена — нет.** На таймаут показываем «Сервер не ответил», отмену вызывающего пробрасываем как есть: тот, кто отменил, сам решит, что с ней делать. Обычно — ничего.
+
+    **`return await response.json()`** внутри `try` — чтобы ошибка разбора JSON тоже прошла через `catch`.
+
+    **В проекте** такая функция живёт в клиентском слое API (тема «Клиентский слой API»), а компоненты передают только `signal`.
+
+- key: code-latest-only
+  kind: code
+  level: medium
+  title: Только последний вызов
+  prompt: |
+    Напишите `latestOnly(fn)`. Возвращает функцию с теми же аргументами, которая вызывает `fn(...args, signal)`:
+    - каждый новый вызов **отменяет** предыдущий: его `signal` получает `abort()`;
+    - промис отменённого вызова отклоняется с `signal.reason` — даже если `fn` его сигнал проигнорировала и всё-таки ответила;
+    - метод `cancel()` отменяет текущий вызов.
+
+    Так работает поиск по мере ввода: важен ответ только на последний запрос.
+  starter: |
+    function latestOnly(fn) {
+      const wrapped = (...args) => fn(...args, new AbortController().signal)
+      wrapped.cancel = () => {}
+      return wrapped
+    }
+  hints:
+    - 'В замыкании — текущий `AbortController`. Новый вызов сначала делает `current?.abort()`, потом создаёт свой.'
+    - 'Даже если `fn` проигнорировала сигнал, результат отменённого вызова нельзя отдавать: после `await` проверьте `signal.aborted`.'
+    - 'Удобно: `signal.throwIfAborted()` сразу после `await fn(...)` — бросит причину отмены.'
+  tests: |
+    test('предыдущий вызов отменяется', async () => {
+      const signals = []
+      const search = latestOnly(async (q, signal) => { signals.push(signal); await sleep(10); return q })
+      const first = search('re')
+      const second = search('react')
+      expect(signals[0].aborted).toBe(true)
+      await expect(first).rejects.toThrow()
+      await expect(second).resolves.toBe('react')
+    })
+    test('устаревший ответ не отдаётся, даже если fn проигнорировала сигнал', async () => {
+      const search = latestOnly(async (q) => { await sleep(q === 're' ? 20 : 5); return q })
+      const first = search('re')
+      const second = search('react')
+      await expect(second).resolves.toBe('react')
+      const error = await first.catch((e) => e)
+      expect(error.name).toBe('AbortError')
+    })
+    test('cancel отменяет текущий', async () => {
+      const search = latestOnly(async (q, signal) => { await sleep(10); return q })
+      const pending = search('x')
+      search.cancel()
+      await expect(pending).rejects.toThrow()
+    })
+    test('аргументы и signal передаются', async () => {
+      const fn = spy(async (a, b, signal) => `${a}${b}${signal instanceof AbortSignal}`)
+      await expect(latestOnly(fn)('a', 'b')).resolves.toBe('abtrue')
+    })
+  solution: |
+    function latestOnly(fn) {
+      let current = null
+      const wrapped = async (...args) => {
+        current?.abort()
+        const controller = new AbortController()
+        current = controller
+        const result = await fn(...args, controller.signal)
+        controller.signal.throwIfAborted()
+        return result
+      }
+      wrapped.cancel = () => current?.abort()
+      return wrapped
+    }
+  explain: |
+    **Два уровня защиты:**
+    - `abort()` предыдущего — освобождает сеть, если `fn` передаёт `signal` дальше в `fetch`;
+    - `throwIfAborted()` после `await` — не отдаёт устаревший ответ, даже если `fn` сигнал проигнорировала.
+
+    **Почему `AbortError`, а не тихо.** Вызывающий должен знать, что результата не будет, — иначе его `await` вернул бы что-то несвежее. А обработчики отмены по имени `AbortError` её просто пропускают.
+
+    **В библиотеках:** TanStack Query передаёт `signal` в `queryFn` и отменяет запросы по устаревшему ключу; `useTransition` и Actions в React 19 сами отбрасывают устаревшие переходы.
+
+- key: react-search-box
+  kind: react
+  level: hard
+  title: Поиск без гонок
+  prompt: |
+    Сделайте `SearchBox({ search })`. `search(query, signal)` — асинхронная функция, возвращающая массив строк.
+    - Поле ввода с подписью «Поиск» (`<label>`). Запрос — при каждом изменении непустого (после `trim`) текста.
+    - Результаты — списком `<li>`. Пустой массив — текст «Ничего не найдено». Пустое поле — без запроса и без результатов.
+    - На экране всегда результат **последнего** запроса: предыдущий отменяется через `signal`, а его ответ, даже если пришёл, не показывается.
+    - Ошибка поиска — текст ошибки в `role="alert"`. Отмена ошибкой не считается.
+    - При размонтировании текущий запрос отменяется.
+  starter: |
+    function SearchBox({ search }) {
+      const [query, setQuery] = useState('')
+      const [results, setResults] = useState(null)
+      useEffect(() => {
+        if (query) search(query).then(setResults)
+      }, [query])
+      return (
+        <div>
+          <label>
+            Поиск <input value={query} onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          {results && (
+            <ul>
+              {results.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )
+    }
+  preview: <SearchBox search={(q, signal) => new Promise((resolve) => setTimeout(() => resolve(['react', 'redux', 'remix', 'rxjs'].filter((x) => x.includes(q.trim()))), 200 + Math.random() * 400))} />
+  hints:
+    - 'Каждому запуску эффекта — свой `AbortController`. Очистка эффекта вызывает `abort()`: она срабатывает и при смене `query`, и при размонтировании.'
+    - 'Перед `setResults` проверьте `controller.signal.aborted`: функция `search` может проигнорировать сигнал и ответить.'
+    - 'В обработчике ошибки: `if (error.name !== "AbortError") setError(error.message)`. И сбрасывайте ошибку при новом запросе.'
+    - 'Пустой запрос: `if (!query.trim()) { setResults(null); return }` — до создания контроллера.'
+  tests: |
+    // Поиск, которым управляет тест. Сигнал он сам не слушает — как API без поддержки отмены.
+    const makeSearch = () => {
+      const calls = []
+      const search = (query, signal) => {
+        const d = deferred()
+        calls.push({ query, signal, d })
+        return d.promise
+      }
+      return { search, calls }
+    }
+
+    test('предыдущий запрос отменяется через signal', async () => {
+      const user = userEvent.setup()
+      const { search, calls } = makeSearch()
+      render(<SearchBox search={search} />)
+      await user.type(screen.getByLabelText('Поиск'), 're')
+      await waitFor(() => expect(calls.map((c) => c.query)).toEqual(['r', 're']))
+      expect(calls[0].signal.aborted).toBe(true)
+      expect(calls[1].signal.aborted).toBe(false)
+    })
+    test('показывает ответ последнего запроса, даже если старый ответил позже', async () => {
+      const user = userEvent.setup()
+      const { search, calls } = makeSearch()
+      render(<SearchBox search={search} />)
+      await user.type(screen.getByLabelText('Поиск'), 're')
+      await waitFor(() => expect(calls).toHaveLength(2))
+      calls[1].d.resolve(['react'])
+      await waitFor(() => expect(screen.getByText('react')).toBeInTheDocument())
+      calls[0].d.resolve(['regexp'])
+      await sleep(30)
+      expect(screen.queryByText('regexp')).toBeNull()
+      expect(screen.getByText('react')).toBeInTheDocument()
+    })
+    test('пустой результат и пустое поле', async () => {
+      const user = userEvent.setup()
+      const { search, calls } = makeSearch()
+      render(<SearchBox search={search} />)
+      const input = screen.getByLabelText('Поиск')
+      await user.type(input, 'x')
+      calls[0].d.resolve([])
+      await waitFor(() => expect(screen.getByText('Ничего не найдено')).toBeInTheDocument())
+      await user.clear(input)
+      await waitFor(() => expect(screen.queryByText('Ничего не найдено')).toBeNull())
+      expect(calls).toHaveLength(1)
+    })
+    test('ошибка показывается, отмена — нет', async () => {
+      const user = userEvent.setup()
+      const { search, calls } = makeSearch()
+      render(<SearchBox search={search} />)
+      await user.type(screen.getByLabelText('Поиск'), 'ab')
+      await waitFor(() => expect(calls).toHaveLength(2))
+      calls[0].d.reject(new DOMException('Aborted', 'AbortError'))
+      calls[1].d.reject(new Error('Сервис поиска недоступен'))
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Сервис поиска недоступен'))
+      expect(screen.getAllByRole('alert')).toHaveLength(1)
+    })
+    test('при размонтировании запрос отменяется', async () => {
+      const user = userEvent.setup()
+      const { search, calls } = makeSearch()
+      const view = render(<SearchBox search={search} />)
+      await user.type(screen.getByLabelText('Поиск'), 'a')
+      await waitFor(() => expect(calls).toHaveLength(1))
+      view.unmount()
+      expect(calls[0].signal.aborted).toBe(true)
+    })
+  solution: |
+    function SearchBox({ search }) {
+      const [query, setQuery] = useState('')
+      const [results, setResults] = useState(null)
+      const [error, setError] = useState(null)
+
+      useEffect(() => {
+        if (!query.trim()) {
+          setResults(null)
+          setError(null)
+          return
+        }
+        const controller = new AbortController()
+        setError(null)
+        search(query, controller.signal).then(
+          (found) => {
+            if (!controller.signal.aborted) setResults(found)
+          },
+          (failure) => {
+            if (!controller.signal.aborted && failure.name !== 'AbortError') setError(failure.message)
+          },
+        )
+        return () => controller.abort()
+      }, [query, search])
+
+      return (
+        <div>
+          <label>
+            Поиск <input value={query} onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          {error && <p role="alert">{error}</p>}
+          {results &&
+            (results.length ? (
+              <ul>
+                {results.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>Ничего не найдено</p>
+            ))}
+        </div>
+      )
+    }
+  explain: |
+    **Очистка эффекта — место для отмены.** React вызывает её перед следующим запуском (сменился `query`) и при размонтировании. Один `AbortController` на запуск эффекта — и каждый запрос отменяется ровно тогда, когда перестаёт быть нужным.
+
+    **Проверка `signal.aborted` перед `setResults`** — вторая линия защиты. Если API не умеет отмену и всё равно ответил, устаревший ответ не попадёт на экран. Это тот же приём, что флаг `ignore` в документации React.
+
+    **StrictMode** в разработке запускает эффект дважды: первый запрос сразу отменится. Без очистки вы увидели бы два запроса и, возможно, гонку — StrictMode специально показывает такие ошибки.
+
+    **В проекте** этот код обычно пишет библиотека: TanStack Query хранит ответы по ключу `['search', query]`, передаёт `signal` в `queryFn` и сама отбрасывает устаревшие ответы. Писать вручную стоит, чтобы понимать, что она делает.

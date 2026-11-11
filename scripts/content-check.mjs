@@ -46,8 +46,13 @@ export async function runOutput(code) {
   const sandbox = {
     console: { log: (...args) => lines.push(args.map(String).join(' ')) },
     setTimeout,
+    clearTimeout,
     queueMicrotask,
     Promise,
+    // Отмена — часть браузерного окружения, задания про AbortController должны запускаться как у ученика.
+    AbortController,
+    AbortSignal,
+    DOMException,
   }
   vm.runInNewContext(code, sandbox, { timeout: 1000 })
   await new Promise((resolve) => setTimeout(resolve, 100))

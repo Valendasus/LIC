@@ -145,6 +145,10 @@ describe('проверка контента', () => {
     expect(errors).toEqual([expect.stringMatching(/^a\.practice\.yaml: ошибка YAML — /)])
   })
 
+  it('«что выведет»: в песочнице есть таймеры и отмена', async () => {
+    expect(await runOutput("const c = new AbortController(); c.abort(); const t = setTimeout(() => console.log('нет')); clearTimeout(t); console.log(c.signal.reason instanceof DOMException, AbortSignal.abort().aborted)")).toEqual(['true true'])
+  })
+
   it('«что выведет» ждёт асинхронный вывод', async () => {
     expect(await runOutput("setTimeout(() => console.log('t')); Promise.resolve().then(() => console.log('p')); console.log('s')")).toEqual(['s', 'p', 't'])
   })
