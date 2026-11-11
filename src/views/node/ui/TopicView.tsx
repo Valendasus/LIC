@@ -2,13 +2,14 @@ import { ArrowLeft, ArrowRight, Check, Circle, CircleDot, Code2, ListChecks } fr
 import Link from 'next/link'
 import type { ComponentType, ReactNode } from 'react'
 import { H3, splitLesson, type SplitLesson } from '@/entities/lesson'
-import { KIND_LABEL, LEVEL_LABEL } from '@/entities/practice-item'
+import { KIND_LABEL, LEVEL_LABEL, LEVEL_TONE, type PracticeItem } from '@/entities/practice-item'
 import type { TopicPractice, TopicStatus, TopicSteps } from '@/entities/review'
 import type { TreeNode } from '@/entities/topic'
 import { GRADE_LABEL, hrefOf } from '@/entities/topic/server'
 import { LevelPicker } from '@/features/set-level'
 import { cn, count } from '@/shared/lib'
 import { Badge, ButtonLink, Card, EmptyState, StepTabs, type Step } from '@/shared/ui'
+import { LessonPractice } from './LessonPractice'
 
 export interface LessonModule {
   Lesson: ComponentType<{ components?: Record<string, unknown> }>
@@ -25,6 +26,8 @@ interface Props {
   siblings: TreeNode[]
   statuses: Map<string, TopicStatus>
   next: TreeNode | null
+  /** Задания темы — для ссылок <Practice id="…" /> в уроке. */
+  items?: PracticeItem[]
 }
 
 const STATUS_ICON: Record<TopicStatus, { icon: ReactNode; label: string }> = {
@@ -34,18 +37,18 @@ const STATUS_ICON: Record<TopicStatus, { icon: ReactNode; label: string }> = {
   soon: { icon: <span aria-hidden className="block size-[15px] text-center leading-[15px] text-subtle">·</span>, label: 'готовится' },
 }
 
-const DIFFICULTY_TONE = { warmup: 'neutral', easy: 'good', medium: 'info', hard: 'warn', boss: 'bad' } as const
-
 /**
  * Тема — главный экран обучения (docs/DESIGN.md, 4.4): три шага вкладками, слева соседние темы модуля,
  * справа оглавление шага, внизу шага — следующее действие.
  */
 export function TopicView(props: Props) {
-  const { node, lesson } = props
+  const { node, lesson, items = [] } = props
   if (!lesson) return <TopicLayout {...props} split={null} />
+  const byKey = new Map(items.map((item) => [item.id.split('#')[1], item]))
+  const Practice = ({ id }: { id: string }) => <LessonPractice id={id} item={byKey.get(id)} topicId={node.id} />
   // Урок раскладывается по шагам при рендере MDX: wrapper получает всё содержимое урока.
   const Wrapper = ({ children }: { children: ReactNode }) => <TopicLayout {...props} split={splitLesson(children, (element) => element.type === H3 || element.type === 'h3')} />
-  return <lesson.Lesson key={node.id} components={{ wrapper: Wrapper }} />
+  return <lesson.Lesson key={node.id} components={{ wrapper: Wrapper, Practice }} />
 }
 
 function TopicLayout({ node, trail, lesson, steps, practice, level, siblings, statuses, next, split }: Props & { split: SplitLesson | null }) {
@@ -85,7 +88,7 @@ function TopicLayout({ node, trail, lesson, steps, practice, level, siblings, st
                 <span aria-label={task.solved ? 'решена' : 'не решена'}>{task.solved ? <Check aria-hidden size={16} strokeWidth={2.5} className="text-good" /> : <Code2 aria-hidden size={16} className="text-muted" />}</span>
                 <span className="min-w-0 flex-1 font-medium">{task.title}</span>
                 <span className="text-xs text-muted">{KIND_LABEL[task.kind]}</span>
-                <Badge tone={DIFFICULTY_TONE[task.level]}>{LEVEL_LABEL[task.level]}</Badge>
+                <Badge tone={LEVEL_TONE[task.level]}>{LEVEL_LABEL[task.level]}</Badge>
               </li>
             ))}
           </ul>

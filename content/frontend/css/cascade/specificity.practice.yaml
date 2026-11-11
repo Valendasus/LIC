@@ -274,3 +274,166 @@
     **Где проверить себя:** спецификация Selectors Level 4, раздел «Calculating a selector’s specificity», и DevTools — при наведении на селектор во вкладке Styles показывается его специфичность.
 
     **Чего здесь нет** ради простоты: `:nth-child(2n of .x)` добавляет специфичность аргумента `of`, а экранированные символы вроде `.a\:b` читаются как часть имени.
+
+- key: quiz-important-layers
+  kind: quiz
+  question: 'Слои объявлены как `@layer base, components;`. В обоих есть `color: red !important` и `color: blue !important` для одного элемента: в `base` — красный, в `components` — синий. Какой цвет победит?'
+  options:
+    - text: Красный — для `!important` порядок слоёв обращается, и ранний слой сильнее
+      correct: true
+    - text: Синий — более поздний слой всегда сильнее
+      why: Это верно для обычных объявлений. Для `!important` порядок обратный, чтобы базовый слой мог защитить важные правила.
+    - text: Победит правило с большей специфичностью, слои не важны
+      why: Слои сравниваются раньше специфичности.
+    - text: Синий — потому что `!important` в последнем слое не перебить
+  explain: 'Обычные объявления: поздний слой сильнее раннего, а стили вне слоёв сильнее любых слоёв. С `!important` всё наоборот: ранний слой сильнее позднего, а важные стили в слоях сильнее важных стилей вне слоёв.'
+
+- key: quiz-unset
+  kind: quiz
+  question: 'Что сделает `color: unset` у элемента, родитель которого `color: green`?'
+  options:
+    - text: Станет зелёным — для наследуемого свойства `unset` работает как `inherit`
+      correct: true
+    - text: Станет чёрным — `unset` всегда сбрасывает к начальному значению
+      why: Так ведёт себя `initial`. `unset` для наследуемых свойств наследует, для ненаследуемых — сбрасывает.
+    - text: Возьмёт значение из стилей браузера по умолчанию
+      why: Так ведёт себя `revert`.
+    - text: Объявление будет проигнорировано
+  explain: '`inherit` — значение родителя. `initial` — начальное значение свойства из спецификации. `unset` — `inherit` для наследуемых свойств (`color`, `font-*`), `initial` для остальных. `revert` — откат к стилям браузера.'
+
+- key: quiz-not-specificity
+  kind: quiz
+  question: Какая специфичность у селектора `:not(#menu, .item)`?
+  options:
+    - text: '(1, 0, 0) — берётся самый сильный аргумент'
+      correct: true
+    - text: '(0, 1, 0) — `:not` считается как псевдокласс'
+      why: Сам `:not` не добавляет специфичности, её задаёт аргумент.
+    - text: '(1, 1, 0) — аргументы складываются'
+      why: Аргументы не складываются, выбирается самый сильный.
+    - text: '(0, 0, 0) — как у `:where`'
+      why: Нулевая специфичность только у `:where()`.
+  explain: '`:is()`, `:not()` и `:has()` берут специфичность самого сильного аргумента из списка. `:where()` всегда даёт ноль — поэтому им удобно писать сбрасываемые базовые стили.'
+
+- key: order-cascade-full
+  kind: order
+  prompt: Расставьте критерии каскада в порядке, в котором браузер их сравнивает, когда два объявления спорят за одно свойство.
+  steps:
+    - Источник и важность (стили браузера, автора, !important)
+    - Встроенный стиль в атрибуте style
+    - Каскадные слои @layer
+    - Специфичность селектора
+    - Близость корня @scope
+    - Порядок появления в коде
+  explain: Следующий критерий сравнивается, только если по предыдущему ничья. Поэтому слой сильнее специфичности, а порядок в коде решает в самую последнюю очередь.
+
+- key: code-beats
+  kind: code
+  level: easy
+  title: Кто сильнее с учётом style и !important
+  prompt: |
+    Объявление описано объектом `{ important, inline, specificity, order }`: `important` — есть ли `!important`, `inline` — объявлено ли в атрибуте `style`, `specificity` — тройка `[a, b, c]`, `order` — номер в коде.
+
+    Напишите `beats(x, y)`: `true`, если `x` побеждает `y`. Слоёв нет, всё — стили автора.
+    - `!important` сильнее обычного.
+    - При равной важности `style` сильнее любого селектора.
+    - Дальше — специфичность, потом порядок: позже — сильнее.
+  starter: |
+    function beats(x, y) {
+      return x.order > y.order
+    }
+  hints:
+    - 'Сравнивайте по критериям сверху вниз и выходите на первом, где есть разница.'
+  tests: |
+    const rule = (extra) => ({ important: false, inline: false, specificity: [0, 0, 1], order: 1, ...extra })
+    test('!important сильнее style', () => {
+      expect(beats(rule({ important: true }), rule({ inline: true, order: 2 }))).toBe(true)
+    })
+    test('style сильнее id', () => {
+      expect(beats(rule({ inline: true }), rule({ specificity: [1, 0, 0], order: 2 }))).toBe(true)
+    })
+    test('специфичность важнее порядка', () => {
+      expect(beats(rule({ specificity: [0, 1, 0] }), rule({ order: 9 }))).toBe(true)
+      expect(beats(rule({ order: 9 }), rule({ specificity: [0, 1, 0] }))).toBe(false)
+    })
+    test('при прочих равных — позже сильнее', () => {
+      expect(beats(rule({ order: 2 }), rule({ order: 1 }))).toBe(true)
+      expect(beats(rule({ order: 1 }), rule({ order: 2 }))).toBe(false)
+    })
+  solution: |
+    function beats(x, y) {
+      if (x.important !== y.important) return x.important
+      if (x.inline !== y.inline) return x.inline
+      for (let i = 0; i < 3; i++) if (x.specificity[i] !== y.specificity[i]) return x.specificity[i] > y.specificity[i]
+      return x.order > y.order
+    }
+  explain: |
+    Каскад — это сравнение по критериям по очереди: следующий критерий важен, только если по предыдущему ничья. Поэтому `!important` перебивает `style`, `style` перебивает любой id, а порядок в коде решает в последнюю очередь.
+
+    **На собеседовании** спросят, чем перебить inline-стиль: только `!important` в стилях. Правильный ответ — не перебивать, а убрать inline-стиль или вынести его в класс.
+
+- key: code-cascade-winner
+  kind: code
+  level: medium
+  title: Победитель каскада со слоями
+  prompt: |
+    Напишите `cascadeWinner(declarations, layers)`. Каждое объявление — `{ value, important, layer, specificity, order }`: `layer` — имя слоя или `null`, если объявление вне слоёв. `layers` — имена слоёв в порядке объявления (`@layer reset, base, components`). Верните `value` победителя.
+
+    Правила:
+    - `!important` сильнее обычного.
+    - Обычные: вне слоёв сильнее любого слоя; из слоёв сильнее более поздний.
+    - Важные: наоборот — слой сильнее, чем вне слоёв; из слоёв сильнее более ранний.
+    - Дальше — специфичность, потом порядок: позже — сильнее.
+  starter: |
+    function cascadeWinner(declarations, layers) {
+      return declarations.at(-1).value
+    }
+  hints:
+    - 'Сделайте функцию «вес слоя»: для обычных объявлений вне слоёв — больше всех, для важных — меньше всех.'
+    - 'Для обычных вес слоя — его индекс в `layers`, для важных — минус индекс. Вне слоёв: `Infinity` для обычных и `-Infinity` для важных.'
+    - 'Победитель — максимум по цепочке сравнений: важность, вес слоя, специфичность, порядок.'
+  tests: |
+    const d = (value, extra) => ({ value, important: false, layer: null, specificity: [0, 0, 1], order: 1, ...extra })
+    const layers = ['reset', 'base', 'components']
+    test('вне слоёв сильнее слоя, даже со слабым селектором', () => {
+      expect(cascadeWinner([d('слой', { layer: 'components', specificity: [1, 0, 0] }), d('вне слоёв')], layers)).toBe('вне слоёв')
+    })
+    test('из слоёв сильнее поздний', () => {
+      expect(cascadeWinner([d('components', { layer: 'components', order: 1 }), d('base', { layer: 'base', order: 2 })], layers)).toBe('components')
+    })
+    test('!important: ранний слой сильнее позднего и сильнее стилей вне слоёв', () => {
+      const result = cascadeWinner([
+        d('вне слоёв', { important: true, order: 3 }),
+        d('components', { important: true, layer: 'components', order: 2 }),
+        d('reset', { important: true, layer: 'reset', order: 1 }),
+      ], layers)
+      expect(result).toBe('reset')
+    })
+    test('!important сильнее обычного', () => {
+      expect(cascadeWinner([d('важное', { important: true, layer: 'components' }), d('обычное', { specificity: [1, 0, 0], order: 2 })], layers)).toBe('важное')
+    })
+    test('в одном слое — специфичность, потом порядок', () => {
+      expect(cascadeWinner([d('класс', { layer: 'base', specificity: [0, 1, 0] }), d('тип', { layer: 'base', order: 2 })], layers)).toBe('класс')
+      expect(cascadeWinner([d('первое', { layer: 'base' }), d('второе', { layer: 'base', order: 2 })], layers)).toBe('второе')
+    })
+  solution: |
+    function cascadeWinner(declarations, layers) {
+      const layerWeight = (decl) => {
+        if (decl.layer === null) return decl.important ? -Infinity : Infinity
+        const index = layers.indexOf(decl.layer)
+        return decl.important ? -index : index
+      }
+      const stronger = (x, y) => {
+        if (x.important !== y.important) return x.important
+        if (layerWeight(x) !== layerWeight(y)) return layerWeight(x) > layerWeight(y)
+        for (let i = 0; i < 3; i++) if (x.specificity[i] !== y.specificity[i]) return x.specificity[i] > y.specificity[i]
+        return x.order > y.order
+      }
+      return declarations.reduce((best, decl) => (stronger(decl, best) ? decl : best)).value
+    }
+  explain: |
+    **Главная идея — «вес слоя»,** который переворачивается для `!important`. Так одна функция сравнения покрывает оба случая.
+
+    **Зачем обращение для `!important`.** Базовый слой (сброс, дизайн-система) объявляется первым. Обычные его правила легко переопределить в поздних слоях. Но если базовый слой пометил что-то как важное, например доступность фокуса, поздние слои не должны это ломать — поэтому для важных порядок обратный.
+
+    **На практике:** слои дают управлять каскадом порядком слоёв, а не гонкой специфичности и `!important`. Стили сторонних библиотек кладут в ранний слой — и свои правила побеждают их без усилий.

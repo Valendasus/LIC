@@ -1,5 +1,5 @@
 import { describe, expect as vexpect, it } from 'vitest'
-import { deepEqual, expect, isSolved, runCode, show, sleep, spy } from '@/features/solve-task/lib/code-runner'
+import { concurrency, deepEqual, deferred, expect, fakeObserver, fakeWindows, fakeWorker, flaky, isSolved, runCode, show, sleep, spy } from '@/features/solve-task/lib/code-runner'
 
 /** Ошибка проверки или undefined, если проверка прошла. */
 function failure(check: () => void) {
@@ -277,5 +277,114 @@ describe('проверки элементов DOM', () => {
     const self = el()
     ;(self as Record<string, unknown>).ownerDocument = { activeElement: self }
     vexpect(failure(() => expect(self).not.toHaveFocus())).toBe('Не ожидался фокус на <button> «Отправить   форму»')
+  })
+})
+
+describe('помощники для тестов задач', () => {
+  it('доступны в тестах задачи по именам', async () => {
+    const result = await runCode('', "test('есть', () => expect([deferred, flaky, concurrency, fakeWorker, fakeWindows, fakeObserver].every((f) => typeof f === 'function')).toBe(true))")
+    vexpect(isSolved(result)).toBe(true)
+  })
+
+  it('deferred: внешние resolve и reject и признак завершения', async () => {
+    const ok = deferred<number>()
+    vexpect(ok.settled).toBe(false)
+    ok.resolve(1)
+    vexpect(ok.settled).toBe(true)
+    await vexpect(ok.promise).resolves.toBe(1)
+    const fail = deferred()
+    fail.reject(new Error('нет'))
+    await vexpect(fail.promise).rejects.toThrow('нет')
+    vexpect(fail.settled).toBe(true)
+  })
+
+  it('flaky: сначала сбои по номерам вызовов, потом значение', async () => {
+    const fn = flaky(2, 'ок')
+    await vexpect(fn('a')).rejects.toThrow('сбой 1')
+    await vexpect(fn()).rejects.toThrow('сбой 2')
+    await vexpect(fn()).resolves.toBe('ок')
+    vexpect(fn.calls).toEqual([['a'], [], []])
+  })
+
+  it('concurrency: пик одновременных вызовов, счётчик уменьшается и при ошибке', async () => {
+    const stats = concurrency()
+    const ok = stats.track(async (ms: number) => sleep(ms))
+    const bad = stats.track(async () => {
+      throw new Error('x')
+    })
+    await Promise.all([ok(5), ok(5), bad().catch(() => {})])
+    vexpect(stats.peak).toBe(3)
+    vexpect(stats.active).toBe(0)
+  })
+
+  it('fakeWorker: сообщения в обе стороны — копией и задачей; terminate останавливает', async () => {
+    const { worker, scope, posted } = fakeWorker()
+    const data = { n: 1 }
+    const inWorker: unknown[] = []
+    scope.onmessage = (event) => {
+      inWorker.push(event.data)
+      scope.postMessage((event.data as { n: number }).n * 2)
+    }
+    const replies: unknown[] = []
+    const listener = (event: { data: unknown }) => replies.push(event.data)
+    worker.addEventListener('message', listener)
+    worker.addEventListener('error', listener)
+    worker.postMessage(data)
+    vexpect(inWorker).toEqual([])
+    await sleep(5)
+    vexpect(inWorker).toEqual([{ n: 1 }])
+    vexpect(inWorker[0]).not.toBe(data)
+    vexpect(replies).toEqual([2])
+    worker.removeEventListener('error', listener)
+    worker.removeEventListener('message', listener)
+    worker.postMessage({ n: 2 })
+    await sleep(5)
+    vexpect(replies).toEqual([2])
+    worker.terminate()
+    worker.postMessage({ n: 3 })
+    scope.postMessage('после остановки')
+    await sleep(5)
+    vexpect(inWorker).toHaveLength(2)
+    vexpect(posted).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }])
+  })
+
+  it('fakeWindows: доставка только на подходящий origin, с origin и source отправителя', async () => {
+    const { a, b } = fakeWindows()
+    const toB: unknown[] = []
+    const toA: unknown[] = []
+    b.addEventListener('message', (event) => toB.push([event.data, event.origin, event.source === a]))
+    a.onmessage = (event) => toA.push([event.data, event.origin])
+    a.postMessage('чужому', 'https://evil.example')
+    a.postMessage('точно', 'https://widget.example')
+    a.postMessage('всем', '*')
+    b.postMessage('ответ', a.origin)
+    await sleep(5)
+    vexpect(toB).toEqual([
+      ['точно', 'https://app.example', true],
+      ['всем', 'https://app.example', true],
+    ])
+    vexpect(toA).toEqual([['ответ', 'https://widget.example']])
+    vexpect(fakeWindows('https://x', 'https://y').b.origin).toBe('https://y')
+  })
+
+  it('fakeObserver: trigger вызывает колбэки наблюдающих экземпляров', () => {
+    const io = fakeObserver()
+    const seen: unknown[] = []
+    const first = new io.Observer((entries, observer) => seen.push([entries[0], observer === first]), { threshold: 1 })
+    const second = new io.Observer(() => seen.push('второй'))
+    const el = { id: 'el' }
+    first.observe(el)
+    second.observe(el)
+    vexpect(io.trigger(el, { isIntersecting: true })).toBe(2)
+    second.unobserve(el)
+    vexpect(io.trigger(el)).toBe(1)
+    first.disconnect()
+    vexpect(io.instances[0].disconnected).toBe(true)
+    vexpect(io.trigger(el)).toBe(0)
+    first.observe(el)
+    vexpect(io.instances[0].disconnected).toBe(false)
+    vexpect(first.takeRecords()).toEqual([])
+    vexpect(io.instances[0].options).toEqual({ threshold: 1 })
+    vexpect(seen).toEqual([[{ target: el, isIntersecting: true }, true], 'второй', [{ target: el }, true]])
   })
 })

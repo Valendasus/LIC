@@ -107,95 +107,23 @@ button.addEventListener('click', () => {
 
 ## Implement
 
-<Task level="warmup" title="Порядок вывода: промис и таймер">
+Начните с предсказаний: проговорите порядок вслух, потом откройте ответ.
 
-```js
-setTimeout(() => console.log('A'))
-Promise.resolve().then(() => console.log('B'))
-queueMicrotask(() => console.log('C'))
-console.log('D')
-```
+<Practice id="out-basic" />
 
-<Hints hints={['Сначала синхронный код, потом все микрозадачи в порядке постановки, потом задачи.']}>
+<Practice id="out-nested" />
 
-**D, B, C, A.** `then` и `queueMicrotask` — обе микрозадачи, выполняются в порядке постановки в очередь.
+<Practice id="out-await" />
 
-</Hints>
-</Task>
+<Practice id="quiz-yield" />
 
-<Task level="easy" title="Вложенные очереди">
+Теперь код. Задачи решаются в редакторе с тестами.
 
-```js
-Promise.resolve().then(() => {
-  console.log(1)
-  setTimeout(() => console.log(2))
-  Promise.resolve().then(() => console.log(3))
-})
-setTimeout(() => console.log(4))
-```
+<Practice id="code-with-timeout" />
 
-<Hints hints={['Микрозадача, добавленная из микрозадачи, выполняется в ту же контрольную точку.', 'Какой из двух таймеров поставлен в очередь раньше?']}>
+<Practice id="code-map-limit" />
 
-**1, 3, 4, 2.** Очередь микрозадач опустошается полностью, включая новую с `3`. Таймер с `4` поставлен при выполнении скрипта, а таймер с `2` — позже, из микрозадачи.
-
-</Hints>
-</Task>
-
-<Task level="medium" title="await и цепочки">
-
-```js
-async function first() {
-  console.log('f1')
-  await second()
-  console.log('f2')
-}
-async function second() {
-  console.log('s')
-}
-setTimeout(() => console.log('t'))
-first()
-Promise.resolve().then(() => console.log('p'))
-console.log('end')
-```
-
-<Hints hints={['first и second выполняются синхронно до первого await.', 'Продолжение после await встаёт в очередь микрозадач в момент, когда second уже выполнилась.', 'Кто попадает в очередь микрозадач раньше: продолжение first или then на следующей строке?']}>
-
-**f1, s, end, f2, p, t.** `second()` синхронно печатает `s` и возвращает уже выполненный промис. Продолжение `first` встаёт в очередь микрозадач раньше, чем `then` со следующей строки.
-
-</Hints>
-</Task>
-
-<Task level="hard" title="Обработка списка без заморозки">
-
-Есть `items` на 200 000 элементов и функция `process(item)`, которая выполняется примерно за 0,01 мс. Напишите `processAll(items, onProgress)`, которая обрабатывает всё, не создавая задач длиннее 50 мс, и сообщает прогресс в процентах. Индикатор прогресса на странице должен обновляться.
-
-<Hints hints={['Выполнять всё одним циклом нельзя: 200 000 × 0,01 мс — это около 2 секунд в одной задаче.', 'Разбейте работу на порции и между ними уступайте поток. Какой способ уступить действительно даёт браузеру отрисовать кадр?', 'Размер порции лучше считать по времени, а не по количеству: обрабатывайте, пока не прошло, например, 10 мс (performance.now()).', 'Уступайте через новую задачу: scheduler.yield(), если он есть, иначе setTimeout.']}>
-
-```js
-const yieldToMain = () =>
-  globalThis.scheduler?.yield
-    ? scheduler.yield()
-    : new Promise((resolve) => setTimeout(resolve))
-
-async function processAll(items, onProgress) {
-  let i = 0
-  while (i < items.length) {
-    const start = performance.now()
-    while (i < items.length && performance.now() - start < 10) {
-      process(items[i++])
-    }
-    onProgress(Math.round((i / items.length) * 100))
-    await yieldToMain()
-  }
-}
-```
-
-**Разбор.** Порция ограничена по времени (10 мс), поэтому на медленном устройстве порции станут меньше, а не длиннее. Между порциями — новая задача, и браузер успевает обработать ввод и отрисовать прогресс. Если заменить `yieldToMain` на `await Promise.resolve()`, прогресс не будет обновляться до самого конца: это микрозадача.
-
-**А если** работу нужно отменить (пользователь ушёл со страницы)? Передайте `AbortSignal` и проверяйте `signal.aborted` после каждой порции.
-
-</Hints>
-</Task>
+<Practice id="code-process-all" />
 
 ## Confirm
 

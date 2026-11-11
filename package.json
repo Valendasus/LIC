@@ -13,6 +13,8 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "content:check": "node scripts/check-content.mjs",
+    "content:run": "node scripts/run-output.mjs",
+    "new:topic": "node scripts/new-topic.mjs",
     "postinstall": "prisma generate",
     "test:e2e": "playwright test",
     "test": "vitest run",

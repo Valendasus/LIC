@@ -298,6 +298,20 @@ Promise.reject(new Error('y')).then(() => console.log('C'), () => console.log('D
 </Hints>
 </Task>
 
+Задачи с кодом решаются в редакторе с тестами:
+
+<Practice id="code-fix-chain" />
+
+<Practice id="code-promisify" />
+
+<Practice id="code-retry" />
+
+<Practice id="code-share-in-flight" />
+
+<Practice id="code-my-promise" />
+
+И задача на проектирование — словами и кодом, без автопроверки.
+
 <Task level="hard" title="Спроектировать загрузку с повтором">
 
 Форма отправляет заказ. Сеть иногда сбоит, сервер иногда отвечает 503. Опишите словами и кодом, как повторять запрос, — функция `submitOrder(order)`:

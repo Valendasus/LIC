@@ -52,8 +52,8 @@ test('дерево: специальность → блок → модуль →
 })
 
 test('лестница подсказок открывается по одной ступени, решение — отдельно', async ({ page }) => {
-  await page.goto('/frontend/javascript/scope/closures#implement')
-  const task = page.locator('section', { hasText: 'debounce с cancel и flush' })
+  await page.goto('/frontend/javascript/async/promises#implement')
+  const task = page.locator('section', { hasText: 'Спроектировать загрузку с повтором' })
   await expect(task.getByText('Подсказка 1.')).toHaveCount(0)
   await task.getByRole('button', { name: 'Подсказка 1 из 4' }).click()
   await expect(task.getByText('Подсказка 1.')).toBeVisible()
@@ -63,8 +63,23 @@ test('лестница подсказок открывается по одной
   await expect(task.getByRole('button', { name: /Подсказка \d из 4/ })).toHaveCount(0)
   await expect(task.locator('pre')).toHaveCount(0)
   await task.getByRole('button', { name: 'Показать решение' }).click()
-  await expect(task.locator('pre').first()).toContainText('function debounce')
+  await expect(task.locator('pre').first()).toContainText('async function submitOrder')
   await expect(task.getByRole('button', { name: 'Показать решение' })).toHaveCount(0)
+})
+
+test('задания из практики прямо в уроке: ответ под кнопкой, задача — ссылкой в редактор', async ({ page }) => {
+  await page.goto('/frontend/javascript/async/event-loop#implement')
+  const output = page.getByRole('region', { name: 'Что выведет код' }).first()
+  await expect(output.locator('pre')).toHaveCount(1)
+  await output.getByRole('button', { name: 'Показать ответ' }).click()
+  await expect(output.locator('pre').nth(1)).toHaveText('D\nB\nC\nA')
+  const quiz = page.getByRole('region', { name: 'Вопрос' })
+  await quiz.getByRole('button', { name: 'Показать ответ' }).click()
+  await expect(quiz.getByText('Верный ответ:')).toBeVisible()
+  const task = page.getByRole('region', { name: 'Задача: Промис с таймаутом' })
+  await task.getByRole('link', { name: /Решить в редакторе/ }).click()
+  await expect(page).toHaveURL(/\/practice\?scope=frontend%2Fjavascript%2Fasync%2Fevent-loop&kinds=code&mode=free/)
+  await expect(page.getByRole('button', { name: /Запустить тесты/ })).toBeVisible()
 })
 
 test('вопрос на вспоминание раскрывается по клику', async ({ page }) => {

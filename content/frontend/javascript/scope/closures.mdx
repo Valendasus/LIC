@@ -137,157 +137,23 @@ function Timer() {
 
 ## Implement
 
-<Task level="warmup" title="Что выведет?">
+Начните с предсказаний, потом — код в редакторе.
 
-```js
-let x = 1
-function show() {
-  console.log(x)
-}
-function run() {
-  let x = 2
-  show()
-}
-run()
-```
+<Practice id="out-lexical" />
 
-<Hints hints={['Важно, где функция создана, а не где вызвана.']}>
+<Practice id="out-shared-env" />
 
-Выведет **1**. Функция `show` создана на верхнем уровне и ищет `x` там. Переменная `x` внутри `run` для неё не видна: область видимости лексическая, а не динамическая.
+<Practice id="out-loop-var-let" />
 
-</Hints>
-</Task>
+<Practice id="code-counter" />
 
-<Task level="warmup" title="Два счётчика">
+<Practice id="code-once" />
 
-```js
-function make() {
-  let n = 0
-  return { inc: () => ++n, get: () => n }
-}
-const a = make()
-const b = a
-const c = make()
-a.inc(); b.inc(); c.inc()
-console.log(a.get(), b.get(), c.get())
-```
+<Practice id="code-memoize" />
 
-<Hints hints={['b — это не новый вызов make, а та же ссылка, что и a.']}>
+<Practice id="code-debounce" />
 
-Выведет **2 2 1**. `a` и `b` — один объект с одним окружением. `c` создан отдельным вызовом, у него свой `n`.
-
-</Hints>
-</Task>
-
-<Task level="easy" title="Счётчик с ограничением">
-
-Напишите `createCounter(limit)`, которая возвращает объект с методами `inc()`, `dec()`, `reset()` и `value()`. Значение не выходит за пределы от 0 до `limit`. Снаружи поменять значение напрямую нельзя.
-
-<Hints hints={['Состояние храните в переменной внутри createCounter, а не в свойстве объекта.', 'Math.min и Math.max помогут удержать границы.']}>
-
-```js
-function createCounter(limit) {
-  let value = 0
-  return {
-    inc: () => (value = Math.min(limit, value + 1)),
-    dec: () => (value = Math.max(0, value - 1)),
-    reset: () => (value = 0),
-    value: () => value,
-  }
-}
-```
-
-Если хранить значение в свойстве объекта (`this.value`), его можно будет изменить снаружи. Замыкание делает его по-настоящему приватным.
-
-</Hints>
-</Task>
-
-<Task level="medium" title="once и memoize">
-
-1. `once(fn)` вызывает `fn` только в первый раз и затем всегда возвращает первый результат. Аргументы передаются.
-2. `memoize(fn)` кеширует результат по аргументам. Ключ по умолчанию — `JSON.stringify(args)`. Учтите, что `fn` может вернуть `undefined`, и это значение тоже нужно кешировать.
-
-<Hints hints={['В замыкании храните флаг «уже вызывали» и результат отдельно: результат может быть undefined.', 'Для memoize подойдёт Map, а проверять наличие нужно через has, а не по значению.', 'Ключ JSON.stringify не различает функции и некоторые объекты. Подумайте, как дать пользователю передать свою функцию ключа.']}>
-
-```js
-function once(fn) {
-  let called = false
-  let result
-  return (...args) => {
-    if (!called) {
-      called = true
-      result = fn(...args)
-    }
-    return result
-  }
-}
-
-function memoize(fn, getKey = (...args) => JSON.stringify(args)) {
-  const cache = new Map()
-  return (...args) => {
-    const key = getKey(...args)
-    if (!cache.has(key)) cache.set(key, fn(...args))
-    return cache.get(key)
-  }
-}
-```
-
-У `memoize` кеш растёт без ограничений. В реальном коде нужен лимит или вытеснение старых записей (LRU) — эта задача будет в теме «Map, Set, WeakMap».
-
-</Hints>
-</Task>
-
-<Task level="hard" title="debounce с cancel и flush">
-
-Напишите `debounce(fn, ms)`. Функция вызывает `fn` через `ms` миллисекунд после **последнего** вызова, с последними аргументами. У результата есть методы:
-
-- `cancel()` — отменить запланированный вызов;
-- `flush()` — выполнить запланированный вызов немедленно и вернуть его результат. Если ничего не запланировано, ничего не делать.
-
-Так работает поиск: запрос уходит, когда пользователь перестал печатать, а при уходе со страницы можно отправить последний ввод сразу.
-
-<Hints hints={['Состояние между вызовами: id таймера и последние аргументы. Оба живут в замыкании.', 'Каждый вызов сбрасывает старый таймер через clearTimeout и ставит новый.', 'Функция в JS — объект: ей можно добавить свойства debounced.cancel и debounced.flush.', 'flush должен проверить, есть ли запланированный вызов. Удобно хранить сохранённые аргументы и обнулять их после выполнения.']}>
-
-```js
-function debounce(fn, ms) {
-  let timer = null
-  let pendingArgs = null
-
-  function run() {
-    const args = pendingArgs
-    timer = null
-    pendingArgs = null
-    return fn(...args)
-  }
-
-  function debounced(...args) {
-    pendingArgs = args
-    clearTimeout(timer)
-    timer = setTimeout(run, ms)
-  }
-
-  debounced.cancel = () => {
-    clearTimeout(timer)
-    timer = null
-    pendingArgs = null
-  }
-
-  debounced.flush = () => {
-    if (pendingArgs === null) return undefined
-    clearTimeout(timer)
-    return run()
-  }
-
-  return debounced
-}
-```
-
-**Разбор.** Всё состояние живёт в замыкании `debounce`. Каждый вызов `debounce` создаёт независимый экземпляр со своим таймером. Отличие от `throttle`: debounce ждёт паузы, throttle ограничивает частоту вызовов.
-
-**А если…** нужно, чтобы первый вызов выполнялся сразу (вариант leading)? Добавьте параметр и запускайте `fn`, если таймера ещё нет.
-
-</Hints>
-</Task>
+Последняя задача — на чтение кода, без редактора.
 
 <Task level="medium" title="Почини таймер в React">
 

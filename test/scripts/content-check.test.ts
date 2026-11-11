@@ -206,6 +206,59 @@ describe('проверка контента', () => {
     ])
   })
 
+  it('наполненная тема: нормы состава по уровню, метки TODO и ссылки <Practice> в уроке', async () => {
+    const { errors } = await content({
+      's/tree.yaml': '- slug: a\n  title: A\n  grade: M\n  content: true\n  goals: ["TODO: цель", "Готовая цель"]\n',
+      's/a.mdx': `${META}\nTODO: текст\n\n<Practice id="q" />\n\n<Practice id="nope" />\n`,
+      's/a.cards.yaml': "- { key: c, type: term, front: 'TODO: термин', back: B }\n",
+      's/a.practice.yaml': '- { key: q, kind: quiz, question: Q, explain: E, options: [{ text: A, correct: true }, { text: B }] }\n',
+    })
+    expect(errors).toEqual([
+      'a.mdx: <Practice id="nope" /> — такого задания нет в a.practice.yaml',
+      'a: карточек 1, нужно не меньше 10 (M)',
+      'a: быстрых заданий (квиз, «что выведет», порядок) 1, нужно не меньше 8 (M)',
+      'a: задач с кодом 0, нужно не меньше 4 (M)',
+      'a: незаполненных меток TODO — 3',
+    ])
+  })
+
+  it('норма выполнена — сообщения только о том, чего не хватает', async () => {
+    const cards = Array.from({ length: 8 }, (_, i) => `- { key: c${i}, type: qa, front: F, back: B }`).join('\n')
+    const { errors } = await content({ 's/tree.yaml': '- { slug: a, title: A, grade: S, content: true }\n', 's/a.mdx': META, 's/a.cards.yaml': cards })
+    expect(errors).toEqual(['a: быстрых заданий (квиз, «что выведет», порядок) 0, нужно не меньше 6 (S)', 'a: задач с кодом 0, нужно не меньше 3 (S)'])
+  })
+
+  it('нормы не проверяются у темы без уровня и у ненаполненной темы', async () => {
+    const { errors } = await content({
+      's/tree.yaml': '- { slug: a, title: A, content: true }\n- { slug: b, title: B, grade: J }\n',
+      's/a.mdx': META,
+      's/b.cards.yaml': '- { key: c, type: qa, front: F, back: B }\n',
+    })
+    expect(errors).toEqual([])
+  })
+
+  it('фильтр по теме: проверяются только подходящие темы, файлы остальных не считаются лишними', async () => {
+    const files = {
+      's/tree.yaml': '- slug: a\n  title: A\n  children:\n    - { slug: b, title: B }\n    - { slug: c, title: C }\n- { slug: d, title: D }\n',
+      's/a/b.practice.yaml': "- { key: o, kind: output, code: \"console.log('x')\", answer: [x], explain: E }\n",
+      's/a/c.practice.yaml': '- { key: bad, kind: weird }\n',
+      's/d.cards.yaml': '- { key: c, type: qa, front: F, back: B }\n',
+    }
+    const only = async (filter: string) => {
+      const { checkContent: check } = await import('../../scripts/content-check.mjs')
+      await content(files)
+      return check(root, { only: filter })
+    }
+    expect(await only('a/b')).toEqual({ errors: [], stats: { leaves: 1, filled: 0, cards: 0, practice: 1 } })
+    expect((await only('s/a/b')).stats.leaves).toBe(1)
+    expect((await only('d')).stats).toEqual({ leaves: 1, filled: 0, cards: 1, practice: 0 })
+    const block = await only('a')
+    expect(block.stats.leaves).toBe(2)
+    expect(block.errors[0]).toMatch(/^a\/c\.practice\.yaml #1 \(bad\)/)
+    expect((await only('s/a')).stats.leaves).toBe(2)
+    expect((await only('nope')).stats.leaves).toBe(0)
+  })
+
   it('этапы траектории: каждый блок ровно в одном этапе', async () => {
     const tree = '- { slug: a, title: A }\n- { slug: b, title: B }\n- { slug: c, title: C }\n'
     const ok = await content({ 's/tree.yaml': tree, 's/stages.yaml': '- { title: Один, blocks: [a, b] }\n- { title: Два, blocks: [c] }\n' })

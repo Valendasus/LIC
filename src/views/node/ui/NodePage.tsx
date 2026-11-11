@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { getItems } from '@/entities/practice-item/server'
 import { getReviewCounts, getTopicPractice, getTopicStatuses, getTopicSteps } from '@/entities/review/server'
 import { getProgressMap, rollup } from '@/entities/progress/server'
 import { getCurrentUser } from '@/entities/user/server'
@@ -46,11 +47,12 @@ export async function NodePage({ params }: Props) {
   const tree = trail[0]
   const leaves = leavesOf(tree)
   const siblings = trail.at(-2)!.children
-  const [lesson, steps, practice, statuses] = await Promise.all([
+  const [lesson, steps, practice, statuses, items] = await Promise.all([
     node.content ? loadLesson(node) : null,
     getTopicSteps(user.id, node.id),
     getTopicPractice(user.id, node.id),
     getTopicStatuses(user.id, tree.slug, siblings),
+    getItems(tree.slug),
   ])
   const next = leaves[leaves.findIndex((leaf) => leaf.id === node.id) + 1] ?? null
 
@@ -65,6 +67,7 @@ export async function NodePage({ params }: Props) {
       siblings={siblings}
       statuses={statuses}
       next={next}
+      items={items.filter((item) => item.topicId === node.id)}
     />
   )
 }

@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { practice, type RawPractice } from './content'
+import { practice, topicsWithTasks, type RawPractice } from './content'
 import { expect, reviewRows, test } from './fixtures'
 
 const TOPIC = 'javascript/scope/closures'
@@ -112,7 +112,9 @@ test('ошибки решения видны: синтаксис, исключе
 
 test('все задачи всех тем решаются своим эталоном в настоящем браузере', async ({ page }) => {
   test.setTimeout(120_000)
-  for (const topic of ['javascript/scope/closures', 'javascript/async/event-loop', 'javascript/async/promises', 'css/cascade/specificity']) {
+  const topics = topicsWithTasks('code')
+  expect(topics.length).toBeGreaterThan(3)
+  for (const topic of topics) {
     const keys = practice(topic).filter((item) => item.kind === 'code')
     await page.goto(`/practice?scope=frontend/${topic}&kinds=code&mode=free`)
     for (let i = 0; i < keys.length; i++) {

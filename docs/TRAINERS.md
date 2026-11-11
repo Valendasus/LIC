@@ -177,6 +177,17 @@
 - **Автооценка** по правилу раздела 1.2. «Легко» пока не ставится: для него нужно медианное время решения, а данных о нём ещё нет.
 - **Пока нет:** вариации задачи после решения и «а если…». Последнее сейчас живёт в разборе.
 
+**Что доступно в тестах задачи.** `test(name, fn)`, `expect` (матчеры: `toBe`, `toEqual`, `toThrow`, `toBeInstanceOf`, `resolves`, `rejects` и др.), `spy(impl)` с `.calls`, `sleep(ms)`. И помощники (`src/features/solve-task/lib/code-runner.ts`):
+
+| Помощник | Что делает | Пример |
+|---|---|---|
+| `deferred()` | промис с внешними `resolve` и `reject` и признаком `settled` | управляемый ответ сервера |
+| `flaky(n, value)` | асинхронная функция: первые `n` вызовов — `Error('сбой N')`, потом `value`; `.calls` | проверка `retry` |
+| `concurrency()` | `track(fn)` оборачивает функцию, `peak` — наибольшее число одновременных вызовов | проверка пула `mapLimit` |
+| `fakeWorker()` | `{ worker, scope, posted }`: страница и воркер без настоящего воркера; данные копируются, доставка — задачей, `terminate()` | RPC поверх `postMessage` |
+| `fakeWindows(a, b)` | два окна разных origin: `postMessage(data, targetOrigin)` с `origin` и `source` | проверка `event.origin` в виджете |
+| `fakeObserver()` | `{ Observer, trigger(target, entry), instances }` вместо Intersection-, Resize- или MutationObserver | хук `useInView` |
+
 ### T6. Задачи на типы
 
 **Зачем:** TypeScript на уровне типов.

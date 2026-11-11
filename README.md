@@ -149,7 +149,7 @@ npm run dev            # http://localhost:3000
   - `medium` — 2;
   - `hard` и `boss` — 3.
 - **Черновик** хранится в браузере и удаляется после перехода к следующему элементу.
-- **Проверка контента:** `npm run content:check` запускает тесты на эталоне и на заготовке тем же модулем, что и браузер (`src/lib/code-runner.ts`). Эталон обязан пройти все тесты, заготовка — провалить хотя бы один.
+- **Проверка контента:** `npm run content:check` запускает тесты на эталоне и на заготовке тем же модулем, что и браузер (`src/features/solve-task/lib/code-runner.ts`). Эталон обязан пройти все тесты, заготовка — провалить хотя бы один.
 
 ## Задачи на типы и React-задачи
 
@@ -201,7 +201,10 @@ npm run dev            # http://localhost:3000
 ## Проверки и тесты
 
 ```bash
-npm run content:check   # дерево, карточки, задания; «что выведет» и эталоны задач реально запускаются
+npm run content:check   # дерево, карточки, задания; «что выведет» и эталоны задач реально запускаются; нормы состава и TODO
+npm run content:check -- javascript/async   # только темы с этим id или префиксом
+npm run content:run -- файл.js              # запустить фрагмент в песочнице «что выведет» (или код через stdin)
+npm run new:topic -- javascript/async/x     # заготовка новой темы
 npm run typecheck       # TypeScript
 npm run test            # юнит- и интеграционные тесты (Vitest)
 npm run test:coverage   # то же с покрытием; порог — 100% строк, ветвлений, функций и операторов
@@ -215,7 +218,8 @@ npm run test:all        # всё по порядку
 
 ## Добавить тему
 
-1. Найдите тему в `content/<специальность>/tree.yaml`, добавьте ей `content: true` и `goals`.
-2. Создайте файл по её пути, например `content/frontend/javascript/scope/closures.mdx`. Образец — уже наполненные темы.
-3. В начале файла укажите `export const meta = { verified, versions }`: когда и на каких версиях проверено.
-4. Запустите `npm run content:check`.
+Порядок — в [docs/LESSON-PLAYBOOK.md](docs/LESSON-PLAYBOOK.md). Коротко:
+
+1. `npm run new:topic -- javascript/async/async-await` — три файла с метками `TODO`, тема в дереве отмечена `content: true`. В заготовке практики — частые вопросы с собеседований и задачи соседних тем.
+2. Заполните урок, карточки и практику. Задания вставляются в урок компонентом `<Practice id="ключ" />`, а не копируются.
+3. `npm run content:check -- javascript/async/async-await` — пока есть `TODO` или не выполнены нормы состава, проверка не проходит.

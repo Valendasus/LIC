@@ -23,6 +23,9 @@ export type TaskLevel = 'warmup' | 'easy' | 'medium' | 'hard' | 'boss'
 
 export const TASK_LEVELS: TaskLevel[] = ['warmup', 'easy', 'medium', 'hard', 'boss']
 
+/** Цвет значка уровня: от нейтральной разминки до «босса». */
+export const LEVEL_TONE = { warmup: 'neutral', easy: 'good', medium: 'info', hard: 'warn', boss: 'bad' } as const satisfies Record<TaskLevel, string>
+
 export const LEVEL_LABEL: Record<TaskLevel, string> = {
   warmup: 'Разминка',
   easy: 'Лёгкая',

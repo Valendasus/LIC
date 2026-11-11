@@ -236,6 +236,176 @@ export function spy<A extends unknown[], R>(impl?: (...args: A) => R) {
 
 export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
+// ── Помощники для тестов задач (docs/TRAINERS.md) ─────────────────────────────────────────
+// Доступны в тестах любой задачи наравне с test, expect, spy и sleep: короткие тесты, а темы браузера
+// (воркеры, окна, наблюдатели) проверяются без настоящего браузера.
+
+/** Промис с внешними resolve и reject — как Promise.withResolvers, но с явным состоянием для проверок. */
+export function deferred<T = unknown>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const state = { settled: false }
+  const promise = new Promise<T>((res, rej) => {
+    resolve = (value) => {
+      state.settled = true
+      res(value)
+    }
+    reject = (reason) => {
+      state.settled = true
+      rej(reason)
+    }
+  })
+  return Object.assign(state, { promise, resolve, reject })
+}
+
+/**
+ * Асинхронная функция, которая первые failTimes вызовов отклоняется с Error(`сбой ${номер вызова}`),
+ * а потом возвращает value. calls — аргументы каждого вызова.
+ */
+export function flaky<T>(failTimes: number, value?: T) {
+  const calls: unknown[][] = []
+  const fn = async (...args: unknown[]) => {
+    calls.push(args)
+    if (calls.length <= failTimes) throw new Error(`сбой ${calls.length}`)
+    return value
+  }
+  return Object.assign(fn, { calls })
+}
+
+/** Счётчик одновременных вызовов: track(fn) оборачивает асинхронную функцию, peak — наибольшее число одновременно идущих. */
+export function concurrency() {
+  const stats = { active: 0, peak: 0 }
+  const track =
+    <A extends unknown[], R>(fn: (...args: A) => Promise<R>) =>
+    async (...args: A) => {
+      stats.active++
+      stats.peak = Math.max(stats.peak, stats.active)
+      try {
+        return await fn(...args)
+      } finally {
+        stats.active--
+      }
+    }
+  return Object.assign(stats, { track })
+}
+
+type Listener = (event: { data: unknown; origin?: string; source?: unknown }) => void
+
+/** Объект с addEventListener / removeEventListener / onmessage для событий message. */
+function messageTarget() {
+  const listeners = new Set<Listener>()
+  const target = {
+    onmessage: null as Listener | null,
+    addEventListener: (type: string, listener: Listener) => void (type === 'message' && listeners.add(listener)),
+    removeEventListener: (type: string, listener: Listener) => void (type === 'message' && listeners.delete(listener)),
+    /** Доставить событие: как в браузере — отдельной задачей и копией данных (структурированное клонирование). */
+    deliver(event: { data: unknown; origin?: string; source?: unknown }) {
+      const copy = { ...event, data: structuredClone(event.data) }
+      setTimeout(() => {
+        target.onmessage?.(copy)
+        for (const listener of [...listeners]) listener(copy)
+      }, 0)
+    },
+  }
+  return target
+}
+
+/**
+ * Пара «страница ↔ воркер» без настоящего воркера. worker.postMessage доставляет сообщение в scope (как self внутри воркера),
+ * scope.postMessage — обратно в worker. Данные копируются, доставка — отдельной задачей. После terminate() сообщения не идут.
+ */
+export function fakeWorker() {
+  let alive = true
+  const worker = messageTarget()
+  const scope = messageTarget()
+  const posted: unknown[] = []
+  return {
+    worker: Object.assign(worker, {
+      postMessage(data: unknown) {
+        posted.push(data)
+        if (alive) scope.deliver({ data })
+      },
+      terminate: () => void (alive = false),
+    }),
+    scope: Object.assign(scope, { postMessage: (data: unknown) => void (alive && worker.deliver({ data })) }),
+    /** Всё, что страница отправила в воркер. */
+    posted,
+  }
+}
+
+/**
+ * Два окна разных origin, например страница и iframe. a.postMessage(data, targetOrigin) доставляет сообщение в b,
+ * только если targetOrigin — '*' или origin окна b; событие несёт origin и source отправителя.
+ */
+export function fakeWindows(originA = 'https://app.example', originB = 'https://widget.example') {
+  type FakeWindow = ReturnType<typeof messageTarget> & { origin: string; postMessage(data: unknown, targetOrigin: string): void }
+  const make = (origin: string) => Object.assign(messageTarget(), { origin }) as FakeWindow
+  const a = make(originA)
+  const b = make(originB)
+  for (const [from, to] of [
+    [a, b],
+    [b, a],
+  ] as const) {
+    from.postMessage = (data, targetOrigin) => {
+      if (targetOrigin !== '*' && targetOrigin !== to.origin) return
+      to.deliver({ data, origin: from.origin, source: from })
+    }
+  }
+  return { a, b }
+}
+
+/**
+ * Управляемый наблюдатель вместо IntersectionObserver, ResizeObserver или MutationObserver.
+ * Observer — класс с observe / unobserve / disconnect; trigger(target, entry) вызывает колбэки тех экземпляров,
+ * что наблюдают за target. instances — все созданные экземпляры.
+ */
+export function fakeObserver() {
+  type Callback = (entries: Record<string, unknown>[], observer: unknown) => void
+  const instances: { callback: Callback; targets: Set<unknown>; options: unknown; disconnected: boolean }[] = []
+  class Observer {
+    #self: (typeof instances)[number]
+    constructor(callback: Callback, options?: unknown) {
+      this.#self = { callback, targets: new Set(), options, disconnected: false }
+      instances.push(this.#self)
+    }
+    observe(target: unknown) {
+      this.#self.disconnected = false
+      this.#self.targets.add(target)
+    }
+    unobserve(target: unknown) {
+      this.#self.targets.delete(target)
+    }
+    disconnect() {
+      this.#self.targets.clear()
+      this.#self.disconnected = true
+    }
+    takeRecords() {
+      return []
+    }
+  }
+  const observers = new WeakMap<(typeof instances)[number], Observer>()
+  const Tracked = new Proxy(Observer, {
+    construct(Target, args) {
+      const observer = new Target(...(args as [Callback, unknown]))
+      observers.set(instances.at(-1)!, observer)
+      return observer
+    },
+  })
+  return {
+    Observer: Tracked,
+    instances,
+    /** Сообщить наблюдателям за target о записи entry. Возвращает, скольких колбэков это коснулось. */
+    trigger(target: unknown, entry: Record<string, unknown> = {}) {
+      const watching = instances.filter((item) => item.targets.has(target))
+      for (const item of watching) item.callback([{ target, ...entry }], observers.get(item))
+      return watching.length
+    },
+  }
+}
+
+/** Все помощники по именам — в таком виде их получают тесты задач. */
+export const HELPERS = { deferred, flaky, concurrency, fakeWorker, fakeWindows, fakeObserver }
+
 /** Решения пишут как модуль: `export function …`. В общей области видимости с тестами export не нужен. */
 function stripExports(code: string) {
   return code.replace(/^(\s*)export\s+(default\s+)?(?=(async\s+)?function|const|let|var|class)/gm, '$1')
@@ -253,13 +423,13 @@ export async function runCode(code: string, tests: string, { testTimeoutMs = 200
   // Код и тесты — внутри блока: так решение может объявить своё `render` или `test`, не конфликтуя с параметрами.
   let program: (...args: unknown[]) => void
   try {
-    program = new Function('test', 'expect', 'spy', 'sleep', 'console', ...Object.keys(globals), `"use strict";\n{\n${stripExports(code)}\n;\n${tests}\n}`) as typeof program
+    program = new Function('test', 'expect', 'spy', 'sleep', 'console', ...Object.keys(HELPERS), ...Object.keys(globals), `"use strict";\n{\n${stripExports(code)}\n;\n${tests}\n}`) as typeof program
   } catch (error) {
     return { status: 'error', tests: [], logs, error: `Синтаксическая ошибка: ${(error as Error).message}` }
   }
 
   try {
-    program(test, expect, spy, sleep, sandboxConsole, ...Object.values(globals))
+    program(test, expect, spy, sleep, sandboxConsole, ...Object.values(HELPERS), ...Object.values(globals))
   } catch (error) {
     return { status: 'error', tests: [], logs, error: show(error) }
   }

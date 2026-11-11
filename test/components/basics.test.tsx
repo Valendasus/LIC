@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { Hints } from '@/entities/lesson/ui/Hints'
-import { Callout, Example, Question, Sources, Task } from '@/entities/lesson/ui/blocks'
+import { Callout, Example, PracticeOutside, Question, Sources, Task } from '@/entities/lesson/ui/blocks'
 import { RichText } from '@/shared/ui/RichText'
 import { levelName } from '@/entities/progress/model/levels'
 import { ProgressBar } from '@/shared/ui'
@@ -108,6 +108,21 @@ describe('блоки темы', () => {
   })
 
   it('компоненты, доступные в MDX', () => {
-    expect(Object.keys(useMDXComponents()).sort()).toEqual(['Callout', 'Example', 'Hints', 'Question', 'Sources', 'Task', 'h3'])
+    expect(Object.keys(useMDXComponents()).sort()).toEqual(['Callout', 'Example', 'Hints', 'Practice', 'Question', 'Sources', 'Task', 'h3'])
+  })
+
+  it('задание вне страницы темы — пояснение вместо падения', () => {
+    render(<PracticeOutside id="out-basic" />)
+    expect(screen.getByText('Задание «out-basic» — на странице темы.')).toBeInTheDocument()
+  })
+
+  it('подсказки: своя подпись кнопки решения', async () => {
+    render(
+      <Hints hints={[]} solutionLabel="Показать ответ">
+        <p>42</p>
+      </Hints>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Показать ответ' }))
+    expect(screen.getByText('42')).toBeInTheDocument()
   })
 })

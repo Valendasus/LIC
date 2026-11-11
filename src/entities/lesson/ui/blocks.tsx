@@ -98,3 +98,8 @@ export function Task({
 export function Sources({ children }: { children: ReactNode }) {
   return <div className="text-sm">{children}</div>
 }
+
+/** Ссылка на задание вне страницы темы (например, в превью MDX): заданий там нет, показываем пояснение. */
+export function PracticeOutside({ id }: { id: string }) {
+  return <p className="not-prose my-5 rounded-card border border-dashed border-line px-4 py-3 text-sm text-muted">Задание «{id}» — на странице темы.</p>
+}

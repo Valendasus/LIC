@@ -6,7 +6,7 @@ import { useState, type ReactNode } from 'react'
  * Лестница подсказок: ступени открываются по одной, решение — отдельной кнопкой.
  * В MDX: <Hints hints={["направление", "приём", "каркас"]}> решение в markdown </Hints>
  */
-export function Hints({ hints, children }: { hints: string[]; children?: ReactNode }) {
+export function Hints({ hints, children, solutionLabel = 'Показать решение' }: { hints: string[]; children?: ReactNode; solutionLabel?: string }) {
   const [open, setOpen] = useState(0)
   const [showSolution, setShowSolution] = useState(false)
 
@@ -34,7 +34,7 @@ export function Hints({ hints, children }: { hints: string[]; children?: ReactNo
             onClick={() => setShowSolution(true)}
             className="rounded-md border border-line px-3 py-1.5 text-sm text-muted hover:border-warn"
           >
-            Показать решение
+            {solutionLabel}
           </button>
         )}
       </div>

@@ -252,6 +252,7 @@ describe('страница практики', () => {
     expect(Object.keys(props.orders)).toEqual([
       'frontend/css/cascade/specificity#order-cascade',
       'frontend/css/cascade/specificity#order-specificity',
+      'frontend/css/cascade/specificity#order-cascade-full',
     ])
   })
 

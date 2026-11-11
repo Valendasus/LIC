@@ -2,6 +2,8 @@
 // Проверяет: дерево корректно, у каждой темы с content: true есть файл, карточки и задания
 // оформлены правильно, ответы «что выведет» совпадают с реальным выводом кода,
 // эталоны задач на код проходят свои тесты, а заготовки — нет,
+// наполненные темы соблюдают нормы состава (docs/LESSON-PLAYBOOK.md) и не содержат меток TODO,
+// ссылки <Practice id="…" /> в уроках ведут на существующие задания,
 // и нет «осиротевших» файлов, которых нет в дереве.
 import { readFileSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
@@ -22,6 +24,21 @@ const TASK_LEVELS = ['warmup', 'easy', 'medium', 'hard', 'boss']
 /** Сложным задачам нужна полная лестница подсказок. */
 const MIN_HINTS = { warmup: 0, easy: 1, medium: 2, hard: 3, boss: 3 }
 const KEY = /^[a-z0-9-]+$/
+const QUICK_KINDS = ['quiz', 'output', 'order']
+
+/**
+ * Нормы состава наполненной темы по уровню (docs/LESSON-PLAYBOOK.md, часть 2): минимум карточек,
+ * быстрых заданий (квиз, «что выведет», порядок) и задач с редактором.
+ */
+export const NORMS = {
+  J: { cards: 12, quick: 10, tasks: 4 },
+  M: { cards: 10, quick: 8, tasks: 4 },
+  S: { cards: 8, quick: 6, tasks: 3 },
+}
+
+/** Метка незаполненного места в заготовке темы (npm run new:topic). */
+const TODO = /\bTODO\b/g
+const countTodo = (text) => (text.match(TODO) ?? []).length
 
 /** Выполняет код задачи «что выведет» и возвращает реальный вывод console.log построчно. */
 export async function runOutput(code) {
@@ -189,11 +206,38 @@ async function checkStages(dir, blocks, errors) {
   for (const slug of known) if (!seen.has(slug)) errors.push(`stages.yaml: блок «${slug}» не входит ни в один этап`)
 }
 
+/** Состав темы по нормам: карточек (без обратных), быстрых заданий и задач. Сообщения — о том, чего не хватает. */
+function checkNorms(where, grade, cards, practice, errors) {
+  const norm = NORMS[grade]
+  if (!norm) return
+  const have = {
+    cards: cards.length,
+    quick: practice.filter((item) => QUICK_KINDS.includes(item.kind)).length,
+    tasks: practice.filter((item) => TASK_KINDS.includes(item.kind)).length,
+  }
+  const names = { cards: 'карточек', quick: 'быстрых заданий (квиз, «что выведет», порядок)', tasks: 'задач с кодом' }
+  for (const field of ['cards', 'quick', 'tasks']) {
+    if (have[field] < norm[field]) errors.push(`${where}: ${names[field]} ${have[field]}, нужно не меньше ${norm[field]} (${grade})`)
+  }
+}
+
+/** Ссылки <Practice id="ключ" /> в уроке: каждая ведёт на задание этой темы. */
+function checkPracticeRefs(where, lesson, practice, errors) {
+  const keys = new Set(practice.map((item) => item.key))
+  for (const match of lesson.matchAll(/<Practice\s+id="([^"]*)"/g)) {
+    if (!keys.has(match[1])) errors.push(`${where}.mdx: <Practice id="${match[1]}" /> — такого задания нет в ${where.split('/').at(-1)}.practice.yaml`)
+  }
+}
+
+/** Тема попадает в проверку: без фильтра — все, с фильтром — id темы начинается с него (с специальностью или без). */
+const matches = (only, specialty, where) => !only || where === only || where.startsWith(`${only}/`) || `${specialty}/${where}` === only || `${specialty}/${where}`.startsWith(`${only}/`)
+
 /**
  * Проверяет каталог content/. Возвращает список ошибок и статистику.
  * @param {string} root путь к каталогу content
+ * @param {{ only?: string }} [options] only — проверить только темы с этим id или префиксом: «javascript/async» или «frontend/javascript/async/promises»
  */
-export async function checkContent(root) {
+export async function checkContent(root, { only } = {}) {
   const errors = []
   const stats = { leaves: 0, filled: 0, cards: 0, practice: 0 }
   const specialties = parse(await readFile(path.join(root, 'specialties.yaml'), 'utf8'))
@@ -220,20 +264,32 @@ export async function checkContent(root) {
           await walk(children, [...parents, node.slug])
           continue
         }
+        const base = path.join(dir, ...parents, node.slug)
+        // Файлы темы вне фильтра не проверяются, но и не считаются «осиротевшими».
+        if (!matches(only, specialty.slug, where)) {
+          for (const ext of ['cards.yaml', 'practice.yaml', 'mdx']) expected.add(`${base}.${ext}`)
+          continue
+        }
         stats.leaves++
         const keys = new Set()
-        const base = path.join(dir, ...parents, node.slug)
+        let todo = 0
 
         const cardsText = await readFile(`${base}.cards.yaml`, 'utf8').catch(() => null)
+        let cards = []
         if (cardsText !== null) {
           expected.add(`${base}.cards.yaml`)
-          stats.cards += checkCards(parseYaml(cardsText, `${where}.cards.yaml`, errors), where, keys, errors)
+          todo += countTodo(cardsText)
+          cards = parseYaml(cardsText, `${where}.cards.yaml`, errors)
+          stats.cards += checkCards(cards, where, keys, errors)
         }
 
         const practiceText = await readFile(`${base}.practice.yaml`, 'utf8').catch(() => null)
+        let practice = []
         if (practiceText !== null) {
           expected.add(`${base}.practice.yaml`)
-          stats.practice += await checkPractice(parseYaml(practiceText, `${where}.practice.yaml`, errors), where, keys, errors)
+          todo += countTodo(practiceText)
+          practice = parseYaml(practiceText, `${where}.practice.yaml`, errors)
+          stats.practice += await checkPractice(practice, where, keys, errors)
         }
 
         if (node.content) {
@@ -241,9 +297,16 @@ export async function checkContent(root) {
           expected.add(`${base}.mdx`)
           const lesson = await readFile(`${base}.mdx`, 'utf8').catch(() => null)
           if (lesson === null) errors.push(`${where}: content: true, но нет файла ${path.relative(root, `${base}.mdx`)}`)
-          // Каждая тема говорит, когда и на каких версиях её проверили: это правило актуальности контента.
-          else if (!/export const meta = \{[^}]*verified:[^}]*versions:/s.test(lesson)) errors.push(`${where}.mdx: нет export const meta с verified и versions`)
+          else {
+            // Каждая тема говорит, когда и на каких версиях её проверили: это правило актуальности контента.
+            if (!/export const meta = \{[^}]*verified:[^}]*versions:/s.test(lesson)) errors.push(`${where}.mdx: нет export const meta с verified и versions`)
+            todo += countTodo(lesson)
+            checkPracticeRefs(where, lesson, practice, errors)
+          }
+          for (const goal of node.goals ?? []) todo += countTodo(String(goal))
+          checkNorms(where, node.grade, cards, practice, errors)
         }
+        if (todo) errors.push(`${where}: незаполненных меток TODO — ${todo}`)
       }
     }
 

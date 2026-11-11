@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { practice, type RawPractice } from './content'
+import { practice, topicsWithTasks, type RawPractice } from './content'
 import { expect, reviewRows, test } from './fixtures'
 
 const editor = (page: Page) => page.locator('.cm-content')
@@ -45,9 +45,11 @@ test('задача на типы: компилятор в воркере, оши
 
 test('все задачи на типы решаются эталоном в браузере', async ({ page }) => {
   test.setTimeout(120_000)
-  for (const topic of ['typescript/utility-types', 'typescript/type-level', 'typescript/generics']) {
-    const tasks = practice(topic)
-    await page.goto(`/practice?scope=frontend/${topic}&mode=free`)
+  const topics = topicsWithTasks('types')
+  expect(topics.length).toBeGreaterThan(2)
+  for (const topic of topics) {
+    const tasks = practice(topic).filter((item) => item.kind === 'types')
+    await page.goto(`/practice?scope=frontend/${topic}&kinds=types&mode=free`)
     for (let i = 0; i < tasks.length; i++) {
       const task = await currentTask(page, topic)
       await setCode(page, task.solution!)
@@ -100,7 +102,9 @@ test('React-задача: синтаксическая ошибка и беск�
 
 test('все React-задачи решаются эталоном в браузере', async ({ page }) => {
   test.setTimeout(180_000)
-  for (const topic of ['react-basics/state', 'react-basics/lists-keys', 'react-basics/forms', 'react-hooks/custom-hooks', 'react-patterns/accessible-components']) {
+  const topics = topicsWithTasks('react')
+  expect(topics.length).toBeGreaterThan(4)
+  for (const topic of topics) {
     await page.goto(`/practice?scope=frontend/${topic}&mode=free`)
     const task = await currentTask(page, topic)
     await setCode(page, task.solution!)

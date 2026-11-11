@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { parse } from 'yaml'
 
@@ -7,7 +7,7 @@ const root = path.join(process.cwd(), 'content/frontend')
 
 export interface RawPractice {
   key: string
-  kind: 'quiz' | 'output' | 'order' | 'code'
+  kind: 'quiz' | 'output' | 'order' | 'code' | 'types' | 'react'
   question?: string
   options?: { text: string; correct?: boolean }[]
   code?: string
@@ -22,6 +22,22 @@ export interface RawPractice {
 
 export function practice(topicPath: string): RawPractice[] {
   return parse(readFileSync(path.join(root, `${topicPath}.practice.yaml`), 'utf8'))
+}
+
+/** Все темы, у которых есть задания с кодом указанного вида, — в порядке дерева. Новые темы попадают в проверки сами. */
+export function topicsWithTasks(kind: string): string[] {
+  type Node = { slug: string; children?: Node[] }
+  const tree = parse(readFileSync(path.join(root, 'tree.yaml'), 'utf8')) as Node[]
+  const out: string[] = []
+  const walk = (nodes: Node[], parents: string[]) => {
+    for (const node of nodes) {
+      const where = [...parents, node.slug]
+      if (node.children) walk(node.children, where)
+      else if (existsSync(path.join(root, `${where.join('/')}.practice.yaml`)) && practice(where.join('/')).some((item) => item.kind === kind)) out.push(where.join('/'))
+    }
+  }
+  walk(tree, [])
+  return out
 }
 
 export function cards(topicPath: string): { key: string; front: string; back: string; reverse?: boolean }[] {
