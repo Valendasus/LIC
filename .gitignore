@@ -8,3 +8,16 @@ next-env.d.ts
 playwright-report/
 test-results/
 coverage/
+
+# Внутреннее: разбор кода реальных проектов, не для публикации
+docs/PROJECTS-KB.md
+
+# Внутренние документы: правила работы, планы, этапы, устройство платформы
+/CLAUDE.md
+/AGENTS.md
+/CHANGELOG.md
+/docs/PLAN.md
+/docs/FRONTEND-PLAN.md
+/docs/DESIGN.md
+/docs/TRAINERS.md
+/docs/LESSON-PLAYBOOK.md

@@ -2,16 +2,7 @@
 
 Платформа для обучения разработке. Каждая тема проходит три шага: **Learn** (понять), **Implement** (сделать руками), **Confirm** (подтвердить и повторять).
 
-Как ведём проект — в [CLAUDE.md](CLAUDE.md), история изменений — в [CHANGELOG.md](CHANGELOG.md).
-
-Планы и программа — в [docs/](docs/):
-
-- [PLAN.md](docs/PLAN.md) — общий план платформы;
-- [TOPIC-TREE.md](docs/TOPIC-TREE.md) — дерево тем всех специальностей;
-- [FRONTEND-PLAN.md](docs/FRONTEND-PLAN.md) — подробная программа Frontend;
-- [PROJECTS-KB.md](docs/PROJECTS-KB.md) — примеры из реальных проектов;
-- [TRAINERS.md](docs/TRAINERS.md) — устройство тренажёров и интервального повторения;
-- [DESIGN.md](docs/DESIGN.md) — логика интерфейса, экраны и визуальный язык.
+Дерево тем всех специальностей — [docs/TOPIC-TREE.md](docs/TOPIC-TREE.md). Заметки по первоисточникам к урокам — [docs/research/sources/](docs/research/sources/).
 
 ## Стек
 
@@ -218,7 +209,7 @@ npm run test:all        # всё по порядку
 
 ## Добавить тему
 
-Порядок — в [docs/LESSON-PLAYBOOK.md](docs/LESSON-PLAYBOOK.md). Коротко:
+Коротко:
 
 1. `npm run new:topic -- javascript/async/async-await` — три файла с метками `TODO`, тема в дереве отмечена `content: true`. В заготовке практики — частые вопросы с собеседований и задачи соседних тем.
 2. Заполните урок, карточки и практику. Задания вставляются в урок компонентом `<Practice id="ключ" />`, а не копируются.
