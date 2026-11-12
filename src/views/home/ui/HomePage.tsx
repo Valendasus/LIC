@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { rollup, getProgressMap } from '@/entities/progress/server'
 import { TopicStepChips, type TopicRef, type WeekActivity } from '@/entities/review'
 import { getLastTopic, getNextTopics, getReviewCounts, getTopicSteps, getWeekActivity } from '@/entities/review/server'
-import { GRADE_LABEL, getSpecialties, getTree, hrefOf } from '@/entities/topic/server'
+import { GRADE_LABEL, getMainSpecialty, getSpecialties, getTree, hrefOf } from '@/entities/topic/server'
 import { getCurrentUser } from '@/entities/user/server'
 import { cn, count } from '@/shared/lib'
 import { Badge, ButtonLink, Card, Eyebrow, ProgressBar } from '@/shared/ui'
@@ -31,9 +31,9 @@ export function longDate(now: Date) {
  */
 export async function HomePage() {
   const now = new Date()
-  const user = await getCurrentUser()
+  const [user, main] = await Promise.all([getCurrentUser(), getMainSpecialty()])
   const [counts, week, last, specialties, progress] = await Promise.all([
-    getReviewCounts(user.id, 'frontend'),
+    getReviewCounts(user.id, main),
     getWeekActivity(user.id, now),
     getLastTopic(user.id),
     getSpecialties(),
@@ -41,7 +41,7 @@ export async function HomePage() {
   ])
   const [steps, next, trees] = await Promise.all([
     last ? getTopicSteps(user.id, last.node.id) : null,
-    getNextTopics(user.id, 'frontend', { skip: last?.node.id }),
+    getNextTopics(user.id, main, { skip: last?.node.id }),
     Promise.all(specialties.map((item) => getTree(item.slug))),
   ])
   const firstVisit = counts.studied === 0 && !last
@@ -86,7 +86,7 @@ export async function HomePage() {
             <h2 id="next" className="text-lg font-semibold">
               Дальше по пути
             </h2>
-            <Link href="/frontend" className="text-sm text-accent hover:text-fg">
+            <Link href={`/${main}`} className="text-sm text-accent hover:text-fg">
               Весь курс
             </Link>
           </div>

@@ -21,3 +21,9 @@
     - slug: solo
       title: Одиночная
       grade: S
+- slug: soon
+  title: Скоро
+  children:
+    - slug: idea
+      title: Задумка
+      grade: M

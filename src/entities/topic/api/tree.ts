@@ -42,6 +42,9 @@ export const getSpecialties = cache(async (): Promise<Specialty[]> => {
   return parse(raw) as Specialty[]
 })
 
+/** Главная специальность — первая открытая: по ней «Сегодня», «Прогресс» и счётчик практики в навигации. */
+export const getMainSpecialty = cache(async () => (await getSpecialties()).find((item) => item.status === 'active')!.slug)
+
 function build(raw: RawNode, parent: string[], specialty: string): TreeNode {
   const nodePath = [...parent, raw.slug]
   return {

@@ -41,7 +41,7 @@ describe('дерево тем', () => {
 
   it('листья — узлы без детей', async () => {
     const tree = (await getTree('demo'))!
-    expect(leavesOf(tree).map((node) => node.id)).toEqual(['demo/block/mod/topic', 'demo/block/mod/empty', 'demo/other/solo'])
+    expect(leavesOf(tree).map((node) => node.id)).toEqual(['demo/block/mod/topic', 'demo/block/mod/empty', 'demo/other/solo', 'demo/soon/idea'])
     const solo = findNode(tree, ['other', 'solo'])!.node
     expect(leavesOf(solo)).toEqual([solo])
   })

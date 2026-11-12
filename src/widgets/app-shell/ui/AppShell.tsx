@@ -2,7 +2,7 @@ import { Settings } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { getReviewCounts } from '@/entities/review/server'
-import { getSpecialties, getTree, type TreeNode } from '@/entities/topic/server'
+import { getMainSpecialty, getSpecialties, getTree, type TreeNode } from '@/entities/topic/server'
 import { getCurrentUser } from '@/entities/user/server'
 import type { SearchEntry } from '../model/nav'
 import { CommandPalette, SearchButton } from './CommandPalette'
@@ -36,7 +36,7 @@ export async function searchIndex(): Promise<SearchEntry[]> {
  */
 export async function AppShell({ children }: { children: ReactNode }) {
   const user = await getCurrentUser()
-  const [counts, entries] = await Promise.all([getReviewCounts(user.id, 'frontend'), searchIndex()])
+  const [counts, entries] = await Promise.all([getReviewCounts(user.id, await getMainSpecialty()), searchIndex()])
 
   return (
     <div className="min-h-dvh lg:flex">

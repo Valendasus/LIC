@@ -10,7 +10,7 @@ import { ITEM_KINDS, KIND_LABEL, type ItemKind } from '@/entities/practice-item'
 import { getCurrentUser } from '@/entities/user/server'
 import { type SessionMode } from '@/entities/review'
 import { buildSession, getReviewCounts } from '@/entities/review/server'
-import { findNode, getTree } from '@/entities/topic/server'
+import { findNode, getMainSpecialty, getTree } from '@/entities/topic/server'
 
 export const metadata: Metadata = { title: 'Практика' }
 
@@ -21,7 +21,7 @@ export async function ReviewPage({ searchParams }: Props) {
   const mode: SessionMode = params.mode === 'free' ? 'free' : 'review'
   const scope = params.scope || undefined
   const kinds = (params.kinds?.split(',') ?? []).filter((kind): kind is ItemKind => ITEM_KINDS.includes(kind as ItemKind))
-  const specialty = scope?.split('/')[0] ?? 'frontend'
+  const specialty = scope?.split('/')[0] ?? (await getMainSpecialty())
 
   const tree = await getTree(specialty)
   if (!tree) notFound()

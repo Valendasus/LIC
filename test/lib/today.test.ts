@@ -137,10 +137,10 @@ describe('практика и статусы тем', () => {
     const user = await getCurrentUser()
     const tree = (await getTree('demo'))!
     const leaves = leavesOf(tree)
-    expect([...(await getTopicStatuses(user.id, 'demo', leaves)).values()]).toEqual(['new', 'soon', 'new'])
+    expect([...(await getTopicStatuses(user.id, 'demo', leaves)).values()]).toEqual(['new', 'soon', 'new', 'soon'])
     await db.nodeProgress.create({ data: { userId: user.id, nodeId: TOPIC, level: 2 } })
     await item(user.id, 'demo/other/solo#sum')
     await db.nodeProgress.create({ data: { userId: user.id, nodeId: 'demo/block/mod/empty', level: 1 } })
-    expect(Object.fromEntries(await getTopicStatuses(user.id, 'demo', leaves))).toEqual({ [TOPIC]: 'mastered', 'demo/block/mod/empty': 'started', 'demo/other/solo': 'started' })
+    expect(Object.fromEntries(await getTopicStatuses(user.id, 'demo', leaves))).toEqual({ [TOPIC]: 'mastered', 'demo/block/mod/empty': 'started', 'demo/other/solo': 'started', 'demo/soon/idea': 'soon' })
   })
 })

@@ -34,7 +34,7 @@ describe('прогресс', () => {
       ['demo/block/mod/topic', MAX_LEVEL],
       ['demo/block/mod/empty', 0],
     ])
-    expect(rollup(tree, progress)).toEqual({ leaves: 3, started: 1, ratio: 4 / 12 })
+    expect(rollup(tree, progress)).toEqual({ leaves: 4, started: 1, ratio: 4 / 16 })
     expect(rollup(tree.children[0], progress)).toEqual({ leaves: 2, started: 1, ratio: 0.5 })
     expect(rollup(tree.children[1], new Map())).toEqual({ leaves: 1, started: 0, ratio: 0 })
   })

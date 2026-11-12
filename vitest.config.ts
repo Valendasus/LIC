@@ -9,6 +9,8 @@ export default defineConfig({
   plugins: [{ enforce: 'pre', ...mdx({ remarkPlugins: [remarkGfm], providerImportSource: '@/mdx-components' }) }, react()],
   resolve: {
     alias: {
+      // Тестовая специальность demo живёт в test/fixtures/content; алиас идёт раньше общего, поэтому побеждает.
+      '@content/demo': path.resolve(import.meta.dirname, 'test/fixtures/content/demo'),
       '@content': path.resolve(import.meta.dirname, 'content'),
       '@': path.resolve(import.meta.dirname, 'src'),
     },

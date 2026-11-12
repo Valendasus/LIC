@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { LEVEL_LABEL } from '@/entities/practice-item'
 import { getProgressMap, rollup } from '@/entities/progress/server'
 import { getActivity, getMemory, getTaskStats, getWeakTopics } from '@/entities/review/server'
-import { getStages, getTree, hrefOf, leavesOf } from '@/entities/topic/server'
+import { getMainSpecialty, getStages, getTree, hrefOf, leavesOf } from '@/entities/topic/server'
 import { levelName } from '@/entities/progress'
 import { getCurrentUser } from '@/entities/user/server'
 import { cn, count } from '@/shared/lib'
@@ -30,14 +30,15 @@ const HEAT = ['bg-raised', 'bg-accent/30', 'bg-accent/55', 'bg-accent/80', 'bg-a
 export async function ProgressPage() {
   const now = new Date()
   const user = await getCurrentUser()
-  const tree = (await getTree('frontend'))!
+  const main = await getMainSpecialty()
+  const tree = (await getTree(main))!
   const [activity, memory, weak, tasks, progress, stages] = await Promise.all([
     getActivity(user.id, 182, now),
     getMemory(user.id, now),
     getWeakTopics(user.id),
-    getTaskStats(user.id, 'frontend'),
+    getTaskStats(user.id, main),
     getProgressMap(user.id),
-    getStages('frontend'),
+    getStages(main),
   ])
   const max = Math.max(1, ...activity.map((day) => day.answers))
   const activeDays = activity.filter((day) => day.answers > 0).length
